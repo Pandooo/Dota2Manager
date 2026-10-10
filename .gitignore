@@ -1,0 +1,19 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 多人服务器的房间存档（本地运行数据）
+server-data/
+
+# 本地工具与系统文件
+.claude/
+.DS_Store
+*.log
+npm-debug.log*
+.vite/
+coverage/
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,3252 @@
+[
+  {
+    "version": "6.70",
+    "date": "2011-01-18",
+    "title": "6.70 · 早期测试版本",
+    "summary": "Dota 2 最早的游戏版本（对应 DotA 6.70，处于早期封闭测试阶段）：诡计之雾、勇气勋章、韧鼓加入，抱团游走与先手开团体系成形；测试期间陆续移植大量 DotA 英雄。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.01,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "slardar",
+      "enigma",
+      "faceless-void",
+      "tiny",
+      "viper",
+      "venomancer",
+      "clockwerk",
+      "natures-prophet",
+      "dark-seer",
+      "sniper",
+      "beastmaster",
+      "pugna",
+      "enchantress",
+      "leshrac",
+      "shadow-fiend",
+      "tinker",
+      "weaver",
+      "night-stalker",
+      "ancient-apparition",
+      "spectre",
+      "doom",
+      "chen"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.72",
+    "date": "2011-07-22",
+    "title": "6.72 · 首届 TI 版本",
+    "summary": "TI1 所用版本（对应 DotA 6.72 系列，Dota 2 于 6.72d 一并移植）：娜迦海妖、巨魔战将、潮汐猎人、裂魂人、噬魂鬼、艾欧等技能重做，兽王、黑暗贤者等获得神杖升级，新增纷争面纱（部分相关英雄当时尚未移植到 Dota 2）。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.01,
+      "O": 1.005,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "tidehunter",
+      "dark-seer",
+      "beastmaster"
+    ],
+    "newHeroes": [
+      "juggernaut",
+      "bloodseeker",
+      "kunkka",
+      "riki",
+      "broodmother",
+      "queen-of-pain",
+      "wraith-king",
+      "batrider",
+      "huskar",
+      "jakiro",
+      "dragon-knight",
+      "omniknight",
+      "warlock",
+      "alchemist",
+      "lifestealer",
+      "death-prophet",
+      "ursa",
+      "bounty-hunter"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.73",
+    "date": "2012-01-12",
+    "title": "6.73 · 新装备时代",
+    "summary": "引入阿托斯之棍、天堂之戟、天鹰之戒、深渊之刃与静谧之鞋，中单与三号位出装路线更丰富；拉比克、树精卫士被削弱，维萨吉获得神杖升级（三者当时尚未移植到 Dota 2）。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.01,
+      "O": 1.01,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "silencer",
+      "spirit-breaker",
+      "invoker",
+      "clinkz",
+      "outworld-destroyer",
+      "bane"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.74",
+    "date": "2012-03-15",
+    "title": "6.74 · TI2 版本",
+    "summary": "TI2 所用版本：多数英雄获得加强，司夜刺客获得尖刺外壳、食人魔魔法师获得神杖升级（二者稍后才移植到 Dota 2）；四号位游走与先手控制价值上升。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.01,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "shadow-demon",
+      "lycan",
+      "lone-druid",
+      "brewmaster",
+      "phantom-lancer",
+      "treant-protector",
+      "ogre-magi",
+      "chaos-knight",
+      "gyrocopter",
+      "phantom-assassin",
+      "rubick",
+      "io",
+      "luna",
+      "disruptor",
+      "undying",
+      "templar-assassin",
+      "naga-siren",
+      "keeper-of-the-light",
+      "nyx-assassin",
+      "visage",
+      "meepo"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.75",
+    "date": "2012-10-04",
+    "title": "6.75 · TI2 后平衡",
+    "summary": "TI2 后的平衡版本：削弱变体精灵与拉比克，树精卫士活体护甲重做，凤凰与恐怖利刃技能重做，新增暗影护符。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "treant-protector"
+    ],
+    "heroNerfs": [
+      "morphling",
+      "rubick"
+    ],
+    "newHeroes": [
+      "magnus"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.76",
+    "date": "2012-10-25",
+    "title": "6.76 · 小幅平衡",
+    "summary": "继续压制蝙蝠骑士，沉默术士遗言重做，其余英雄普遍小幅加强。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "silencer"
+    ],
+    "heroNerfs": [
+      "batrider"
+    ],
+    "newHeroes": [
+      "centaur-warrunner",
+      "slark",
+      "timbersaw"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.77",
+    "date": "2012-12-19",
+    "title": "6.77 · 压制先手",
+    "summary": "蝙蝠骑士、半人马战行者、马格纳斯等先手开团英雄被削弱，其余英雄普遍加强；三号位强开体系降温。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 0.99,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "batrider",
+      "centaur-warrunner",
+      "magnus"
+    ],
+    "newHeroes": [
+      "medusa",
+      "troll-warlord",
+      "tusk"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.77c",
+    "date": "2013-03-21",
+    "title": "6.77c · 静谧之鞋削弱",
+    "summary": "削弱静谧之鞋并平衡部分英雄，辅助续航能力下降，核心位前期更舒适。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "bristleback",
+      "skywrath-mage",
+      "elder-titan"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.78",
+    "date": "2013-06-04",
+    "title": "6.78 · TI3 前大更新",
+    "summary": "蝙蝠骑士、矮人直升机、马格纳斯、暗影恶魔被削弱；美杜莎石化凝视重做，远古冰魄、全能骑士、沉默术士获得神杖升级，辅助后期作用提升。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 0.995,
+      "HS": 1.01
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "medusa",
+      "ancient-apparition",
+      "omniknight",
+      "silencer"
+    ],
+    "heroNerfs": [
+      "batrider",
+      "gyrocopter",
+      "magnus",
+      "shadow-demon"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.78c",
+    "date": "2013-07-03",
+    "title": "6.78c · TI3 版本",
+    "summary": "TI3 所用版本，对多名职业赛场热门英雄小幅削弱，整体节奏延续 6.78。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "abaddon"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.79",
+    "date": "2013-10-21",
+    "title": "6.79 · 大规模削弱热门",
+    "summary": "亚巴顿、蝙蝠骑士、哈斯卡、噬魂鬼、拉比克、裂魂人、巨魔战将、维萨吉被削弱；帕吉与复仇之魂可以使用闪烁匕首，游走开团手段增加。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 1.005,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "pudge",
+      "vengeful-spirit"
+    ],
+    "heroNerfs": [
+      "abaddon",
+      "batrider",
+      "huskar",
+      "lifestealer",
+      "rubick",
+      "spirit-breaker",
+      "troll-warlord",
+      "visage"
+    ],
+    "newHeroes": [
+      "earth-spirit",
+      "ember-spirit"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.79c",
+    "date": "2013-12-12",
+    "title": "6.79c · 平衡补丁",
+    "summary": "削弱剧毒术士与大地之灵，并对部分物品进行平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "venomancer",
+      "earth-spirit"
+    ],
+    "newHeroes": [
+      "legion-commander"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.80",
+    "date": "2014-01-29",
+    "title": "6.80 · 新春版本",
+    "summary": "削弱炼金术士、大地之灵、剧毒术士；卓尔游侠获得狂风、修补匠获得神杖升级，中单与远程核心更强势。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.01,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "drow-ranger",
+      "tinker"
+    ],
+    "heroNerfs": [
+      "alchemist",
+      "earth-spirit",
+      "venomancer"
+    ],
+    "newHeroes": [
+      "phoenix",
+      "terrorblade"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.81",
+    "date": "2014-04-29",
+    "title": "6.81 · 辅助神杖",
+    "summary": "削弱恐怖利刃，亚巴顿、光之守卫、暗影恶魔获得神杖升级，辅助后期价值提高。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "abaddon",
+      "keeper-of-the-light",
+      "shadow-demon"
+    ],
+    "heroNerfs": [
+      "terrorblade"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.81b",
+    "date": "2014-06-02",
+    "title": "6.81b · TI4 版本",
+    "summary": "TI4 所用版本：削弱蝙蝠骑士、祈求者、狼人，并平衡其他英雄。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.995,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "batrider",
+      "invoker",
+      "lycan"
+    ],
+    "newHeroes": [
+      "techies"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.82",
+    "date": "2014-09-25",
+    "title": "6.82 · 赏金神符与地图重制",
+    "summary": "新增赏金神符并重制地图与金钱经验机制；幻影长矛手、血魔重做，大地之灵、上古巨神、凤凰、斯温获得神杖升级，新增赤红甲；三号位与中单资源增加；神谕者于 2014 年 11 月在本版本周期加入 Dota 2。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.01,
+      "O": 1.01,
+      "SS": 1.0,
+      "HS": 0.99
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "phantom-lancer",
+      "bloodseeker",
+      "earth-spirit",
+      "elder-titan",
+      "phoenix",
+      "sven"
+    ],
+    "heroNerfs": [
+      "faceless-void",
+      "lycan",
+      "riki"
+    ],
+    "newHeroes": [
+      "oracle"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.83",
+    "date": "2014-12-17",
+    "title": "6.83 · 普遍加强",
+    "summary": "削弱莉娜、德鲁伊、潮汐猎人，噬魂鬼获得控制技能，大部分英雄得到加强。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "lifestealer"
+    ],
+    "heroNerfs": [
+      "lina",
+      "lone-druid",
+      "tidehunter"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.83c",
+    "date": "2015-02-12",
+    "title": "6.83c · 平衡补丁",
+    "summary": "削弱斧王与主宰，其余英雄小幅调整；寒冬飞龙随本版本加入 Dota 2。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.005,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "axe",
+      "juggernaut"
+    ],
+    "newHeroes": [
+      "winter-wyvern"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.84",
+    "date": "2015-04-30",
+    "title": "6.84 · 破坏与微光",
+    "summary": "大量新装备（微光披风、卫士胫甲、银月之晶、白银之锋、玲珑心、魔法芒果、远行鞋 II 等）与「破坏」机制登场，沉默机制重做，金钱经验机制重做；辅助生存与视野能力提升。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.0,
+      "O": 0.99,
+      "SS": 1.01,
+      "HS": 1.01
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "lifestealer",
+      "morphling",
+      "tusk",
+      "nyx-assassin",
+      "ursa",
+      "alchemist",
+      "weaver",
+      "natures-prophet"
+    ],
+    "heroNerfs": [
+      "axe",
+      "batrider",
+      "bloodseeker",
+      "bristleback",
+      "earth-spirit",
+      "juggernaut",
+      "lina",
+      "sniper",
+      "troll-warlord"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.84c",
+    "date": "2015-05-18",
+    "title": "6.84c · TI5 版本",
+    "summary": "TI5 所用版本：削弱矮人直升机等多名英雄，小幅调整金钱经验机制。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.005,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "gyrocopter"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.85",
+    "date": "2015-09-24",
+    "title": "6.85 · 中单降温",
+    "summary": "TI5 后的平衡版本：蝙蝠骑士（同时获得神杖升级）、血魔、赏金猎人、矮人直升机、莉娜、痛苦女王、风暴之灵、拉席克、工程师集中削弱，中单节奏英雄降温。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 0.99,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "batrider",
+      "bloodseeker",
+      "bounty-hunter",
+      "gyrocopter",
+      "lina",
+      "queen-of-pain",
+      "storm-spirit",
+      "leshrac",
+      "techies"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.86",
+    "date": "2015-12-16",
+    "title": "6.86 · 奥术神符",
+    "summary": "新增奥术神符与魔龙枪、以太透镜、仙灵之火、寒铁钢爪，地图重制；死亡先知、末日使者、力丸、虚空假面、德鲁伊、沉默术士获得新技能，殁境神蚀者重做；中单与核心发育能力提升。",
+    "powerMult": {
+      "C": 1.01,
+      "M": 1.01,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 0.99
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "outworld-destroyer",
+      "death-prophet",
+      "doom",
+      "riki",
+      "faceless-void",
+      "lone-druid",
+      "silencer"
+    ],
+    "heroNerfs": [
+      "broodmother",
+      "dark-seer",
+      "earth-spirit",
+      "queen-of-pain",
+      "shadow-fiend",
+      "tusk",
+      "undying",
+      "winter-wyvern"
+    ],
+    "newHeroes": [
+      "arc-warden"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.87",
+    "date": "2016-04-25",
+    "title": "6.87 · 扫描与知识之书",
+    "summary": "新增全图扫描与血棘、回音战刃、枯萎之石、凝魂之露、风灵之纹、知识之书、飓风长戟，地图与野怪大改；辅助靠知识之书追经验，信息战更重要。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 1.01,
+      "HS": 1.01
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1.005
+    },
+    "heroBuffs": [
+      "bloodseeker",
+      "mirana",
+      "oracle",
+      "storm-spirit",
+      "winter-wyvern",
+      "earthshaker",
+      "gyrocopter"
+    ],
+    "heroNerfs": [
+      "beastmaster",
+      "bounty-hunter",
+      "chen",
+      "death-prophet",
+      "earth-spirit",
+      "enchantress",
+      "invoker",
+      "natures-prophet"
+    ],
+    "major": true
+  },
+  {
+    "version": "6.88",
+    "date": "2016-06-12",
+    "title": "6.88 · 6.xx 收官",
+    "summary": "6.xx 时代最后一个大版本号：削弱兽王、赏金猎人、死亡先知、末日使者、艾欧等推进与游走英雄，臂章被削弱，其余英雄普遍加强。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 0.995,
+      "SS": 0.995,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "beastmaster",
+      "bounty-hunter",
+      "death-prophet",
+      "doom",
+      "earth-spirit",
+      "io",
+      "slark",
+      "riki"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.88b",
+    "date": "2016-07-12",
+    "title": "6.88b · TI6 版本",
+    "summary": "TI6 所用版本：伐木机、死亡先知、恐怖利刃、虚空假面、上古巨神、兽王、力丸被削弱。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "timbersaw",
+      "death-prophet",
+      "terrorblade",
+      "faceless-void",
+      "elder-titan",
+      "beastmaster",
+      "riki"
+    ],
+    "major": false
+  },
+  {
+    "version": "6.88c",
+    "date": "2016-08-19",
+    "title": "6.88c · TI6 后平衡",
+    "summary": "针对 TI6 热门英雄的削弱：卓尔游侠、上古巨神、虚空假面、米拉娜、神谕者、伐木机、暗影恶魔；孽主在本版本周期加入。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.005,
+      "O": 1.005,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "drow-ranger",
+      "elder-titan",
+      "faceless-void",
+      "mirana",
+      "oracle",
+      "timbersaw",
+      "shadow-demon"
+    ],
+    "newHeroes": [
+      "underlord"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.00",
+    "date": "2016-12-12",
+    "title": "新的旅程 New Journey",
+    "summary": "7.00 新纪元：引入天赋树、背包与神龛，新增远古野点并大幅改动地图，英雄升级经验曲线与幻象机制重做；天赋选择让 BP 与出装博弈更复杂，新英雄齐天大圣登场。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1.005,
+      "M": 1.005,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "monkey-king"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.01",
+    "date": "2016-12-20",
+    "title": "7.01 · 快速修正",
+    "summary": "7.00 发布后一周的平衡修正，死灵法师重回队长模式，多名强势英雄小幅回调。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.02",
+    "date": "2017-02-08",
+    "title": "7.02 · 天赋树重做",
+    "summary": "大量英雄天赋树重做，狼人重回队长模式；天赋路线选择对核心位影响更大。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1.005,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": true
+  },
+  {
+    "version": "7.03",
+    "date": "2017-03-15",
+    "title": "7.03 · 平衡补丁",
+    "summary": "齐天大圣加入队长模式，常规英雄与物品平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.04",
+    "date": "2017-03-23",
+    "title": "7.04 · 平衡补丁",
+    "summary": "针对 7.03 热门英雄与物品的小幅平衡调整。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.05",
+    "date": "2017-04-09",
+    "title": "7.05 · 平衡补丁",
+    "summary": "树精卫士加入队长模式，常规英雄平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.005,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.06",
+    "date": "2017-05-15",
+    "title": "7.06 · 赏金改动",
+    "summary": "移除复活时间类天赋并调整击杀与小兵金钱赏金，后期翻盘与核心发育节奏改变。",
+    "powerMult": {
+      "C": 1.01,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 0.995,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": true
+  },
+  {
+    "version": "7.06e",
+    "date": "2017-07-02",
+    "title": "7.06e · TI7 版本",
+    "summary": "TI7 所用版本：下调小野点金钱，拉野与囤野收益降低，平衡多名英雄。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.005,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.07",
+    "date": "2017-10-31",
+    "title": "Dueling Fates · 双新英雄",
+    "summary": "新英雄邪影芳灵与石鳞剑士登场；新增永恒之盘、慧光、陨星锤、否决坠饰、魂之灵瓮，移除寒铁钢爪与穷鬼盾；英雄属性与天赋树大规模重做，野怪夜间入睡。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.01,
+      "O": 0.99,
+      "SS": 1.01,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1.002,
+      "M": 1.002,
+      "O": 1.002,
+      "SS": 1.002,
+      "HS": 1.002
+    },
+    "newHeroes": [
+      "dark-willow",
+      "pangolier"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.07c",
+    "date": "2017-11-17",
+    "title": "7.07c · 回城限制",
+    "summary": "出兵前不能再使用回城卷轴，高等级复活时间加长，前期 TP 联动受限。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 0.995,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.07d",
+    "date": "2017-12-19",
+    "title": "7.07d · 远古野削弱",
+    "summary": "下调远古野怪赏金并平衡多名英雄，打野刷钱效率下降。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.005,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.08",
+    "date": "2018-02-01",
+    "title": "7.08 · 赏金神符增益",
+    "summary": "赏金神符金钱提高，中单与游走位控符收益上升；常规英雄平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "morphling",
+      "pugna",
+      "alchemist"
+    ],
+    "heroNerfs": [
+      "shadow-shaman",
+      "omniknight",
+      "lycan"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.09",
+    "date": "2018-02-15",
+    "title": "7.09 · 廉价信使",
+    "summary": "信使价格由 200 降至 50，囤野者获得额外赏金，开局赏金神符改为全队共享；五号位经济压力大幅减轻。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.01
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.10",
+    "date": "2018-03-01",
+    "title": "7.10 · 天赋加强",
+    "summary": "邪影芳灵加入队长模式，赏金神符不再提供经验，大量天赋加强。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "lina",
+      "monkey-king",
+      "lion",
+      "warlock",
+      "venomancer",
+      "natures-prophet",
+      "undying"
+    ],
+    "heroNerfs": [
+      "tinker",
+      "necrophos",
+      "dragon-knight",
+      "naga-siren"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.11",
+    "date": "2018-03-15",
+    "title": "7.11 · 买活与翻盘公式",
+    "summary": "买活价格改为与身价挂钩，团战落后方的翻盘金钱公式重做；高身价核心的容错降低。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.12",
+    "date": "2018-03-29",
+    "title": "7.12 · 平衡补丁",
+    "summary": "石鳞剑士加入队长模式，常规英雄与物品平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "crystal-maiden",
+      "zeus",
+      "necrophos",
+      "undying",
+      "slark",
+      "magnus"
+    ],
+    "heroNerfs": [
+      "io",
+      "razor",
+      "sand-king",
+      "tiny",
+      "death-prophet",
+      "gyrocopter"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.13",
+    "date": "2018-04-12",
+    "title": "7.13 · 推进赏金下调",
+    "summary": "英雄属性加成重做，防御塔与兵营的团队赏金下调，防御符文持续时间延长，复活时间调整；推进节奏放缓。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.14",
+    "date": "2018-04-26",
+    "title": "7.14 · 平衡补丁",
+    "summary": "工程师加入队长模式，物品与英雄大范围平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "io",
+      "ember-spirit",
+      "axe",
+      "bloodseeker",
+      "sven",
+      "windranger"
+    ],
+    "heroNerfs": [
+      "pangolier",
+      "broodmother",
+      "omniknight",
+      "tusk",
+      "shadow-fiend"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.15",
+    "date": "2018-05-10",
+    "title": "7.15 · 团队赏金符",
+    "summary": "赏金神符每 5 分钟刷新并为全队提供金钱，兵线赏金下调，肉山增强，反补防御塔不再给敌方金钱；辅助经济改善。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.16",
+    "date": "2018-05-27",
+    "title": "7.16 · TI8 前平衡",
+    "summary": "全面下调移速天赋，延长岗哨守卫持续时间，为 TI8 做平衡准备。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 0.995,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "huskar",
+      "crystal-maiden",
+      "mirana",
+      "tiny",
+      "vengeful-spirit",
+      "enchantress"
+    ],
+    "heroNerfs": [
+      "death-prophet",
+      "leshrac",
+      "doom",
+      "lycan",
+      "gyrocopter",
+      "io"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.17",
+    "date": "2018-06-10",
+    "title": "7.17 · 平衡补丁",
+    "summary": "TI8 前的常规英雄与物品平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "tiny",
+      "magnus",
+      "riki",
+      "enigma",
+      "clinkz"
+    ],
+    "heroNerfs": [
+      "io",
+      "bane",
+      "sand-king",
+      "night-stalker"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.18",
+    "date": "2018-06-25",
+    "title": "7.18 · 平衡补丁",
+    "summary": "TI8 正赛前的常规英雄与物品平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "earthshaker",
+      "tiny",
+      "enchantress",
+      "crystal-maiden",
+      "tidehunter",
+      "lich"
+    ],
+    "heroNerfs": [
+      "beastmaster",
+      "chen",
+      "windranger",
+      "warlock",
+      "lycan",
+      "naga-siren"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.19",
+    "date": "2018-07-29",
+    "title": "7.19 · TI8 版本",
+    "summary": "TI8 所用版本，常规平衡；新英雄天涯墨客于本版本周期登场。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "outworld-destroyer",
+      "juggernaut",
+      "puck",
+      "sven",
+      "ancient-apparition"
+    ],
+    "heroNerfs": [
+      "broodmother",
+      "bloodseeker",
+      "crystal-maiden",
+      "drow-ranger",
+      "necrophos",
+      "windranger"
+    ],
+    "newHeroes": [
+      "grimstroke"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.20",
+    "date": "2018-11-19",
+    "title": "7.20 · 地图重制",
+    "summary": "地图大幅重制；新增宝冕、恐鳌之戒、圣洁吊坠、散慧对剑、慧夜对剑，移除天鹰之戒；大量技能重做，辅助治疗与三号位对线更强。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 0.995,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.01
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1.005,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "phantom-assassin",
+      "tiny",
+      "doom",
+      "earth-spirit",
+      "clockwerk",
+      "brewmaster",
+      "troll-warlord",
+      "elder-titan"
+    ],
+    "heroNerfs": [
+      "chaos-knight",
+      "sand-king",
+      "centaur-warrunner",
+      "grimstroke",
+      "natures-prophet",
+      "spirit-breaker",
+      "naga-siren"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.21",
+    "date": "2019-01-29",
+    "title": "7.21 · 主属性加成移除",
+    "summary": "取消主属性的 25% 额外收益（含物品属性），所有英雄主属性成长 +15%、每点力量生命值 18→20；主野区远古野改为大野，二、三塔与近战兵营护甲提高，艾欧移出队长模式。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 0.995,
+      "O": 1.01,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "bane",
+      "alchemist",
+      "bounty-hunter",
+      "nyx-assassin",
+      "riki",
+      "chen",
+      "treant-protector",
+      "arc-warden"
+    ],
+    "heroNerfs": [
+      "beastmaster",
+      "tusk",
+      "grimstroke",
+      "juggernaut",
+      "earth-spirit",
+      "sven",
+      "tiny"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.21c",
+    "date": "2019-03-02",
+    "title": "7.21c · 玛尔斯登场",
+    "summary": "新英雄玛尔斯于本版本登场；削弱冥界亚龙、昆卡与迈达斯之手。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "death-prophet",
+      "windranger",
+      "sniper",
+      "queen-of-pain",
+      "templar-assassin",
+      "ancient-apparition"
+    ],
+    "heroNerfs": [
+      "viper",
+      "kunkka",
+      "juggernaut",
+      "sven"
+    ],
+    "newHeroes": [
+      "mars"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.22",
+    "date": "2019-05-24",
+    "title": "7.22 · 全英雄神杖",
+    "summary": "所有英雄都拥有阿哈利姆神杖升级，神杖可额外花费 2000 金转为可消耗的永久增益，肉山第三次起掉落可消耗神杖或刷新碎片；艾欧与玛尔斯加入队长模式；装备选择与 BP 组合空间扩大。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1.002,
+      "M": 1.002,
+      "O": 1.002,
+      "SS": 1.002,
+      "HS": 1.002
+    },
+    "heroBuffs": [
+      "spirit-breaker",
+      "timbersaw",
+      "tiny",
+      "huskar",
+      "slark",
+      "magnus",
+      "bristleback",
+      "venomancer"
+    ],
+    "heroNerfs": [
+      "mars",
+      "nyx-assassin",
+      "natures-prophet",
+      "zeus",
+      "dark-seer",
+      "clinkz"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.22f",
+    "date": "2019-07-28",
+    "title": "7.22f · TI9 版本",
+    "summary": "TI9 所用版本：修补匠获得大幅加强，帕吉、力丸得到增强；远古冰魄、变体精灵、冥魂大帝、陈、殁境神蚀者小幅削弱。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "tinker",
+      "pudge",
+      "riki"
+    ],
+    "heroNerfs": [
+      "ancient-apparition",
+      "morphling",
+      "wraith-king",
+      "chen",
+      "outworld-destroyer"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.23",
+    "date": "2019-11-26",
+    "title": "Outlanders · 中立物品与前哨",
+    "summary": "Outlanders 大更新：新增 62 件中立物品掉落、前哨建筑，英雄等级上限提至 30 并可点满天赋，移除边路商店，魔免不再提供魔抗，背包扩至 4 格；新英雄虚无之灵与电炎绝手登场。",
+    "powerMult": {
+      "C": 1.01,
+      "M": 1.005,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 0.99
+    },
+    "insightMult": {
+      "C": 1.005,
+      "M": 1,
+      "O": 1.005,
+      "SS": 1,
+      "HS": 1
+    },
+    "newHeroes": [
+      "snapfire",
+      "void-spirit"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.23e",
+    "date": "2019-12-14",
+    "title": "7.23e · 移除经验天赋",
+    "summary": "移除所有经验类天赋；前哨经验改为每 10 分钟发放，两座非肉山侧神龛被移除（每队仅余一座）。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.005,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "treant-protector",
+      "vengeful-spirit",
+      "ursa"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.24",
+    "date": "2020-01-26",
+    "title": "7.24 · 中立物品栏",
+    "summary": "中立物品获得独立格子与泉水储藏处，背包恢复为 3 格，移除神龛，前哨移至主野区；虚无之灵、电炎绝手加入队长模式。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "sven",
+      "death-prophet",
+      "mars",
+      "grimstroke",
+      "axe",
+      "juggernaut",
+      "queen-of-pain"
+    ],
+    "heroNerfs": [
+      "omniknight",
+      "lich",
+      "doom",
+      "treant-protector",
+      "magnus",
+      "abaddon"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.25",
+    "date": "2020-03-17",
+    "title": "7.25 · 击杀赏金重做",
+    "summary": "全英雄选择模式重做，击杀金钱公式移除团队橡皮筋机制，强化神符改为 4 分钟首刷；核心滚雪球更稳定。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "weaver",
+      "ursa",
+      "visage",
+      "night-stalker",
+      "enigma",
+      "ember-spirit",
+      "earth-spirit"
+    ],
+    "heroNerfs": [
+      "lina",
+      "natures-prophet",
+      "batrider",
+      "bloodseeker"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.26",
+    "date": "2020-04-17",
+    "title": "7.26 · 属性系统简化",
+    "summary": "三大属性不再提供魔抗、技能增强与移速，全局金钱赏金下调 10%，连杀金钱减半；法系中单爆发下降。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.99,
+      "O": 0.995,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": true
+  },
+  {
+    "version": "7.27",
+    "date": "2020-06-28",
+    "title": "7.27 · 装备系统更新",
+    "summary": "新增闪电指套与巫毒面具等物品并大范围调整装备，中单法系的吸血续航路线出现。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.01,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": true
+  },
+  {
+    "version": "7.27b",
+    "date": "2020-07-15",
+    "title": "7.27b · 技能天赋大改",
+    "summary": "大规模平衡更新，百余名英雄的技能与天赋调整：美杜莎分裂箭改为可开关，剃刀属性成长与技能获得加强，另有五件装备调整。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.995,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "medusa",
+      "tiny",
+      "magnus",
+      "razor",
+      "sven",
+      "venomancer",
+      "dark-seer",
+      "outworld-destroyer"
+    ],
+    "heroNerfs": [
+      "queen-of-pain",
+      "ursa",
+      "earthshaker",
+      "anti-mage",
+      "bane",
+      "sniper",
+      "natures-prophet"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.28",
+    "date": "2020-12-17",
+    "title": "阿哈利姆魔晶 · 森海飞霞登场",
+    "summary": "引入阿哈利姆魔晶，为每名英雄提供新技能或强化；新增一批装备，新英雄森海飞霞登场；辅助以低价魔晶获得质变，出装博弈更复杂。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "newHeroes": [
+      "hoodwink"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.28c",
+    "date": "2021-02-19",
+    "title": "7.28c · 平衡补丁",
+    "summary": "削弱殁境神蚀者、兽王、冥魂大帝、变体精灵、帕克等热门英雄。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.005,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "outworld-destroyer",
+      "beastmaster",
+      "wraith-king",
+      "morphling",
+      "puck"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.29",
+    "date": "2021-04-09",
+    "title": "7.29 · 破晓辰星与水符",
+    "summary": "新英雄破晓辰星登场，森海飞霞加入队长模式；新增水神符（中单前期续航），属性加点可灵活分配，赏金神符移入野区，前哨改为持续提供经验。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 1.01,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "brewmaster",
+      "winter-wyvern",
+      "dazzle",
+      "centaur-warrunner",
+      "snapfire",
+      "pudge",
+      "broodmother",
+      "chen"
+    ],
+    "heroNerfs": [
+      "hoodwink",
+      "troll-warlord",
+      "monkey-king",
+      "puck",
+      "phoenix",
+      "axe",
+      "juggernaut",
+      "death-prophet"
+    ],
+    "newHeroes": [
+      "dawnbreaker"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.30",
+    "date": "2021-08-18",
+    "title": "7.30 · 冷却缩减不再叠加",
+    "summary": "百分比冷却缩减不再叠加，队长模式第二轮选人顺序调整，第二代肉山不再掉落奶酪，中立物品大轮换并重做部分装备。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1.005
+    },
+    "heroBuffs": [
+      "sniper",
+      "lich",
+      "bane",
+      "bounty-hunter",
+      "lone-druid",
+      "keeper-of-the-light",
+      "visage"
+    ],
+    "heroNerfs": [
+      "dragon-knight",
+      "winter-wyvern",
+      "invoker",
+      "nyx-assassin",
+      "lion",
+      "meepo",
+      "venomancer"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.30d",
+    "date": "2021-09-25",
+    "title": "7.30d · TI10 版本",
+    "summary": "TI10 所用版本：多件中立物品被削弱，少量装备平衡调整。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.30e",
+    "date": "2021-10-28",
+    "title": "7.30e · 玛西登场",
+    "summary": "新英雄玛西于本版本登场；下调小野点经验，削弱小小、马格纳斯等多名 TI10 热门英雄。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 1.005,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "chen",
+      "spirit-breaker",
+      "broodmother",
+      "zeus",
+      "pugna",
+      "keeper-of-the-light"
+    ],
+    "heroNerfs": [
+      "lina",
+      "elder-titan",
+      "monkey-king",
+      "void-spirit",
+      "bane",
+      "tiny",
+      "weaver",
+      "magnus"
+    ],
+    "newHeroes": [
+      "marci"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.31",
+    "date": "2022-02-23",
+    "title": "7.31 · 兽之咆哮",
+    "summary": "新英雄兽登场，工程师重做；新增宽容之靴等三件装备，连杀金钱公式重做，冷却缩减改为递减叠加，劣势路一塔向河道方向前移；四号位与三号位话语权上升。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.01,
+      "SS": 1.005,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "meepo",
+      "keeper-of-the-light",
+      "venomancer",
+      "dazzle",
+      "terrorblade",
+      "phoenix",
+      "lich",
+      "enchantress"
+    ],
+    "heroNerfs": [
+      "spirit-breaker",
+      "axe",
+      "queen-of-pain",
+      "lycan",
+      "io",
+      "timbersaw",
+      "dark-willow"
+    ],
+    "newHeroes": [
+      "primal-beast"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.31d",
+    "date": "2022-06-08",
+    "title": "7.31d · 平衡补丁",
+    "summary": "玛西加入队长模式，常规英雄平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "magnus",
+      "dark-seer",
+      "pudge",
+      "lina",
+      "lion"
+    ],
+    "heroNerfs": [
+      "dragon-knight",
+      "pugna",
+      "pangolier",
+      "grimstroke",
+      "mars"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.32",
+    "date": "2022-08-24",
+    "title": "7.32 · 经验曲线与旗手",
+    "summary": "兽加入队长模式；升级经验需求与连杀经验重做，新增旗手小兵，被动工资下调 15%，移除中路附近小野点，夜魇坡道后移；辅助经济承压。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 0.995,
+      "HS": 0.99
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "dark-seer",
+      "sven",
+      "invoker",
+      "timbersaw",
+      "mirana",
+      "legion-commander",
+      "oracle",
+      "anti-mage"
+    ],
+    "heroNerfs": [
+      "marci",
+      "zeus",
+      "juggernaut",
+      "warlock",
+      "beastmaster",
+      "batrider",
+      "lycan",
+      "winter-wyvern"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.32c",
+    "date": "2022-09-27",
+    "title": "7.32c · TI11 版本",
+    "summary": "TI11 所用版本：常规英雄与物品平衡、错误修复与说明文字修正。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.32e",
+    "date": "2023-03-07",
+    "title": "7.32e · 琼英碧灵登场",
+    "summary": "新英雄琼英碧灵随 Dead Reckoning 更新登场；削弱莉娜、育母蜘蛛、先知、死亡先知，主宰、幻影刺客、哈斯卡获得加强。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "juggernaut",
+      "sand-king",
+      "lich",
+      "axe",
+      "luna",
+      "enchantress",
+      "phantom-assassin",
+      "huskar"
+    ],
+    "heroNerfs": [
+      "lina",
+      "broodmother",
+      "natures-prophet",
+      "death-prophet",
+      "undying",
+      "tiny"
+    ],
+    "newHeroes": [
+      "muerta"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.33",
+    "date": "2023-04-20",
+    "title": "New Frontiers · 地图大扩张",
+    "summary": "地图扩大约 40%：新增双生之门、痛苦魔方、智慧神符、护盾神符、莲花池与守望者，新增 12 个野点与全才属性；黑皇杖（BKB）重做、中立物品掉落与击杀公式重做；辅助经验来源增加，地图博弈更复杂。",
+    "powerMult": {
+      "C": 0.995,
+      "M": 0.99,
+      "O": 1.0,
+      "SS": 1.01,
+      "HS": 1.015
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "heroBuffs": [
+      "clinkz",
+      "crystal-maiden",
+      "juggernaut",
+      "shadow-shaman",
+      "chen",
+      "weaver",
+      "shadow-demon",
+      "lion"
+    ],
+    "heroNerfs": [
+      "broodmother",
+      "primal-beast",
+      "vengeful-spirit",
+      "brewmaster",
+      "clockwerk",
+      "snapfire",
+      "dazzle",
+      "venomancer"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.33c",
+    "date": "2023-05-13",
+    "title": "7.33c · 智慧神符加强",
+    "summary": "智慧神符与囤野收益加强，部分辅助装备被削弱，地形微调。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "earthshaker",
+      "spirit-breaker",
+      "invoker",
+      "chaos-knight",
+      "lion",
+      "primal-beast"
+    ],
+    "heroNerfs": [
+      "alchemist",
+      "void-spirit",
+      "keeper-of-the-light",
+      "medusa",
+      "legion-commander",
+      "riki"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.34",
+    "date": "2023-08-08",
+    "title": "7.34 · 队长模式新顺序",
+    "summary": "队长模式征召顺序重做（每队禁用 7 名英雄，选人按 1-3-1 分三阶段），BP 策略深度提升。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1.002,
+      "M": 1.002,
+      "O": 1.002,
+      "SS": 1.002,
+      "HS": 1.002
+    },
+    "heroBuffs": [
+      "queen-of-pain",
+      "grimstroke",
+      "dragon-knight",
+      "chaos-knight",
+      "bristleback",
+      "viper",
+      "dazzle",
+      "doom"
+    ],
+    "heroNerfs": [
+      "enchantress",
+      "tinker",
+      "clinkz",
+      "meepo",
+      "bloodseeker",
+      "mirana",
+      "lina"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.34d",
+    "date": "2023-10-05",
+    "title": "7.34d · TI12 版本",
+    "summary": "TI12 所用版本：TI12 正赛前最后一次常规平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "major": false
+  },
+  {
+    "version": "7.35",
+    "date": "2023-12-14",
+    "title": "7.35 · 肉山旗帜",
+    "summary": "野怪赏金全面下调，信使改为按受攻击次数击杀，痛苦魔方新增灼烧光环，肉山新增报复咆哮并掉落肉山旗帜，双生之门耗蓝提高；打野发育变慢。",
+    "powerMult": {
+      "C": 0.99,
+      "M": 1.005,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "phantom-assassin",
+      "timbersaw",
+      "tiny",
+      "clinkz",
+      "batrider",
+      "ursa",
+      "medusa",
+      "ember-spirit"
+    ],
+    "heroNerfs": [
+      "jakiro",
+      "gyrocopter",
+      "necrophos",
+      "treant-protector",
+      "kunkka",
+      "tinker",
+      "warlock",
+      "pugna"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.35d",
+    "date": "2024-03-21",
+    "title": "7.35d · 平衡补丁",
+    "summary": "常规平衡：陈、龙骑士、噬魂鬼、伐木机、恐怖利刃被削弱，圣剑改为可切换攻击力/技能增强模式。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "tinker",
+      "chaos-knight",
+      "snapfire",
+      "drow-ranger"
+    ],
+    "heroNerfs": [
+      "lifestealer",
+      "chen",
+      "dragon-knight",
+      "timbersaw",
+      "terrorblade",
+      "primal-beast"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.36",
+    "date": "2024-05-22",
+    "title": "先天技能与命石",
+    "summary": "每名英雄获得先天技能与多个可选命石（赛前选择、开局后揭示），英雄定位与打法分支大幅扩展，BP 信息博弈更复杂。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.005,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1.002,
+      "M": 1.002,
+      "O": 1.002,
+      "SS": 1.002,
+      "HS": 1.002
+    },
+    "heroBuffs": [
+      "invoker",
+      "phantom-assassin",
+      "tinker",
+      "queen-of-pain",
+      "shadow-fiend",
+      "bane",
+      "tiny",
+      "dragon-knight"
+    ],
+    "heroNerfs": [
+      "brewmaster",
+      "venomancer",
+      "leshrac",
+      "warlock",
+      "anti-mage",
+      "elder-titan",
+      "underlord",
+      "disruptor"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.36c",
+    "date": "2024-06-24",
+    "title": "7.36c · 平衡补丁",
+    "summary": "命石版本后续平衡：削弱圣堂刺客、编织者、影魔、石鳞剑士、谜团、噬魂鬼，卓尔游侠、虚空假面、先知获得加强。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "drow-ranger",
+      "faceless-void",
+      "natures-prophet"
+    ],
+    "heroNerfs": [
+      "templar-assassin",
+      "weaver",
+      "shadow-fiend",
+      "pangolier",
+      "enigma",
+      "lifestealer"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.37",
+    "date": "2024-07-31",
+    "title": "7.37 · 肉山旗帜必掉",
+    "summary": "肉山第二次死亡起必定掉落肉山旗帜，第三次起白天额外掉落奶酪与刷新碎片、夜晚掉落阿哈利姆福佑；传送前往前哨缩短至 4 秒；多件光环装备与召唤物体系调整。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "kunkka",
+      "bristleback",
+      "anti-mage",
+      "queen-of-pain",
+      "viper",
+      "elder-titan",
+      "spectre"
+    ],
+    "heroNerfs": [
+      "shadow-fiend",
+      "sand-king",
+      "tiny",
+      "nyx-assassin",
+      "omniknight",
+      "abaddon",
+      "monkey-king",
+      "troll-warlord"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.37b",
+    "date": "2024-08-14",
+    "title": "7.37b · 平衡补丁",
+    "summary": "修复德鲁伊引发的游戏崩溃；削弱辅助修补匠、灰烬之灵、斧王，米拉娜获得加强；新英雄百戏大王于 8 月下旬在本版本周期上线（暂不可在队长模式选用）。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "mirana",
+      "muerta",
+      "necrophos",
+      "death-prophet",
+      "alchemist"
+    ],
+    "heroNerfs": [
+      "tinker",
+      "ember-spirit",
+      "axe",
+      "viper",
+      "rubick",
+      "monkey-king"
+    ],
+    "newHeroes": [
+      "ringmaster"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.37c",
+    "date": "2024-08-28",
+    "title": "7.37c · TI13 版本",
+    "summary": "TI13 所用版本：削弱多件光环类装备，新英雄百戏大王上线不足一周即遭削弱。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroNerfs": [
+      "ringmaster"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.37d",
+    "date": "2024-10-01",
+    "title": "7.37d · TI13 后平衡",
+    "summary": "TI13 后首个平衡补丁：百戏大王遭全面削弱，缚灵索与多件光环装备（奥术鞋、洞察烟斗、炎阳纹章、赤红甲等）被削弱，移除护腕/系带/挂件 25 分钟后属性翻倍；新英雄凯于 11 月 7 日在本版本周期上线。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "anti-mage"
+    ],
+    "heroNerfs": [
+      "ringmaster",
+      "mirana"
+    ],
+    "newHeroes": [
+      "kez"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.37e",
+    "date": "2024-11-19",
+    "title": "7.37e · 平衡补丁",
+    "summary": "常规平衡：重点削弱美杜莎、露娜、娜迦海妖、魅惑魔女、琼英碧灵与凯，百戏大王获得神杖升级，戴泽、不朽尸王、主宰得到加强。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "ringmaster",
+      "dazzle",
+      "undying",
+      "juggernaut"
+    ],
+    "heroNerfs": [
+      "medusa",
+      "luna",
+      "naga-siren",
+      "enchantress",
+      "muerta",
+      "kez"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.38",
+    "date": "2025-02-19",
+    "title": "Wandering Waters · 河道与肉山大改",
+    "summary": "河水延伸至边路与野区并形成可加速的水流；肉山回到河道并随昼夜在上下两个巢穴间移动，痛苦魔方改为单个、随昼夜在地图两角轮换（与肉山异侧）；智慧神符与莲花池改为需驻守激活的神殿；移除矿区、圣泉等地图增益与角落前哨，双生之门移至地图角落；中立物品改为清野积累素材后自选打造；百戏大王加入队长模式。三、四号位游走与资源争夺更关键。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.01,
+      "SS": 1.005,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1.005,
+      "SS": 1.005,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "shadow-fiend",
+      "disruptor",
+      "nyx-assassin",
+      "visage",
+      "winter-wyvern",
+      "void-spirit",
+      "luna",
+      "venomancer"
+    ],
+    "heroNerfs": [
+      "phantom-assassin",
+      "timbersaw",
+      "skywrath-mage",
+      "puck",
+      "dragon-knight",
+      "bristleback",
+      "windranger"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.38c",
+    "date": "2025-03-27",
+    "title": "7.38c · 一塔与拉野点重制",
+    "summary": "上下两路一塔附近与拉野点地形重制，肉山巢穴微调；削弱噬魂鬼、亚巴顿、戴泽，加强圣堂刺客、伐木机、蝙蝠骑士与百戏大王。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 1.0,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "templar-assassin",
+      "timbersaw",
+      "batrider",
+      "ringmaster"
+    ],
+    "heroNerfs": [
+      "lifestealer",
+      "abaddon",
+      "dazzle"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.39",
+    "date": "2025-05-21",
+    "title": "7.39 · 魔方推迟与生命恢复",
+    "summary": "与春季清扫同步上线：痛苦魔方首刷由 15 分钟推迟到 20 分钟，肉山技能增强；新增「生命恢复」属性统一吸血与回复增强，治疗增强叠加不再递减；闪烁匕首超距施放不再有距离惩罚，穷鬼盾回归，慧光移除法术吸血增强。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 0.99,
+      "SS": 0.995,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "kez",
+      "brewmaster",
+      "phantom-assassin",
+      "chen",
+      "void-spirit",
+      "marci",
+      "vengeful-spirit",
+      "dazzle"
+    ],
+    "heroNerfs": [
+      "morphling",
+      "medusa",
+      "templar-assassin",
+      "ancient-apparition",
+      "wraith-king",
+      "batrider",
+      "spirit-breaker"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.39c",
+    "date": "2025-06-24",
+    "title": "7.39c · 削弱版本强势",
+    "summary": "集中削弱圣堂刺客、暗影萨满、不朽尸王等版本强势英雄，痛苦魔方反射不再计算英雄型单位。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 0.995,
+      "O": 1.005,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "sand-king",
+      "winter-wyvern",
+      "hoodwink",
+      "primal-beast"
+    ],
+    "heroNerfs": [
+      "templar-assassin",
+      "shadow-shaman",
+      "undying",
+      "kunkka",
+      "wraith-king",
+      "terrorblade"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.39d",
+    "date": "2025-08-05",
+    "title": "7.39d · TI14 版本",
+    "summary": "TI14 所用版本，随 Quartero 珍品活动上线：先知被削弱，刃甲、魔龙枪/飓风长戟、漩涡、玲珑心、疯狂面具等装备下调。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "faceless-void",
+      "sand-king",
+      "spirit-breaker",
+      "earth-spirit",
+      "grimstroke",
+      "snapfire"
+    ],
+    "heroNerfs": [
+      "natures-prophet",
+      "batrider",
+      "templar-assassin",
+      "axe",
+      "shadow-fiend",
+      "dazzle"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.39e",
+    "date": "2025-10-02",
+    "title": "7.39e · 平衡补丁",
+    "summary": "凯加入队长模式；支配头盔被削弱，常规英雄平衡。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 0.995,
+      "HS": 1.005
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "venomancer",
+      "lich",
+      "jakiro",
+      "treant-protector",
+      "techies"
+    ],
+    "heroNerfs": [
+      "earthshaker",
+      "beastmaster",
+      "pugna",
+      "disruptor",
+      "snapfire"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.40",
+    "date": "2025-12-15",
+    "title": "7.40 · Largo 登场",
+    "summary": "新英雄 Largo（朗戈，力量型辅助）登场；天赋改用独立天赋点（10/15/20/25 及 27–30 级获得）学习，助攻金钱公式重做，存活兵营为四塔提供护甲，幻象视野与无敌单位索敌规则调整；队长模式第一、三阶段征召顺序调整，智慧神殿改为低地，基地新增一处守卫者之门；酒仙、克林克兹、德鲁伊、斯拉克、幽鬼、树精卫士重做。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 1.0,
+      "O": 1.005,
+      "SS": 0.995,
+      "HS": 0.995
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1.005,
+      "HS": 1.005
+    },
+    "heroBuffs": [
+      "brewmaster",
+      "keeper-of-the-light",
+      "lone-druid",
+      "treant-protector",
+      "ogre-magi",
+      "razor",
+      "tidehunter",
+      "omniknight"
+    ],
+    "heroNerfs": [
+      "kez",
+      "riki",
+      "enchantress",
+      "timbersaw",
+      "juggernaut",
+      "centaur-warrunner",
+      "monkey-king",
+      "snapfire"
+    ],
+    "newHeroes": [
+      "largo"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.40b",
+    "date": "2025-12-23",
+    "title": "7.40b · 重做英雄回调",
+    "summary": "7.40 后首个平衡补丁：Largo 与玛西获得加强，德鲁伊熊灵、克林克兹、石鳞剑士得到增强，卓尔游侠、风行者被削弱；多名切换类技能英雄可在沉默时切换技能。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "largo",
+      "marci",
+      "lone-druid",
+      "clinkz",
+      "pangolier"
+    ],
+    "heroNerfs": [
+      "drow-ranger",
+      "windranger"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.40c",
+    "date": "2026-01-21",
+    "title": "7.40c · 平衡补丁",
+    "summary": "Largo 上线约一个月即加入队长模式并获小幅加强；重点削弱克林克兹（骷髅对建筑伤害降低 75%，神杖不再强化骷髅行走）与育母蜘蛛，并下调灵匣与灰烬之灵的炎阳索以抑制法术爆发流。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "largo"
+    ],
+    "heroNerfs": [
+      "clinkz",
+      "broodmother",
+      "ember-spirit"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.41",
+    "date": "2026-03-24",
+    "title": "告别命石 · 先天技能重做",
+    "summary": "命石系统整体移除，相关效果并入技能、魔晶与神杖；数十名英雄的先天技能重做，先天技能不再随其他技能等级成长，改为固定效果或随英雄等级成长；兵线交汇点向劣势路偏移，首个痛苦魔方移至下路莲花池附近并下调伤害反射，刷新球与刷新碎片不再刷新物品，一级中立物品开局即可获取；新增 9 件商店装备、移除 2 件，中立物品大换血；BP 维度收缩。",
+    "powerMult": {
+      "C": 0.99,
+      "M": 1.0,
+      "O": 1.015,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 0.998,
+      "M": 0.998,
+      "O": 0.998,
+      "SS": 0.998,
+      "HS": 0.998
+    },
+    "heroBuffs": [
+      "void-spirit",
+      "doom",
+      "beastmaster",
+      "lifestealer",
+      "disruptor",
+      "clockwerk",
+      "phoenix",
+      "shadow-shaman"
+    ],
+    "heroNerfs": [
+      "largo",
+      "shadow-fiend",
+      "outworld-destroyer",
+      "lina",
+      "omniknight",
+      "slardar",
+      "bane",
+      "warlock"
+    ],
+    "major": true
+  },
+  {
+    "version": "7.41b",
+    "date": "2026-04-07",
+    "title": "7.41b · 平衡补丁",
+    "summary": "7.41 后续平衡：重点削弱米波，末日使者、卓尔游侠、潮汐猎人、幽鬼、灰烬之灵、虚无之灵被削弱，主宰、风行者、幻影刺客、全能骑士、帕吉获得加强；黑皇杖持续时间固定，痛苦魔方伤害反射下调。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "juggernaut",
+      "windranger",
+      "phantom-assassin",
+      "omniknight",
+      "pudge"
+    ],
+    "heroNerfs": [
+      "meepo",
+      "doom",
+      "drow-ranger",
+      "tidehunter",
+      "spectre",
+      "ember-spirit",
+      "void-spirit"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.41c",
+    "date": "2026-05-06",
+    "title": "7.41c · 平衡补丁",
+    "summary": "飞行视野单位不再能看穿肉山巢穴，痛苦魔方击杀奖励（减痛光环）增强；削弱德鲁伊、兽王、凤凰、蝙蝠骑士、工程师，主宰与莉娜获得伤害加强，白银之锋、法师克星、影刃等装备下调。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 0.995,
+      "SS": 1.005,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "juggernaut",
+      "lina"
+    ],
+    "heroNerfs": [
+      "lone-druid",
+      "beastmaster",
+      "phoenix",
+      "batrider",
+      "techies"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.41d",
+    "date": "2026-06-04",
+    "title": "7.41d · 平衡补丁",
+    "summary": "中立物品大范围调整，使用诡计之雾时会提示队友，夜魇泉水回复光环范围略增；削弱凯、祈求者、小小、电炎绝手，冥魂大帝、育母蜘蛛、矮人直升机、力丸获得加强。",
+    "powerMult": {
+      "C": 1.005,
+      "M": 0.995,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "wraith-king",
+      "broodmother",
+      "gyrocopter",
+      "riki"
+    ],
+    "heroNerfs": [
+      "kez",
+      "invoker",
+      "tiny",
+      "snapfire"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.41e",
+    "date": "2026-07-30",
+    "title": "7.41e · TI15 版本",
+    "summary": "TI15 所用版本，随 2026 夏季清扫（修复 200 余个错误）同步上线：缠绕可打断双生之门等持续施法，部分切换技能不再解除隐身，多把圣剑的技能增强不再叠加；共调整 56 名英雄与约 30 件装备，森海飞霞、卓尔游侠、电炎绝手被削弱。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "gyrocopter",
+      "death-prophet",
+      "pugna",
+      "outworld-destroyer",
+      "troll-warlord",
+      "legion-commander"
+    ],
+    "heroNerfs": [
+      "hoodwink",
+      "drow-ranger",
+      "snapfire",
+      "clockwerk",
+      "treant-protector",
+      "axe",
+      "shadow-fiend",
+      "zeus"
+    ],
+    "major": false
+  },
+  {
+    "version": "7.41f",
+    "date": "2026-09-15",
+    "title": "7.41f · TI15 后平衡",
+    "summary": "截至 2026 年 10 月的最新版本，TI15 后首个平衡补丁：飓风长戟等后期装备涨价，撒旦之邪吸血、白银之锋下调；影魔、赏金猎人、孽主、树精卫士被削弱，敌法师小幅加强。",
+    "powerMult": {
+      "C": 1.0,
+      "M": 1.0,
+      "O": 1.0,
+      "SS": 1.0,
+      "HS": 1.0
+    },
+    "insightMult": {
+      "C": 1,
+      "M": 1,
+      "O": 1,
+      "SS": 1,
+      "HS": 1
+    },
+    "heroBuffs": [
+      "anti-mage"
+    ],
+    "heroNerfs": [
+      "shadow-fiend",
+      "bounty-hunter",
+      "underlord",
+      "treant-protector"
+    ],
+    "major": false
+  }
+]

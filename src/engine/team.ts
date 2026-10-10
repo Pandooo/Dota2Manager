@@ -1,0 +1,392 @@
+// 战队、阵容、战力【E1 负责实现】
+import { CONFIG, POSITION_LABEL } from './config';
+import { computeSalary, effectiveAttr, isAvailable, overallRating, playerRating } from './player';
+import { rngOf } from './rng';
+import type { Coach, GameState, InMatchEvent, Player, Position, Team } from './types';
+import { POSITIONS } from './types';
+
+/** 暴力搜索阵容时的最大候选人数（10 人 → 30240 种排列，可接受） */
+const AUTO_LINEUP_MAX_CANDIDATES = 10;
+
+export function getPlayerTeam(state: GameState): Team {
+  const team = state.teams[state.settings.playerTeamId];
+  if (!team) throw new Error('找不到玩家战队');
+  return team;
+}
+
+/** 战队全部 active 选手（不含 banned/retired） */
+export function teamPlayers(state: GameState, teamId: string): Player[] {
+  const team = state.teams[teamId];
+  if (!team) return [];
+  const out: Player[] = [];
+  for (const id of team.playerIds) {
+    const p = state.players[id];
+    if (p && p.status === 'active') out.push(p);
+  }
+  return out;
+}
+
+/** 首发槽位上的合法选手（存在、active、属于本队），否则 null */
+function slotPlayer(state: GameState, team: Team, pos: Position): Player | null {
+  const id = team.lineup?.[pos];
+  if (!id) return null;
+  const p = state.players[id];
+  if (!p || p.status !== 'active' || p.teamId !== team.id) return null;
+  return p;
+}
+
+/** 五个位置的首发（可能为 null） */
+export function lineupPlayers(state: GameState, teamId: string): { pos: Position; player: Player | null }[] {
+  const team = state.teams[teamId];
+  return POSITIONS.map((pos) => ({ pos, player: team ? slotPlayer(state, team, pos) : null }));
+}
+
+/** 替补（签约但不在首发中的 active 选手） */
+export function benchPlayers(state: GameState, teamId: string): Player[] {
+  const team = state.teams[teamId];
+  if (!team) return [];
+  const starters = new Set<string>();
+  for (const pos of POSITIONS) {
+    const id = team.lineup?.[pos];
+    if (id) starters.add(id);
+  }
+  return teamPlayers(state, teamId).filter((p) => !starters.has(p.id));
+}
+
+/** 选手能否为某赛事出场（可用且非其他赛事的临时替补） */
+function canPlayFor(p: Player, tournamentId?: string | null): boolean {
+  if (!isAvailable(p, tournamentId)) return false;
+  if (tournamentId && p.tempSubUntilTournament && p.tempSubUntilTournament !== tournamentId) return false;
+  return true;
+}
+
+/**
+ * 自动排首发：优先本位置评分最高者，其次用跨位置评分填补空位。
+ * tournamentId 给出时排除无法参加该赛事的选手。
+ * 实现：在候选（≤10 人）上对 5 个位置做带剪枝的全排列搜索，使首发 playerRating 之和最大。
+ */
+export function autoLineup(state: GameState, teamId: string, tournamentId?: string | null): void {
+  const team = state.teams[teamId];
+  if (!team) return;
+  if (!team.lineup) team.lineup = { C: null, M: null, O: null, SS: null, HS: null };
+
+  let cands = teamPlayers(state, teamId).filter((p) => canPlayFor(p, tournamentId));
+  // 稳定排序：综合评分降序，同分按 id，保证结果确定
+  cands.sort((a, b) => overallRating(b) - overallRating(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  if (cands.length > AUTO_LINEUP_MAX_CANDIDATES) {
+    // 剪枝：每个位置评分前 2 + 综合前若干
+    const keep = new Set<Player>();
+    for (const pos of POSITIONS) {
+      cands
+        .slice()
+        .sort((a, b) => playerRating(b, pos) - playerRating(a, pos))
+        .slice(0, 2)
+        .forEach((p) => keep.add(p));
+    }
+    for (const p of cands) {
+      if (keep.size >= AUTO_LINEUP_MAX_CANDIDATES) break;
+      keep.add(p);
+    }
+    cands = cands.filter((p) => keep.has(p));
+  }
+
+  const n = cands.length;
+  const slots = POSITIONS.length;
+  // r[s][i]：候选 i 打位置 s 的评分
+  const r: number[][] = POSITIONS.map((pos) => cands.map((p) => playerRating(p, pos)));
+  const slotMax = r.map((row) => (row.length ? Math.max(...row) : 0));
+  // suffixMax[s] = Σ_{s' ≥ s} slotMax[s']（上界剪枝）
+  const suffixMax = new Array<number>(slots + 1).fill(0);
+  for (let s = slots - 1; s >= 0; s--) suffixMax[s] = suffixMax[s + 1] + slotMax[s];
+
+  const maxEmpty = Math.max(0, slots - n);
+  const assign = new Array<number>(slots).fill(-1);
+  const used = new Array<boolean>(n).fill(false);
+  let best = -Infinity;
+  let bestAssign = assign.slice();
+
+  const dfs = (s: number, total: number, empties: number): void => {
+    if (s === slots) {
+      if (total > best + 1e-9) {
+        best = total;
+        bestAssign = assign.slice();
+      }
+      return;
+    }
+    if (total + suffixMax[s] <= best + 1e-9) return;
+    for (let i = 0; i < n; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      assign[s] = i;
+      dfs(s + 1, total + r[s][i], empties);
+      used[i] = false;
+    }
+    if (empties < maxEmpty) {
+      assign[s] = -1;
+      dfs(s + 1, total, empties + 1);
+    }
+  };
+  dfs(0, 0, 0);
+
+  POSITIONS.forEach((pos, s) => {
+    const i = bestAssign[s];
+    team.lineup[pos] = i >= 0 && i < n ? cands[i].id : null;
+  });
+}
+
+/** 校验阵容，返回中文错误列表（空数组 = 合法）。tournamentId 给出时检查签证/禁赛等不可用 */
+export function validateLineup(state: GameState, teamId: string, tournamentId?: string | null): string[] {
+  const team = state.teams[teamId];
+  if (!team) return ['战队不存在'];
+  const errors: string[] = [];
+  const seen = new Map<string, Position>();
+  for (const pos of POSITIONS) {
+    const id = team.lineup?.[pos];
+    const label = POSITION_LABEL[pos];
+    if (!id) {
+      errors.push(`${label}空缺`);
+      continue;
+    }
+    const p = state.players[id];
+    if (!p) {
+      errors.push(`${label}的选手不存在`);
+      continue;
+    }
+    if (seen.has(id)) {
+      errors.push(`${p.handle} 被同时安排在${POSITION_LABEL[seen.get(id)!]}和${label}`);
+      continue;
+    }
+    seen.set(id, pos);
+    if (p.teamId !== teamId || !team.playerIds.includes(id)) {
+      errors.push(`${p.handle} 不是本队选手`);
+      continue;
+    }
+    if (p.status === 'banned') {
+      errors.push(`${p.handle} 已被禁赛，无法上场`);
+      continue;
+    }
+    if (p.status === 'retired') {
+      errors.push(`${p.handle} 已退役`);
+      continue;
+    }
+    if (tournamentId) {
+      if (!isAvailable(p, tournamentId)) {
+        errors.push(`${p.handle} 无法参加本项赛事（签证/伤病）`);
+        continue;
+      }
+      if (p.tempSubUntilTournament && p.tempSubUntilTournament !== tournamentId) {
+        errors.push(`${p.handle} 是其他赛事的临时替补，不能参加本项赛事`);
+      }
+    }
+  }
+  return errors;
+}
+
+/** 设置某位置首发；若该选手已在其他位置，则与该位置原选手互换 */
+export function setLineupSlot(state: GameState, teamId: string, pos: Position, playerId: string | null): void {
+  const team = state.teams[teamId];
+  if (!team) return;
+  if (!team.lineup) team.lineup = { C: null, M: null, O: null, SS: null, HS: null };
+  if (playerId === null) {
+    team.lineup[pos] = null;
+    return;
+  }
+  const p = state.players[playerId];
+  if (!p || p.teamId !== teamId || !team.playerIds.includes(playerId)) return;
+  const prev = team.lineup[pos];
+  const otherPos = POSITIONS.find((q) => q !== pos && team.lineup[q] === playerId);
+  team.lineup[pos] = playerId;
+  if (otherPos) team.lineup[otherPos] = prev && prev !== playerId ? prev : null;
+}
+
+/** 教练评分加成 */
+function coachRatingBonus(coach: Coach | null): number {
+  if (!coach) return 0;
+  const insight = Number.isFinite(coach.insight) ? coach.insight : 0;
+  return Math.max(0, insight) * CONFIG.coach.ratingBonusPerInsight;
+}
+
+/**
+ * 战队评分 = Σ 首发 playerRating(位置) × 局内事件倍数 + 教练加成（insight × CONFIG.coach.ratingBonusPerInsight）。
+ * 首发空缺按 0 计（并在 UI 警示）。
+ */
+export function teamRating(state: GameState, teamId: string, incidents?: InMatchEvent[]): number {
+  const team = state.teams[teamId];
+  if (!team) return 0;
+  let incidentMult: Map<string, number> | null = null;
+  if (incidents && incidents.length > 0) {
+    incidentMult = new Map();
+    for (const ev of incidents) {
+      if (!ev || !ev.playerId || !Number.isFinite(ev.powerMult)) continue;
+      incidentMult.set(ev.playerId, (incidentMult.get(ev.playerId) ?? 1) * ev.powerMult);
+    }
+  }
+  let total = 0;
+  for (const pos of POSITIONS) {
+    const p = slotPlayer(state, team, pos);
+    if (!p) continue;
+    let r = playerRating(p, pos);
+    if (incidentMult) r *= Math.max(0, incidentMult.get(p.id) ?? 1);
+    total += r;
+  }
+  return total + coachRatingBonus(getCoach(state, teamId));
+}
+
+/** 战队灵性 = 首发 insight 均值 × (1-w) + 教练 insight × w（无教练时只用首发） */
+export function teamInsight(state: GameState, teamId: string): number {
+  const team = state.teams[teamId];
+  if (!team) return 0;
+  let sumIns = 0;
+  let n = 0;
+  for (const pos of POSITIONS) {
+    const p = slotPlayer(state, team, pos);
+    if (!p) continue;
+    sumIns += effectiveAttr(p, 'insight'); // 灵性也可能受修正器影响
+    n++;
+  }
+  const coach = getCoach(state, teamId);
+  const avgIns = n > 0 ? sumIns / n : 0;
+  if (!coach) return avgIns;
+  const w = CONFIG.coach.insightWeightInDraft;
+  if (n === 0) return coach.insight;
+  return avgIns * (1 - w) + coach.insight * w;
+}
+
+/**
+ * 签入选手：设置 teamId/joinedSeason/salary/contractUntil，加入 playerIds；若首发有空位且本位置空则自动补位。
+ * 非 active（禁赛/退役）选手、已解散战队一律忽略，保证战队名单只引用 active 选手。
+ */
+export function addPlayerToTeam(
+  state: GameState,
+  playerId: string,
+  teamId: string,
+  opts?: { salary?: number; contractSeasons?: number },
+): void {
+  const p = state.players[playerId];
+  const team = state.teams[teamId];
+  if (!p || !team || team.disbanded || p.status !== 'active') return;
+  // 转入前从原队（含数据不一致时残留的其他战队名单/首发）移除，保证选手只属于一支战队
+  if (p.teamId !== teamId) removePlayerFromTeam(state, playerId);
+
+  const ti = state.season?.ti ?? state.settings.startTi;
+  p.teamId = teamId;
+  p.joinedSeason = ti;
+  p.benchRounds = 0;
+  p.salary = opts?.salary !== undefined && Number.isFinite(opts.salary)
+    ? Math.max(0, Math.round(opts.salary))
+    : computeSalary(state, p, p.isRookie === true);
+
+  let seasons = opts?.contractSeasons;
+  if (seasons === undefined || !Number.isFinite(seasons)) {
+    const [lo, hi] = CONFIG.economy.contractSeasons;
+    seasons = rngOf(state).int(lo, hi);
+  }
+  // 合同含当前赛季：1 个赛季 = 本届 TI 后到期；临时替补只签到本赛季
+  seasons = p.tempSubUntilTournament ? 1 : Math.max(1, Math.round(seasons));
+  p.contractUntil = ti + seasons - 1;
+
+  if (!team.playerIds.includes(playerId)) team.playerIds.push(playerId);
+  if (!team.lineup) team.lineup = { C: null, M: null, O: null, SS: null, HS: null };
+  if (p.status === 'active' && !POSITIONS.some((q) => team.lineup[q] === playerId)) {
+    const tid = p.tempSubUntilTournament;
+    if (!tid) {
+      if (!slotPlayer(state, team, p.position)) team.lineup[p.position] = playerId;
+    } else {
+      // 临时替补：顶替本位置（优先）或任意一个「空缺 / 无法参加该赛事」的首发位
+      const order: Position[] = [p.position, ...POSITIONS.filter((q) => q !== p.position)];
+      const hole = order.find((q) => {
+        const occ = slotPlayer(state, team, q);
+        return !occ || !canPlayFor(occ, tid);
+      });
+      if (hole) team.lineup[hole] = playerId;
+    }
+  }
+}
+
+/** 移出选手：teamId=null，从 playerIds 与 lineup 中移除（不改变 status） */
+export function removePlayerFromTeam(state: GameState, playerId: string): void {
+  const p = state.players[playerId];
+  const strip = (team: Team) => {
+    const idx = team.playerIds.indexOf(playerId);
+    if (idx >= 0) team.playerIds.splice(idx, 1);
+    if (team.lineup) {
+      for (const pos of POSITIONS) if (team.lineup[pos] === playerId) team.lineup[pos] = null;
+    }
+  };
+  // 扫描全部战队（≈30 队 × ≤9 人，开销可忽略）：即使 player.teamId 与名单不一致也不会留下悬空引用
+  for (const id in state.teams) {
+    const t = state.teams[id];
+    if (t.playerIds.includes(playerId) || (t.lineup && POSITIONS.some((q) => t.lineup[q] === playerId))) strip(t);
+  }
+  if (p) {
+    if (p.teamId) p.lastTeamId = p.teamId;
+    p.teamId = null;
+    p.benchRounds = 0;
+  }
+}
+
+/** 正式阵容人数（active 且非临时替补） */
+export function rosterSize(state: GameState, teamId: string): number {
+  let count = 0;
+  for (const p of teamPlayers(state, teamId)) if (!p.tempSubUntilTournament) count++;
+  return count;
+}
+
+/**
+ * 距常规阵容上限（软上限 team.maxRoster）的剩余名额，临时替补不计；可为负（超出常规上限）。
+ * 只是提示：人类玩家战队超出常规上限仍可签约 / 求购 / 选秀，也不阻塞推进（见 rosterSigningBlock / rosterOverflowNotice）。
+ */
+export function rosterRoom(state: GameState, teamId: string): number {
+  const team = state.teams[teamId];
+  if (!team) return 0;
+  return CONFIG.team.maxRoster - rosterSize(state, teamId);
+}
+
+/** 距绝对上限（team.hardMaxRoster）的剩余名额（临时替补不计） */
+export function rosterHardRoom(state: GameState, teamId: string): number {
+  const team = state.teams[teamId];
+  if (!team) return 0;
+  return CONFIG.team.hardMaxRoster - rosterSize(state, teamId);
+}
+
+/** 人类玩家签约自由选手 / 求购选手时，阵容人数造成的阻止原因：只有达到绝对上限才阻止（null = 可以引进） */
+export function rosterSigningBlock(state: GameState, teamId: string): string | null {
+  if (!state.teams[teamId]) return '战队不存在';
+  if (rosterHardRoom(state, teamId) > 0) return null;
+  return `阵容已达绝对上限（${CONFIG.team.hardMaxRoster} 人），请先解约或出售选手`;
+}
+
+/** 阵容超出常规上限时的提示（不阻塞任何操作）；未超出返回 null */
+export function rosterOverflowNotice(state: GameState, teamId: string): string | null {
+  const n = rosterSize(state, teamId);
+  if (n <= CONFIG.team.maxRoster) return null;
+  return `阵容 ${n}/${CONFIG.team.maxRoster}：超出常规上限，替补归属感下降更快、工资照付`;
+}
+
+/** 再引进 1 人后将超出常规上限时的提示（签约 / 报价前展示）；不会超出、或已达绝对上限时返回 null */
+export function rosterSigningNote(state: GameState, teamId: string): string | null {
+  if (!state.teams[teamId] || rosterSigningBlock(state, teamId)) return null;
+  const after = rosterSize(state, teamId) + 1;
+  if (after <= CONFIG.team.maxRoster) return null;
+  return `签下后阵容 ${after}/${CONFIG.team.maxRoster}，超出常规上限：替补归属感下降更快、工资照付（绝对上限 ${CONFIG.team.hardMaxRoster} 人）`;
+}
+
+/** 按 teamRating 降序排列的战队 id（默认全部未解散战队） */
+export function rankTeamsByRating(state: GameState, teamIds?: string[]): string[] {
+  const ids = teamIds ?? activeTeams(state).map((t) => t.id);
+  const scored = ids.map((id) => ({ id, r: teamRating(state, id) }));
+  scored.sort((a, b) => b.r - a.r || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return scored.map((s) => s.id);
+}
+
+export function getCoach(state: GameState, teamId: string): Coach | null {
+  const team = state.teams[teamId];
+  if (!team || !team.coachId) return null;
+  return state.coaches[team.coachId] ?? null;
+}
+
+/** 当前未解散的全部战队 */
+export function activeTeams(state: GameState): Team[] {
+  return Object.values(state.teams).filter((t) => !t.disbanded);
+}

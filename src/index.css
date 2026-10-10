@@ -1,0 +1,266 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0a0d13;
+  --color-panel: #111722;
+  --color-panel-2: #182031;
+  --color-panel-3: #212b3f;
+  --color-line: #263147;
+  --color-ink: #e7eaf1;
+  --color-mute: #8b96ab;
+  --color-faint: #5b6579;
+  --color-dota: #c23c2a;
+  --color-dota-2: #e2523b;
+  --color-gold: #e5b24d;
+  --color-radiant: #63c24f;
+  --color-dire: #d9473a;
+  --color-good: #4cc38a;
+  --color-bad: #ef5b5b;
+  --color-info: #4ea1ff;
+  --color-tier-c: #9aa3b2;
+  --color-tier-b: #4caf6a;
+  --color-tier-a: #3d8bfd;
+  --color-tier-s: #a970ff;
+  --color-tier-ss: #ff9f1a;
+  --color-tier-ssr: #ff4d6d;
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+}
+
+/* 背景纹理：Dota 风格的暗红光晕 */
+.app-bg {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(194, 60, 42, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(229, 178, 77, 0.06), transparent 60%),
+    var(--color-bg);
+}
+
+/* 通用表格 */
+.tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.tbl th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-mute);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--color-panel);
+  z-index: 1;
+}
+.tbl td {
+  padding: 7px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent);
+  white-space: nowrap;
+}
+.tbl tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-panel-2) 70%, transparent);
+}
+.tbl .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* SSR 渐变文字 */
+.ssr-text {
+  background: linear-gradient(90deg, #ffd54a, #ff4d6d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #263147; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 抽卡/新闻等动画 */
+@keyframes pop-in {
+  0% { transform: scale(0.85) rotateY(90deg); opacity: 0; }
+  60% { transform: scale(1.04) rotateY(0deg); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.pop-in { animation: pop-in 0.45s ease-out both; }
+
+@keyframes fade-up {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.fade-up { animation: fade-up 0.25s ease-out both; }
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229, 178, 77, 0.0); }
+  50% { box-shadow: 0 0 18px 2px rgba(229, 178, 77, 0.45); }
+}
+.glow { animation: glow 1.6s ease-in-out infinite; }
+
+/* 新闻滚动栏 */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker-scroll var(--ticker-duration, 60s) linear infinite;
+  will-change: transform;
+}
+.ticker:hover .ticker-track {
+  animation-play-state: paused;
+}
+.ticker-mask {
+  mask-image: linear-gradient(90deg, transparent, black 32px, black calc(100% - 48px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 32px, black calc(100% - 48px), transparent);
+}
+
+/* 顶部居中提示 */
+@keyframes toast-drop {
+  from { transform: translateY(-12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.toast-drop { animation: toast-drop 0.22s ease-out both; }
+
+/* ---------------------------------------------------------------------------
+   TI 转场（第八波）：src/ui/components/TiTransition.tsx
+   正赛：不朽之盾升起 → 发光 → 消失（--ti-dur 与组件的 MAIN_MS 一致）；减少动态效果时只淡入淡出。
+   --------------------------------------------------------------------------- */
+.ti-intro { --ti-dur: 3.2s; }
+.ti-intro-run { animation: ti-overlay-life var(--ti-dur) ease-in-out both; }
+.ti-intro-reduced { animation: ti-overlay-fade 1.8s ease-in-out both; }
+.ti-intro.ti-intro-leave { animation: ti-overlay-out 0.28s ease-out both; }
+
+@keyframes ti-overlay-life {
+  0% { opacity: 0; }
+  7% { opacity: 1; }
+  76% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes ti-overlay-fade {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes ti-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* 盾：自下方升起 → 停驻微浮 → 放大消散 */
+.ti-intro-run .ti-aegis { animation: ti-aegis-rise var(--ti-dur) cubic-bezier(0.2, 0.8, 0.2, 1) both; will-change: transform, opacity; }
+@keyframes ti-aegis-rise {
+  0% { transform: translateY(42vh) scale(0.78); opacity: 0; }
+  12% { opacity: 1; }
+  36% { transform: translateY(0) scale(1); }
+  70% { transform: translateY(-1.2vh) scale(1.03); opacity: 1; }
+  100% { transform: translateY(-5vh) scale(1.22); opacity: 0; }
+}
+
+/* 光晕：两次脉冲后扩散 */
+.ti-aegis-halo { opacity: 0; }
+.ti-intro-run .ti-aegis-halo { animation: ti-aegis-halo var(--ti-dur) ease-in-out both; will-change: transform, opacity; }
+.ti-intro-reduced .ti-aegis-halo { opacity: 0.6; }
+@keyframes ti-aegis-halo {
+  0%, 28% { opacity: 0; transform: scale(0.6); }
+  44% { opacity: 1; transform: scale(1.05); }
+  56% { opacity: 0.75; transform: scale(0.98); }
+  70% { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+
+/* 盾面扫光（SVG 用户坐标） */
+.ti-aegis-shine { opacity: 0; }
+.ti-intro-run .ti-aegis-shine { animation: ti-aegis-shine var(--ti-dur) ease-in-out both; }
+@keyframes ti-aegis-shine {
+  0%, 38% { transform: translateX(0); opacity: 0; }
+  41% { opacity: 1; }
+  62% { transform: translateX(340px); opacity: 1; }
+  64%, 100% { transform: translateX(340px); opacity: 0; }
+}
+
+/* 放射光 */
+.ti-intro-rays { opacity: 0; }
+.ti-intro-run .ti-intro-rays { animation: ti-rays var(--ti-dur) linear both; }
+@keyframes ti-rays {
+  0%, 25% { opacity: 0; transform: rotate(0deg) scale(0.9); }
+  50% { opacity: 0.9; }
+  100% { opacity: 0; transform: rotate(40deg) scale(1.15); }
+}
+
+/* 上升光点 */
+.ti-spark { opacity: 0; }
+.ti-intro-run .ti-spark { animation: ti-spark 2.2s ease-out both; }
+@keyframes ti-spark {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateY(-62vh) scale(1); opacity: 0; }
+}
+
+/* 标题文字 */
+.ti-intro-run .ti-intro-text { animation: ti-text-in var(--ti-dur) ease-out both; }
+@keyframes ti-text-in {
+  0%, 24% { opacity: 0; transform: translateY(14px); }
+  40%, 100% { opacity: 1; transform: translateY(0); }
+}
+
+/* 预选横幅 */
+.ti-banner { animation: ti-banner-drop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.ti-banner.ti-banner-leave { animation: ti-banner-up 0.25s ease-in both; }
+@keyframes ti-banner-drop {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes ti-banner-up {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-100%); opacity: 0; }
+}
+.ti-banner-progress { transform-origin: left center; animation: ti-banner-progress var(--ti-banner-ms, 7s) linear both; }
+@keyframes ti-banner-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* TI 正赛回合：顶栏 / 底栏主题点缀的呼吸 */
+.ti-accent-breathe { animation: ti-breathe 4.5s ease-in-out infinite; }
+@keyframes ti-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* 减少动态效果：正赛转场只淡入淡出，横幅 / 点缀不做位移与呼吸 */
+@media (prefers-reduced-motion: reduce) {
+  .ti-intro-run { animation: ti-overlay-fade 1.8s ease-in-out both; }
+  .ti-intro-run .ti-aegis,
+  .ti-intro-run .ti-intro-text { animation: none; }
+  .ti-intro-run .ti-aegis-halo { animation: none; opacity: 0.6; }
+  .ti-intro-run .ti-aegis-shine,
+  .ti-intro-run .ti-intro-rays,
+  .ti-intro-run .ti-spark { animation: none; display: none; }
+  .ti-banner,
+  .ti-banner.ti-banner-leave { animation: none; }
+  .ti-accent-breathe { animation: none; opacity: 0.8; }
+}
+.ti-intro-reduced .ti-intro-rays,
+.ti-intro-reduced .ti-spark { display: none; }

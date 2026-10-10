@@ -1,0 +1,236 @@
+{
+  "_meta": {
+    "description": "生涯总结（legacy.ts）的历史俱乐部参照表：真实俱乐部截至 TI15（2026）的 TI 成绩与 Valve Major 冠军（事实性数据）。",
+    "asOf": "2026-10",
+    "sources": [
+      "Liquipedia Dota 2：The International 2011–2026 各届奖金/名次表（The_International/<年份>）",
+      "Liquipedia Dota 2：Dota Major Championships（2015–2023 共 28 届 Valve Major）各届冠军",
+      "src/data/tis.json（冠军 / 亚军字段，测试 tests/legacy.test.ts 交叉校验）"
+    ],
+    "conventions": [
+      "以俱乐部（组织）为单位，只统计主队：改名 / 合作冠名的主队计入同一组织（PSG.LGD → LGD；G2 x iG → Invictus Gaming；TNC Pro Team → TNC Predator），二队（LGD.Forever Young、VG.Reborn、iG.Vitality）不计入主队。",
+      "tiTitles / tiRunnerUp / tiTop4 / tiTop8 为 TI 序号列表：冠军、亚军、第 3–4 名、第 5–8 名；tiAppearances 为参加 TI 正赛的届数。",
+      "majors 为 Valve Major（2015 Frankfurt – 2023 Bali，共 28 届）冠军数，majorList 列出明细；DPC 之前与之后的其他顶级赛事不计入。",
+      "teamIds 为本项目 roster 数据中对应的战队 id（用于与 tis.json 交叉校验与界面链接）。"
+    ]
+  },
+  "clubs": [
+    {
+      "id": "team-spirit", "name": "Team Spirit", "region": "CIS", "teamIds": ["team-spirit"],
+      "firstTi": 10, "lastTi": 15,
+      "tiTitles": [10, 12, 15], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [], "tiAppearances": 6,
+      "majors": 1, "majorList": ["PGL Arlington Major 2022"],
+      "highlight": "TI10、TI12、TI15 三夺不朽盾，唯一的三冠俱乐部"
+    },
+    {
+      "id": "og", "name": "OG", "region": "EU", "teamIds": ["og"],
+      "firstTi": 6, "lastTi": 15,
+      "tiTitles": [8, 9], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [7, 10, 11], "tiAppearances": 7,
+      "majors": 5, "majorList": ["Frankfurt Major 2015", "Manila Major 2016", "Boston Major 2016", "Kiev Major 2017", "ESL One Stockholm Major 2022"],
+      "highlight": "TI8–TI9 两连冠，唯一成功卫冕的俱乐部；5 个 Valve Major"
+    },
+    {
+      "id": "team-liquid", "name": "Team Liquid", "region": "NA", "teamIds": ["team-liquid"],
+      "firstTi": 3, "lastTi": 15,
+      "tiTitles": [7, 13], "tiRunnerUp": [9], "tiTop4": [8, 11], "tiTop8": [3, 6, 12, 15], "tiAppearances": 11,
+      "majors": 1, "majorList": ["China Dota2 Supermajor 2018"],
+      "highlight": "TI7、TI13 两夺冠军，TI9 亚军；十一次参加 TI"
+    },
+    {
+      "id": "natus-vincere", "name": "Natus Vincere", "region": "CIS", "teamIds": ["natus-vincere"],
+      "firstTi": 1, "lastTi": 14,
+      "tiTitles": [1], "tiRunnerUp": [2, 3], "tiTop4": [], "tiTop8": [4], "tiAppearances": 8,
+      "majors": 0, "majorList": [],
+      "highlight": "首届 TI 冠军，TI2、TI3 连续亚军"
+    },
+    {
+      "id": "invictus-gaming", "name": "Invictus Gaming", "region": "CN", "teamIds": ["invictus-gaming", "g2-ig"],
+      "firstTi": 1, "lastTi": 13,
+      "tiTitles": [2], "tiRunnerUp": [], "tiTop4": [10], "tiTop8": [1, 3, 4, 7], "tiAppearances": 9,
+      "majors": 1, "majorList": ["ONE Esports Singapore Major 2021"],
+      "highlight": "TI2 冠军，首支捧起不朽盾的中国战队；TI10 殿军"
+    },
+    {
+      "id": "alliance", "name": "Alliance", "region": "EU", "teamIds": ["alliance"],
+      "firstTi": 3, "lastTi": 10,
+      "tiTitles": [3], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [], "tiAppearances": 5,
+      "majors": 0, "majorList": [],
+      "highlight": "TI3 冠军"
+    },
+    {
+      "id": "newbee", "name": "Newbee", "region": "CN", "teamIds": ["newbee"],
+      "firstTi": 4, "lastTi": 9,
+      "tiTitles": [4], "tiRunnerUp": [7], "tiTop4": [], "tiTop8": [], "tiAppearances": 6,
+      "majors": 0, "majorList": [],
+      "highlight": "TI4 冠军，TI7 亚军"
+    },
+    {
+      "id": "evil-geniuses", "name": "Evil Geniuses", "region": "NA", "teamIds": ["evil-geniuses"],
+      "firstTi": 2, "lastTi": 12,
+      "tiTitles": [5], "tiRunnerUp": [], "tiTop4": [4, 6, 8], "tiTop8": [9], "tiAppearances": 10,
+      "majors": 0, "majorList": [],
+      "highlight": "TI5 冠军；TI4、TI6、TI8 三度季军，十次参加 TI"
+    },
+    {
+      "id": "wings-gaming", "name": "Wings Gaming", "region": "CN", "teamIds": ["wings-gaming"],
+      "firstTi": 6, "lastTi": 6,
+      "tiTitles": [6], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [], "tiAppearances": 1,
+      "majors": 0, "majorList": [],
+      "highlight": "TI6 冠军——唯一一次参加 TI 便登顶"
+    },
+    {
+      "id": "tundra-esports", "name": "Tundra Esports", "region": "EU", "teamIds": ["tundra-esports"],
+      "firstTi": 11, "lastTi": 14,
+      "tiTitles": [11], "tiRunnerUp": [], "tiTop4": [13], "tiTop8": [14], "tiAppearances": 4,
+      "majors": 0, "majorList": [],
+      "highlight": "TI11 冠军，TI13 季军"
+    },
+    {
+      "id": "team-falcons", "name": "Team Falcons", "region": "EU", "teamIds": ["team-falcons"],
+      "firstTi": 13, "lastTi": 15,
+      "tiTitles": [14], "tiRunnerUp": [], "tiTop4": [13], "tiTop8": [15], "tiAppearances": 3,
+      "majors": 0, "majorList": [],
+      "highlight": "TI14 冠军，TI13 殿军"
+    },
+    {
+      "id": "lgd", "name": "LGD Gaming（PSG.LGD）", "region": "CN", "teamIds": ["lgd-gaming", "psg-lgd"],
+      "firstTi": 2, "lastTi": 15,
+      "tiTitles": [], "tiRunnerUp": [8, 10], "tiTop4": [2, 5, 7, 9, 12], "tiTop8": [4, 11], "tiAppearances": 12,
+      "majors": 3, "majorList": ["EPICENTER XL 2018", "MDL Changsha Major 2018", "WePlay AniMajor 2021"],
+      "highlight": "TI8、TI10 两度亚军，七次打进 TI 前四；3 个 Valve Major"
+    },
+    {
+      "id": "gaimin-gladiators", "name": "Gaimin Gladiators", "region": "EU", "teamIds": ["gaimin-gladiators"],
+      "firstTi": 11, "lastTi": 13,
+      "tiTitles": [], "tiRunnerUp": [12, 13], "tiTop4": [], "tiTop8": [], "tiAppearances": 3,
+      "majors": 3, "majorList": ["Lima Major 2023", "ESL One Berlin Major 2023", "Bali Major 2023"],
+      "highlight": "TI12、TI13 连续亚军；2023 赛季包揽全部 3 个 Major"
+    },
+    {
+      "id": "team-secret", "name": "Team Secret", "region": "EU", "teamIds": ["team-secret"],
+      "firstTi": 5, "lastTi": 11,
+      "tiTitles": [], "tiRunnerUp": [11], "tiTop4": [9, 10], "tiTop8": [5, 8], "tiAppearances": 7,
+      "majors": 5, "majorList": ["Shanghai Major 2016", "DreamLeague Season 8 2017", "Chongqing Major 2019", "MDL Disneyland Paris Major 2019", "DreamLeague Season 13 Leipzig Major 2020"],
+      "highlight": "TI11 亚军，TI9–TI11 连续三届前四；5 个 Valve Major"
+    },
+    {
+      "id": "virtus-pro", "name": "Virtus.pro", "region": "CIS", "teamIds": ["virtus-pro"],
+      "firstTi": 3, "lastTi": 12,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [5, 7, 8, 10, 12], "tiAppearances": 7,
+      "majors": 5, "majorList": ["ESL One Hamburg 2017", "ESL One Katowice 2018", "The Bucharest Major 2018", "ESL One Birmingham 2018", "The Kuala Lumpur Major 2018"],
+      "highlight": "5 个 Valve Major；五次 TI 前八"
+    },
+    {
+      "id": "vici-gaming", "name": "Vici Gaming", "region": "CN", "teamIds": ["vici-gaming"],
+      "firstTi": 4, "lastTi": 15,
+      "tiTitles": [], "tiRunnerUp": [4], "tiTop4": [5], "tiTop8": [9, 10], "tiAppearances": 6,
+      "majors": 2, "majorList": ["DreamLeague Season 11 Stockholm Major 2019", "EPICENTER Major 2019"],
+      "highlight": "TI4 亚军，TI5 殿军；2019 年 2 个 Valve Major"
+    },
+    {
+      "id": "team-dk", "name": "Team DK", "region": "CN", "teamIds": ["team-dk"],
+      "firstTi": 2, "lastTi": 4,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [2, 4], "tiTop8": [3], "tiAppearances": 3,
+      "majors": 0, "majorList": [],
+      "highlight": "TI2、TI4 殿军，三届 TI 全部打进前六"
+    },
+    {
+      "id": "ehome", "name": "EHOME", "region": "CN", "teamIds": ["ehome"],
+      "firstTi": 1, "lastTi": 6,
+      "tiTitles": [], "tiRunnerUp": [1], "tiTop4": [], "tiTop8": [2, 5, 6], "tiAppearances": 4,
+      "majors": 0, "majorList": [],
+      "highlight": "TI1 亚军，四次参加 TI 全部进入前六"
+    },
+    {
+      "id": "digital-chaos", "name": "Digital Chaos", "region": "NA", "teamIds": ["digital-chaos"],
+      "firstTi": 6, "lastTi": 7,
+      "tiTitles": [], "tiRunnerUp": [6], "tiTop4": [], "tiTop8": [], "tiAppearances": 2,
+      "majors": 0, "majorList": [],
+      "highlight": "TI6 亚军"
+    },
+    {
+      "id": "cdec-gaming", "name": "CDEC Gaming", "region": "CN", "teamIds": ["cdec-gaming"],
+      "firstTi": 5, "lastTi": 5,
+      "tiTitles": [], "tiRunnerUp": [5], "tiTop4": [], "tiTop8": [], "tiAppearances": 1,
+      "majors": 0, "majorList": [],
+      "highlight": "TI5 亚军"
+    },
+    {
+      "id": "xtreme-gaming", "name": "Xtreme Gaming", "region": "CN", "teamIds": ["xtreme-gaming"],
+      "firstTi": 13, "lastTi": 15,
+      "tiTitles": [], "tiRunnerUp": [14], "tiTop4": [], "tiTop8": [13], "tiAppearances": 3,
+      "majors": 0, "majorList": [],
+      "highlight": "TI14 亚军"
+    },
+    {
+      "id": "team-vision", "name": "TEAM VISION", "region": "CIS", "teamIds": ["team-vision"],
+      "firstTi": 15, "lastTi": 15,
+      "tiTitles": [], "tiRunnerUp": [15], "tiTop4": [], "tiTop8": [], "tiAppearances": 1,
+      "majors": 0, "majorList": [],
+      "highlight": "TI15 亚军"
+    },
+    {
+      "id": "fnatic", "name": "Fnatic", "region": "EU", "teamIds": ["fnatic"],
+      "firstTi": 3, "lastTi": 11,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [6], "tiTop8": [3], "tiAppearances": 9,
+      "majors": 0, "majorList": [],
+      "highlight": "九次参加 TI，TI6 殿军"
+    },
+    {
+      "id": "orange-esports", "name": "Orange Esports", "region": "SEA", "teamIds": ["orange-esports"],
+      "firstTi": 2, "lastTi": 3,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [3], "tiTop8": [2], "tiAppearances": 2,
+      "majors": 0, "majorList": [],
+      "highlight": "TI3 季军"
+    },
+    {
+      "id": "team-aster", "name": "Team Aster", "region": "CN", "teamIds": ["team-aster"],
+      "firstTi": 10, "lastTi": 11,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [11], "tiTop8": [], "tiAppearances": 2,
+      "majors": 0, "majorList": [],
+      "highlight": "TI11 殿军"
+    },
+    {
+      "id": "azure-ray", "name": "Azure Ray", "region": "CN", "teamIds": ["azure-ray"],
+      "firstTi": 12, "lastTi": 12,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [12], "tiTop8": [], "tiAppearances": 1,
+      "majors": 0, "majorList": [],
+      "highlight": "TI12 殿军"
+    },
+    {
+      "id": "mineski", "name": "Mineski", "region": "SEA", "teamIds": ["mineski"],
+      "firstTi": 1, "lastTi": 9,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [], "tiAppearances": 3,
+      "majors": 1, "majorList": ["Dota 2 Asia Championships 2018"],
+      "highlight": "DAC 2018 冠军，首个东南亚 Major 冠军"
+    },
+    {
+      "id": "tnc", "name": "TNC Predator", "region": "SEA", "teamIds": ["tnc-pro-team", "tnc-predator"],
+      "firstTi": 6, "lastTi": 9,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [6], "tiAppearances": 4,
+      "majors": 1, "majorList": ["MDL Chengdu Major 2019"],
+      "highlight": "MDL 成都 Major 2019 冠军；TI6 第 7–8 名"
+    },
+    {
+      "id": "cloud9", "name": "Cloud9", "region": "EU", "teamIds": ["cloud9"],
+      "firstTi": 4, "lastTi": 13,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [4, 13], "tiAppearances": 4,
+      "majors": 0, "majorList": [],
+      "highlight": "TI4、TI13 第 5–6 名"
+    },
+    {
+      "id": "team-empire", "name": "Team Empire", "region": "CIS", "teamIds": ["team-empire"],
+      "firstTi": 4, "lastTi": 7,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [7], "tiAppearances": 3,
+      "majors": 0, "majorList": [],
+      "highlight": "TI7 第 7–8 名"
+    },
+    {
+      "id": "mousesports", "name": "mousesports", "region": "EU", "teamIds": ["mousesports"],
+      "firstTi": 2, "lastTi": 4,
+      "tiTitles": [], "tiRunnerUp": [], "tiTop4": [], "tiTop8": [], "tiAppearances": 3,
+      "majors": 0, "majorList": [],
+      "highlight": "TI2–TI4 连续三届参赛"
+    }
+  ]
+}

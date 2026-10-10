@@ -1,0 +1,392 @@
+{
+  "ti": 12,
+  "year": 2023,
+  "teams": [
+    {
+      "id": "team-spirit", "name": "Team Spirit", "tag": "TSpirit", "region": "CIS", "honor": 1120, "funds": 2800000, "color": "#E5E5E5",
+      "atTI": true, "tiResult": "1",
+      "coach": {"id": "silent", "name": "Airat Gaziev", "nationality": "RU", "birthYear": 1992, "tier": "S", "insight": 90},
+      "players": [
+        {"id": "yatoro", "handle": "Yatoro", "name": "Illya Mulyarchuk", "nationality": "UA", "birthYear": 2003, "position": "C", "mmr": 15000, "power": 94, "talent": 92, "resilience": 55, "insight": 62, "loyalty": 88, "signatureHeroes": ["morphling", "faceless-void", "naga-siren"]},
+        {"id": "larl", "handle": "Larl", "name": "Denis Sigitov", "nationality": "RU", "birthYear": 2002, "position": "M", "mmr": 12000, "power": 89, "talent": 74, "resilience": 50, "insight": 66, "loyalty": 60, "signatureHeroes": ["storm-spirit", "puck", "void-spirit"]},
+        {"id": "collapse", "handle": "Collapse", "name": "Magomed Khalilov", "nationality": "RU", "birthYear": 2002, "position": "O", "mmr": 14000, "power": 93, "talent": 74, "resilience": 62, "insight": 72, "loyalty": 90, "signatureHeroes": ["magnus", "mars", "primal-beast"]},
+        {"id": "mira", "handle": "Mira", "name": "Myroslav Kolpakov", "nationality": "UA", "birthYear": 1999, "position": "SS", "mmr": 11500, "power": 88, "talent": 52, "resilience": 66, "insight": 76, "loyalty": 88, "signatureHeroes": ["hoodwink", "rubick", "tiny"]},
+        {"id": "miposhka", "handle": "Miposhka", "name": "Yaroslav Naidenov", "nationality": "RU", "birthYear": 1997, "position": "HS", "mmr": 11800, "power": 90, "talent": 42, "resilience": 88, "insight": 92, "loyalty": 92, "signatureHeroes": ["enchantress", "disruptor", "bane"]}
+      ]
+    },
+    {
+      "id": "gaimin-gladiators", "name": "Gaimin Gladiators", "tag": "GG", "region": "EU", "honor": 740, "funds": 2800000, "color": "#D4AF37",
+      "atTI": true, "tiResult": "2",
+      "coach": {"id": "cy", "name": "Aske Wilbur Vang Larsen", "nationality": "DK", "birthYear": 1996, "tier": "A", "insight": 86},
+      "players": [
+        {"id": "dyrachyo", "handle": "dyrachyo", "name": "Anton Shkredov", "nationality": "RU", "birthYear": 2001, "position": "C", "mmr": 12800, "power": 88, "talent": 70, "resilience": 55, "insight": 58, "loyalty": 75, "signatureHeroes": ["lifestealer", "chaos-knight", "troll-warlord"]},
+        {"id": "quinn", "handle": "Quinn", "name": "Quinn Callahan", "nationality": "US", "birthYear": 1999, "position": "M", "mmr": 13500, "power": 90, "talent": 55, "resilience": 68, "insight": 74, "loyalty": 65, "signatureHeroes": ["pangolier", "ember-spirit", "void-spirit"]},
+        {"id": "ace-dk", "handle": "Ace", "name": "Marcus Hoelgaard", "nationality": "DK", "birthYear": 1994, "position": "O", "mmr": 12000, "power": 88, "talent": 38, "resilience": 82, "insight": 80, "loyalty": 80, "signatureHeroes": ["centaur-warrunner", "broodmother", "beastmaster"]},
+        {"id": "tofu", "handle": "tOfu", "name": "Erik Engel", "nationality": "DE", "birthYear": 1996, "position": "SS", "mmr": 11000, "power": 87, "talent": 40, "resilience": 72, "insight": 78, "loyalty": 75, "signatureHeroes": ["rubick", "techies", "tusk"]},
+        {"id": "seleri", "handle": "Seleri", "name": "Melchior Hillenkamp", "nationality": "NL", "birthYear": 1999, "position": "HS", "mmr": 10800, "power": 86, "talent": 55, "resilience": 70, "insight": 86, "loyalty": 82, "signatureHeroes": ["enchantress", "chen", "io"]}
+      ]
+    },
+    {
+      "id": "lgd-gaming", "name": "LGD Gaming", "tag": "LGD", "region": "CN", "honor": 2500, "funds": 2800000, "color": "#F05A28",
+      "atTI": true, "tiResult": "3",
+      "coach": {"id": "xiao8", "name": "张宁", "nationality": "CN", "birthYear": 1989, "tier": "SS", "insight": 92},
+      "players": [
+        {"id": "shiro", "handle": "shiro", "name": "郭轩昂", "nationality": "CN", "birthYear": 2001, "position": "C", "mmr": 11500, "power": 86, "talent": 70, "resilience": 50, "insight": 55, "loyalty": 58, "signatureHeroes": ["morphling", "phantom-lancer", "naga-siren"]},
+        {"id": "nothingtosay", "handle": "NothingToSay", "name": "Cheng Jin Xiang", "nationality": "MY", "birthYear": 2000, "position": "M", "mmr": 13200, "power": 89, "talent": 70, "resilience": 60, "insight": 70, "loyalty": 80, "signatureHeroes": ["tinker", "ember-spirit", "leshrac"]},
+        {"id": "niu", "handle": "niu", "name": "李孔博", "nationality": "CN", "birthYear": 2000, "position": "O", "mmr": 10200, "power": 84, "talent": 66, "resilience": 50, "insight": 64, "loyalty": 55, "signatureHeroes": ["mars", "centaur-warrunner", "primal-beast"]},
+        {"id": "planet", "handle": "planet", "name": "林灏", "nationality": "CN", "birthYear": 1998, "position": "SS", "mmr": 9800, "power": 83, "talent": 52, "resilience": 58, "insight": 72, "loyalty": 60, "signatureHeroes": ["rubick", "mirana", "tusk"]},
+        {"id": "y", "handle": "y`", "name": "张懿萍", "nationality": "CN", "birthYear": 1998, "position": "HS", "mmr": 11000, "power": 87, "talent": 45, "resilience": 75, "insight": 82, "loyalty": 90, "signatureHeroes": ["elder-titan", "undying", "oracle"]}
+      ]
+    },
+    {
+      "id": "azure-ray", "name": "Azure Ray", "tag": "AR", "region": "CN", "honor": 130, "funds": 1400000, "color": "#2F80ED",
+      "atTI": true, "tiResult": "4",
+      "coach": {"id": "lanm", "name": "张志成", "nationality": "CN", "birthYear": 1989, "tier": "SS", "insight": 86},
+      "players": [
+        {"id": "lou", "handle": "Lou", "name": "楼桢", "nationality": "CN", "birthYear": 2001, "position": "C", "mmr": 10500, "power": 84, "talent": 70, "resilience": 48, "insight": 55, "loyalty": 60, "signatureHeroes": ["luna", "faceless-void", "naga-siren"]},
+        {"id": "somnus", "handle": "Somnus", "name": "路垚", "nationality": "CN", "birthYear": 1995, "position": "M", "mmr": 12000, "power": 85, "talent": 38, "resilience": 75, "insight": 75, "loyalty": 60, "signatureHeroes": ["shadow-fiend", "storm-spirit", "invoker"]},
+        {"id": "chalice", "handle": "Chalice", "name": "杨沈仪", "nationality": "CN", "birthYear": 1998, "position": "O", "mmr": 10800, "power": 84, "talent": 48, "resilience": 68, "insight": 72, "loyalty": 60, "signatureHeroes": ["dark-seer", "clockwerk", "mars"]},
+        {"id": "fy", "handle": "fy", "name": "徐林森", "nationality": "CN", "birthYear": 1995, "position": "SS", "mmr": 11000, "power": 84, "talent": 35, "resilience": 82, "insight": 88, "loyalty": 62, "signatureHeroes": ["rubick", "earth-spirit", "grimstroke"]},
+        {"id": "tianming", "handle": "天命", "name": "姜岸", "nationality": "CN", "birthYear": 1996, "position": "HS", "mmr": 9500, "power": 82, "talent": 40, "resilience": 72, "insight": 76, "loyalty": 62, "signatureHeroes": ["bounty-hunter", "elder-titan", "oracle"]}
+      ]
+    },
+    {
+      "id": "team-liquid", "name": "Team Liquid", "tag": "Liquid", "region": "EU", "honor": 2100, "funds": 2800000, "color": "#1C77C3",
+      "atTI": true, "tiResult": "5-6",
+      "coach": {"id": "blitz", "name": "William Lee", "nationality": "US", "birthYear": 1990, "tier": "A", "insight": 88},
+      "players": [
+        {"id": "micke", "handle": "miCKe", "name": "Michael Vu", "nationality": "SE", "birthYear": 1999, "position": "C", "mmr": 12500, "power": 85, "talent": 55, "resilience": 62, "insight": 60, "loyalty": 82, "signatureHeroes": ["natures-prophet", "morphling", "monkey-king"]},
+        {"id": "nisha", "handle": "Nisha", "name": "Michał Jankowski", "nationality": "PL", "birthYear": 2000, "position": "M", "mmr": 13500, "power": 86, "talent": 65, "resilience": 60, "insight": 72, "loyalty": 65, "signatureHeroes": ["void-spirit", "puck", "templar-assassin"]},
+        {"id": "zai", "handle": "zai", "name": "Ludwig Wåhlberg", "nationality": "SE", "birthYear": 1997, "position": "O", "mmr": 11000, "power": 84, "talent": 40, "resilience": 78, "insight": 82, "loyalty": 76, "signatureHeroes": ["dark-seer", "enigma", "sand-king"]},
+        {"id": "boxi", "handle": "Boxi", "name": "Samuel Svahn", "nationality": "SE", "birthYear": 1998, "position": "SS", "mmr": 10800, "power": 84, "talent": 42, "resilience": 70, "insight": 76, "loyalty": 85, "signatureHeroes": ["tusk", "rubick", "earth-spirit"]},
+        {"id": "insania", "handle": "iNSaNiA", "name": "Aydin Sarkohi", "nationality": "SE", "birthYear": 1994, "position": "HS", "mmr": 10500, "power": 84, "talent": 35, "resilience": 82, "insight": 90, "loyalty": 85, "signatureHeroes": ["oracle", "rubick", "io"]}
+      ]
+    },
+    {
+      "id": "betboom-team", "name": "BetBoom Team", "tag": "BB", "region": "CIS", "honor": 170, "funds": 2800000, "color": "#C8102E",
+      "atTI": true, "tiResult": "5-6",
+      "coach": {"id": "boolk", "name": "Anatoly Ivanov", "nationality": "RU", "birthYear": 1991, "tier": "A", "insight": 82},
+      "players": [
+        {"id": "nightfall", "handle": "Nightfall", "name": "Egor Grigorenko", "nationality": "RU", "birthYear": 2002, "position": "C", "mmr": 11800, "power": 84, "talent": 72, "resilience": 50, "insight": 55, "loyalty": 62, "signatureHeroes": ["morphling", "faceless-void", "phantom-assassin"]},
+        {"id": "gpk", "handle": "gpk", "name": "Danil Skutin", "nationality": "RU", "birthYear": 2001, "position": "M", "mmr": 13000, "power": 85, "talent": 70, "resilience": 52, "insight": 62, "loyalty": 65, "signatureHeroes": ["ember-spirit", "invoker", "storm-spirit"]},
+        {"id": "pure", "handle": "Pure", "name": "Ivan Moskalenko", "nationality": "RU", "birthYear": 2004, "position": "O", "mmr": 11500, "power": 82, "talent": 86, "resilience": 40, "insight": 55, "loyalty": 55, "signatureHeroes": ["templar-assassin", "luna", "primal-beast"]},
+        {"id": "save", "handle": "Save-", "name": "Vitalie Melnic", "nationality": "MD", "birthYear": 2002, "position": "SS", "mmr": 10500, "power": 82, "talent": 70, "resilience": 52, "insight": 74, "loyalty": 65, "signatureHeroes": ["windranger", "muerta", "hoodwink"]},
+        {"id": "torontotokyo", "handle": "TORONTOTOKYO", "name": "Alexander Khertek", "nationality": "RU", "birthYear": 1997, "position": "HS", "mmr": 11500, "power": 84, "talent": 40, "resilience": 78, "insight": 86, "loyalty": 60, "signatureHeroes": ["mirana", "undying", "tiny"]}
+      ]
+    },
+    {
+      "id": "nouns", "name": "nouns", "tag": "nouns", "region": "NA", "honor": 120, "funds": 700000, "color": "#D22209",
+      "atTI": true, "tiResult": "7-8",
+      "coach": {"id": "astini", "name": "Filipe Astini Ribeiro", "nationality": "BR", "birthYear": 1990, "tier": "B", "insight": 74},
+      "players": [
+        {"id": "k1", "handle": "K1", "name": "Héctor Antonio Rodríguez Asto", "nationality": "PE", "birthYear": 2000, "position": "C", "mmr": 11500, "power": 82, "talent": 60, "resilience": 58, "insight": 55, "loyalty": 52, "signatureHeroes": ["wraith-king", "sven", "faceless-void"]},
+        {"id": "gunnar", "handle": "Gunnar", "name": "Nicolas Lopez", "nationality": "US", "birthYear": 2000, "position": "M", "mmr": 11000, "power": 81, "talent": 60, "resilience": 55, "insight": 66, "loyalty": 70, "signatureHeroes": ["lone-druid", "ember-spirit", "puck"]},
+        {"id": "moo", "handle": "Moo", "name": "David Hull", "nationality": "US", "birthYear": 1995, "position": "O", "mmr": 9500, "power": 79, "talent": 38, "resilience": 74, "insight": 74, "loyalty": 66, "signatureHeroes": ["beastmaster", "timbersaw", "dark-seer"]},
+        {"id": "lelis", "handle": "Lelis", "name": "Rodrigo Lelis Santos", "nationality": "BR", "birthYear": 1996, "position": "SS", "mmr": 9800, "power": 80, "talent": 40, "resilience": 70, "insight": 74, "loyalty": 62, "signatureHeroes": ["dark-seer", "batrider", "tusk"]},
+        {"id": "yamsun", "handle": "Yamsun", "name": "Luke Wang", "nationality": "US", "birthYear": 2001, "position": "HS", "mmr": 8800, "power": 77, "talent": 62, "resilience": 55, "insight": 66, "loyalty": 60, "signatureHeroes": ["undying", "witch-doctor", "morphling"]}
+      ]
+    },
+    {
+      "id": "virtus-pro", "name": "Virtus.pro", "tag": "VP", "region": "CIS", "honor": 1380, "funds": 1400000, "color": "#FF6A13",
+      "atTI": true, "tiResult": "7-8",
+      "coach": {"id": "god", "name": "Sergei Bragin", "nationality": "RU", "birthYear": 1992, "tier": "S", "insight": 84},
+      "players": [
+        {"id": "kiritych", "handle": "Kiritych", "name": "Ilya Ulyanov", "nationality": "RU", "birthYear": 2003, "position": "C", "mmr": 11000, "power": 80, "talent": 76, "resilience": 42, "insight": 52, "loyalty": 58, "signatureHeroes": ["terrorblade", "anti-mage", "naga-siren"]},
+        {"id": "squad1x", "handle": "squad1x", "name": "Ilya Kuvaldin", "nationality": "RU", "birthYear": 2003, "position": "M", "mmr": 10500, "power": 79, "talent": 76, "resilience": 42, "insight": 58, "loyalty": 58, "signatureHeroes": ["void-spirit", "ember-spirit", "puck"]},
+        {"id": "noticed", "handle": "Noticed", "name": "Evgeniy Ignatenko", "nationality": "RU", "birthYear": 2002, "position": "O", "mmr": 10000, "power": 79, "talent": 68, "resilience": 50, "insight": 62, "loyalty": 60, "signatureHeroes": ["mars", "beastmaster", "primal-beast"]},
+        {"id": "sayuw", "handle": "sayuw", "name": "Oleg Kalenbet", "nationality": "RU", "birthYear": 1997, "position": "SS", "mmr": 9500, "power": 78, "talent": 42, "resilience": 64, "insight": 72, "loyalty": 62, "signatureHeroes": ["tusk", "windranger", "hoodwink"]},
+        {"id": "fng", "handle": "Fng", "name": "Artsiom Barshak", "nationality": "BY", "birthYear": 1995, "position": "HS", "mmr": 10500, "power": 80, "talent": 36, "resilience": 85, "insight": 90, "loyalty": 60, "signatureHeroes": ["bane", "vengeful-spirit", "shadow-demon"]}
+      ]
+    },
+    {
+      "id": "tsm", "name": "TSM", "tag": "TSM", "region": "NA", "honor": 160, "funds": 1400000, "color": "#D8D8D8",
+      "atTI": true, "tiResult": "9-12",
+      "coach": {"id": "moonmeander", "name": "David Tan", "nationality": "CA", "birthYear": 1992, "tier": "S", "insight": 82},
+      "players": [
+        {"id": "timado", "handle": "Timado", "name": "Enzo Gianoli O'Connor", "nationality": "PE", "birthYear": 2000, "position": "C", "mmr": 12000, "power": 80, "talent": 58, "resilience": 58, "insight": 62, "loyalty": 72, "signatureHeroes": ["shadow-fiend", "morphling", "templar-assassin"]},
+        {"id": "bryle", "handle": "Bryle", "name": "Jonathan Bryle Santos De Guia", "nationality": "CA", "birthYear": 2001, "position": "M", "mmr": 11000, "power": 79, "talent": 64, "resilience": 52, "insight": 62, "loyalty": 68, "signatureHeroes": ["queen-of-pain", "templar-assassin", "void-spirit"]},
+        {"id": "kasane", "handle": "kasane", "name": "Ilyas Gainullin", "nationality": "RU", "birthYear": 2003, "position": "O", "mmr": 9500, "power": 76, "talent": 74, "resilience": 42, "insight": 58, "loyalty": 55, "signatureHeroes": ["natures-prophet", "beastmaster", "dark-seer"]},
+        {"id": "ari", "handle": "Ari", "name": "Matthew Walker", "nationality": "GB", "birthYear": 2003, "position": "SS", "mmr": 9200, "power": 76, "talent": 76, "resilience": 42, "insight": 66, "loyalty": 55, "signatureHeroes": ["rubick", "marci", "tusk"]},
+        {"id": "whitemon", "handle": "Whitemon", "name": "Matthew Filemon", "nationality": "ID", "birthYear": 2000, "position": "HS", "mmr": 9800, "power": 78, "talent": 58, "resilience": 58, "insight": 74, "loyalty": 52, "signatureHeroes": ["disruptor", "enchantress", "oracle"]}
+      ]
+    },
+    {
+      "id": "talon-esports", "name": "Talon Esports", "tag": "Talon", "region": "SEA", "honor": 160, "funds": 700000, "color": "#C8A24A",
+      "atTI": true, "tiResult": "9-12",
+      "coach": {"id": "sunbhie", "name": "Lee Jeong-jae", "nationality": "KR", "birthYear": 1990, "tier": "A", "insight": 84},
+      "players": [
+        {"id": "23savage", "handle": "23savage", "name": "Nuengnara Teeramahanon", "nationality": "TH", "birthYear": 2002, "position": "C", "mmr": 13500, "power": 82, "talent": 72, "resilience": 48, "insight": 55, "loyalty": 70, "signatureHeroes": ["morphling", "faceless-void", "terrorblade"]},
+        {"id": "mikoto", "handle": "Mikoto", "name": "Rafli Fathur Rahman", "nationality": "ID", "birthYear": 2000, "position": "M", "mmr": 11000, "power": 80, "talent": 60, "resilience": 55, "insight": 62, "loyalty": 68, "signatureHeroes": ["ember-spirit", "templar-assassin", "void-spirit"]},
+        {"id": "jabz", "handle": "Jabz", "name": "Anucha Jirawong", "nationality": "TH", "birthYear": 1998, "position": "O", "mmr": 10000, "power": 78, "talent": 45, "resilience": 62, "insight": 66, "loyalty": 70, "signatureHeroes": ["mars", "primal-beast", "earth-spirit"]},
+        {"id": "q-th", "handle": "Q", "name": "Worawit Mekchai", "nationality": "TH", "birthYear": 1998, "position": "SS", "mmr": 9000, "power": 77, "talent": 45, "resilience": 58, "insight": 70, "loyalty": 66, "signatureHeroes": ["mirana", "tiny", "hoodwink"]},
+        {"id": "oli", "handle": "Oli", "name": "Chan Chon Kien", "nationality": "MY", "birthYear": 1995, "position": "HS", "mmr": 9500, "power": 78, "talent": 38, "resilience": 75, "insight": 80, "loyalty": 62, "signatureHeroes": ["bane", "disruptor", "shadow-shaman"]}
+      ]
+    },
+    {
+      "id": "9pandas", "name": "9Pandas", "tag": "9P", "region": "CIS", "honor": 120, "funds": 700000, "color": "#4CAF50",
+      "atTI": true, "tiResult": "9-12",
+      "coach": null,
+      "players": [
+        {"id": "ramzes666", "handle": "RAMZES666", "name": "Roman Kushnarev", "nationality": "RU", "birthYear": 1999, "position": "C", "mmr": 12500, "power": 80, "talent": 52, "resilience": 66, "insight": 62, "loyalty": 62, "signatureHeroes": ["terrorblade", "morphling", "lifestealer"]},
+        {"id": "kiyotaka", "handle": "kiyotaka", "name": "Gleb Zyryanov", "nationality": "RU", "birthYear": 2004, "position": "M", "mmr": 11000, "power": 78, "talent": 78, "resilience": 38, "insight": 55, "loyalty": 58, "signatureHeroes": ["invoker", "ember-spirit", "storm-spirit"]},
+        {"id": "miero", "handle": "MieRo`", "name": "Matvey Vasyunin", "nationality": "RU", "birthYear": 2003, "position": "O", "mmr": 9500, "power": 76, "talent": 75, "resilience": 42, "insight": 58, "loyalty": 58, "signatureHeroes": ["doom", "enigma", "dark-seer"]},
+        {"id": "antares", "handle": "Antares", "name": "Vladislav Kertman", "nationality": "RU", "birthYear": 2002, "position": "SS", "mmr": 9000, "power": 76, "talent": 66, "resilience": 48, "insight": 66, "loyalty": 58, "signatureHeroes": ["techies", "skywrath-mage", "hoodwink"]},
+        {"id": "solo", "handle": "Solo", "name": "Alexey Berezin", "nationality": "RU", "birthYear": 1990, "position": "HS", "mmr": 10000, "power": 78, "talent": 30, "resilience": 92, "insight": 92, "loyalty": 62, "signatureHeroes": ["disruptor", "shadow-demon", "undying"]}
+      ]
+    },
+    {
+      "id": "entity", "name": "Entity", "tag": "Entity", "region": "EU", "honor": 150, "funds": 700000, "color": "#7B61FF",
+      "atTI": true, "tiResult": "9-12",
+      "coach": {"id": "mettpum", "name": "Daniil Gilev", "nationality": "RU", "birthYear": 1992, "tier": "A", "insight": 80},
+      "players": [
+        {"id": "watson", "handle": "watson", "name": "Alimzhan Islambekov", "nationality": "KZ", "birthYear": 2002, "position": "C", "mmr": 13000, "power": 80, "talent": 74, "resilience": 45, "insight": 55, "loyalty": 60, "signatureHeroes": ["faceless-void", "terrorblade", "morphling"]},
+        {"id": "stormstormer", "handle": "Stormstormer", "name": "Daniel Schoetzau", "nationality": "DE", "birthYear": 1998, "position": "M", "mmr": 10500, "power": 77, "talent": 45, "resilience": 55, "insight": 62, "loyalty": 62, "signatureHeroes": ["invoker", "lina", "void-spirit"]},
+        {"id": "gabbi", "handle": "Gabbi", "name": "Kim Villafuerte Santos", "nationality": "PH", "birthYear": 1998, "position": "O", "mmr": 10500, "power": 78, "talent": 45, "resilience": 62, "insight": 64, "loyalty": 55, "signatureHeroes": ["primal-beast", "mars", "morphling"]},
+        {"id": "kataomi", "handle": "Kataomi`", "name": "Vladislav Semenov", "nationality": "RU", "birthYear": 1999, "position": "SS", "mmr": 9500, "power": 77, "talent": 50, "resilience": 58, "insight": 72, "loyalty": 60, "signatureHeroes": ["bane", "winter-wyvern", "hoodwink"]},
+        {"id": "fishman", "handle": "Fishman", "name": "Dzmitry Palishchuk", "nationality": "BY", "birthYear": 1995, "position": "HS", "mmr": 9200, "power": 76, "talent": 38, "resilience": 70, "insight": 76, "loyalty": 62, "signatureHeroes": ["bane", "disruptor", "oracle"]}
+      ]
+    },
+    {
+      "id": "shopify-rebellion", "name": "Shopify Rebellion", "tag": "SR", "region": "NA", "honor": 140, "funds": 1400000, "color": "#95BF47",
+      "atTI": true, "tiResult": "13-16",
+      "coach": {"id": "bulba", "name": "Kanishka Sosale", "nationality": "US", "birthYear": 1991, "tier": "S", "insight": 86},
+      "players": [
+        {"id": "arteezy", "handle": "Arteezy", "name": "Artour Babaev", "nationality": "CA", "birthYear": 1996, "position": "C", "mmr": 13500, "power": 80, "talent": 40, "resilience": 62, "insight": 62, "loyalty": 85, "signatureHeroes": ["terrorblade", "morphling", "naga-siren"]},
+        {"id": "abed", "handle": "Abed", "name": "Abed Azel Yusop", "nationality": "PH", "birthYear": 2000, "position": "M", "mmr": 13500, "power": 80, "talent": 60, "resilience": 55, "insight": 66, "loyalty": 70, "signatureHeroes": ["invoker", "storm-spirit", "void-spirit"]},
+        {"id": "saberlight", "handle": "SabeRLight-", "name": "Jonáš Volek", "nationality": "CZ", "birthYear": 2000, "position": "O", "mmr": 10500, "power": 77, "talent": 58, "resilience": 60, "insight": 66, "loyalty": 60, "signatureHeroes": ["beastmaster", "mars", "dark-seer"]},
+        {"id": "cr1t", "handle": "Cr1t-", "name": "Andreas Franck Nielsen", "nationality": "DK", "birthYear": 1996, "position": "SS", "mmr": 11500, "power": 79, "talent": 38, "resilience": 75, "insight": 88, "loyalty": 80, "signatureHeroes": ["earth-spirit", "rubick", "snapfire"]},
+        {"id": "fly", "handle": "Fly", "name": "Tal Aizik", "nationality": "IL", "birthYear": 1993, "position": "HS", "mmr": 10500, "power": 77, "talent": 30, "resilience": 85, "insight": 90, "loyalty": 82, "signatureHeroes": ["dazzle", "crystal-maiden", "io"]}
+      ]
+    },
+    {
+      "id": "evil-geniuses", "name": "Evil Geniuses", "tag": "EG", "region": "SA", "honor": 2470, "funds": 1400000, "color": "#1E5BB8",
+      "atTI": true, "tiResult": "13-16",
+      "coach": {"id": "vintage", "name": "Juan David Angulo Nicho", "nationality": "PE", "birthYear": 1996, "tier": "A", "insight": 76},
+      "players": [
+        {"id": "pakazs", "handle": "Pakazs", "name": "Crhistian Antony Savina Casanova", "nationality": "PE", "birthYear": 2001, "position": "C", "mmr": 10500, "power": 76, "talent": 62, "resilience": 50, "insight": 52, "loyalty": 55, "signatureHeroes": ["morphling", "gyrocopter", "faceless-void"]},
+        {"id": "chrisluck", "handle": "Chris Luck", "name": "Jean Pierre Gonzales Salazar", "nationality": "PE", "birthYear": 1997, "position": "M", "mmr": 10200, "power": 75, "talent": 42, "resilience": 60, "insight": 64, "loyalty": 55, "signatureHeroes": ["templar-assassin", "shadow-fiend", "void-spirit"]},
+        {"id": "wisper", "handle": "Wisper", "name": "Adrián Céspedes Dobles", "nationality": "BO", "birthYear": 2001, "position": "O", "mmr": 11000, "power": 78, "talent": 66, "resilience": 55, "insight": 66, "loyalty": 60, "signatureHeroes": ["batrider", "leshrac", "dark-seer"]},
+        {"id": "matthew", "handle": "Matthew", "name": "Farith Puente", "nationality": "PE", "birthYear": 1998, "position": "SS", "mmr": 9500, "power": 75, "talent": 45, "resilience": 60, "insight": 70, "loyalty": 58, "signatureHeroes": ["earth-spirit", "rubick", "tusk"]},
+        {"id": "panda", "handle": "Panda", "name": "Jose Leonardo Padilla Hernandez", "nationality": "PE", "birthYear": 2000, "position": "HS", "mmr": 8500, "power": 73, "talent": 55, "resilience": 55, "insight": 66, "loyalty": 55, "signatureHeroes": ["abaddon", "bane", "undying"]}
+      ]
+    },
+    {
+      "id": "keyd-stars", "name": "Keyd Stars", "tag": "Keyd", "region": "SA", "honor": 110, "funds": 350000, "color": "#B0B0B0",
+      "atTI": true, "tiResult": "13-16",
+      "coach": {"id": "dflash", "name": "Bruno de Souza Oliveira", "nationality": "BR", "birthYear": 1998, "tier": "A", "insight": 74},
+      "players": [
+        {"id": "costabile", "handle": "Costabile", "name": "Guilherme Costábile", "nationality": "BR", "birthYear": 1995, "position": "C", "mmr": 9500, "power": 74, "talent": 38, "resilience": 62, "insight": 55, "loyalty": 60, "signatureHeroes": ["juggernaut", "terrorblade", "phantom-lancer"]},
+        {"id": "4nalog", "handle": "4nalog", "name": "João Gabriel Giannini Santos", "nationality": "BR", "birthYear": 2001, "position": "M", "mmr": 9500, "power": 74, "talent": 60, "resilience": 50, "insight": 60, "loyalty": 60, "signatureHeroes": ["ember-spirit", "puck", "void-spirit"]},
+        {"id": "fcr", "handle": "fcr", "name": "Gustavo Batista Teixeira Ribeiro", "nationality": "BR", "birthYear": 2001, "position": "O", "mmr": 8800, "power": 73, "talent": 60, "resilience": 50, "insight": 60, "loyalty": 60, "signatureHeroes": ["mars", "arc-warden", "beastmaster"]},
+        {"id": "kingrd", "handle": "Kingrd", "name": "Danylo Nascimento", "nationality": "BR", "birthYear": 1992, "position": "SS", "mmr": 8800, "power": 73, "talent": 32, "resilience": 80, "insight": 80, "loyalty": 66, "signatureHeroes": ["earth-spirit", "sand-king", "tusk"]},
+        {"id": "kj", "handle": "KJ", "name": "Matheus Santos Jungles Diniz", "nationality": "BR", "birthYear": 1999, "position": "HS", "mmr": 8500, "power": 72, "talent": 50, "resilience": 58, "insight": 68, "loyalty": 60, "signatureHeroes": ["enchantress", "io", "chen"]}
+      ]
+    },
+    {
+      "id": "tundra-esports", "name": "Tundra Esports", "tag": "Tundra", "region": "EU", "honor": 700, "funds": 1400000, "color": "#00B140",
+      "atTI": true, "tiResult": "13-16",
+      "coach": {"id": "aui2000", "name": "Kurtis Ling", "nationality": "CA", "birthYear": 1992, "tier": "SS", "insight": 84},
+      "players": [
+        {"id": "skiter", "handle": "skiter", "name": "Oliver Lepko", "nationality": "SK", "birthYear": 1998, "position": "C", "mmr": 12500, "power": 81, "talent": 42, "resilience": 72, "insight": 64, "loyalty": 78, "signatureHeroes": ["lifestealer", "wraith-king", "faceless-void"]},
+        {"id": "topson", "handle": "Topson", "name": "Topias Taavitsainen", "nationality": "FI", "birthYear": 1998, "position": "M", "mmr": 13500, "power": 81, "talent": 50, "resilience": 62, "insight": 74, "loyalty": 50, "signatureHeroes": ["monkey-king", "zeus", "invoker"]},
+        {"id": "33", "handle": "33", "name": "Neta Shapira", "nationality": "IL", "birthYear": 1997, "position": "O", "mmr": 12000, "power": 82, "talent": 40, "resilience": 74, "insight": 82, "loyalty": 82, "signatureHeroes": ["doom", "beastmaster", "dark-seer"]},
+        {"id": "nine", "handle": "Nine", "name": "Leon Kirilin", "nationality": "DE", "birthYear": 1998, "position": "SS", "mmr": 11000, "power": 79, "talent": 42, "resilience": 66, "insight": 70, "loyalty": 75, "signatureHeroes": ["zeus", "pangolier", "hoodwink"]},
+        {"id": "sneyking", "handle": "Sneyking", "name": "Wu Jingjun", "nationality": "US", "birthYear": 1995, "position": "HS", "mmr": 10500, "power": 79, "talent": 35, "resilience": 80, "insight": 86, "loyalty": 80, "signatureHeroes": ["enchantress", "mirana", "oracle"]}
+      ]
+    },
+    {
+      "id": "beastcoast", "name": "beastcoast", "tag": "BC", "region": "SA", "honor": 240, "funds": 700000, "color": "#00A3E0",
+      "atTI": true, "tiResult": "17-20",
+      "coach": {"id": "papita", "name": "Mariano Caneda", "nationality": "AR", "birthYear": 1995, "tier": "A", "insight": 78},
+      "players": [
+        {"id": "parker", "handle": "Parker", "name": "David Nicho Flores", "nationality": "PE", "birthYear": 2002, "position": "C", "mmr": 9500, "power": 73, "talent": 66, "resilience": 45, "insight": 52, "loyalty": 55, "signatureHeroes": ["templar-assassin", "medusa", "faceless-void"]},
+        {"id": "darkmago", "handle": "DarkMago", "name": "Oswaldo Gonzalo Herrera Martínez", "nationality": "PE", "birthYear": 1999, "position": "M", "mmr": 9800, "power": 73, "talent": 50, "resilience": 52, "insight": 60, "loyalty": 62, "signatureHeroes": ["mars", "tiny", "void-spirit"]},
+        {"id": "sacred", "handle": "Sacred", "name": "Rafael Hinostroza Jhonatan", "nationality": "PE", "birthYear": 2000, "position": "O", "mmr": 9000, "power": 72, "talent": 58, "resilience": 55, "insight": 62, "loyalty": 62, "signatureHeroes": ["timbersaw", "mars", "dark-seer"]},
+        {"id": "scofield", "handle": "Scofield", "name": "Elvis De la Cruz Peña", "nationality": "PE", "birthYear": 1998, "position": "SS", "mmr": 8800, "power": 72, "talent": 45, "resilience": 62, "insight": 70, "loyalty": 66, "signatureHeroes": ["earthshaker", "clockwerk", "tusk"]},
+        {"id": "stinger", "handle": "Stinger", "name": "Steven Vargas Mamani", "nationality": "PE", "birthYear": 1996, "position": "HS", "mmr": 9000, "power": 72, "talent": 38, "resilience": 72, "insight": 74, "loyalty": 68, "signatureHeroes": ["enchantress", "silencer", "oracle"]}
+      ]
+    },
+    {
+      "id": "thunder-awaken", "name": "Thunder Awaken", "tag": "TA", "region": "SA", "honor": 200, "funds": 350000, "color": "#FFD600",
+      "atTI": true, "tiResult": "17-20",
+      "coach": {"id": "naog", "name": "Eduardo David Valencia Sánchez", "nationality": "PE", "birthYear": 1995, "tier": "B", "insight": 72},
+      "players": [
+        {"id": "smilingknight", "handle": "Knight~", "name": "Aliaksei Svirydau", "nationality": "BY", "birthYear": 2001, "position": "C", "mmr": 9500, "power": 72, "talent": 62, "resilience": 48, "insight": 52, "loyalty": 55, "signatureHeroes": ["spectre", "lifestealer", "faceless-void"]},
+        {"id": "slatem", "handle": "SLATEM$", "name": "Jordan Pascasio Vega", "nationality": "PE", "birthYear": 2004, "position": "M", "mmr": 9000, "power": 71, "talent": 76, "resilience": 38, "insight": 55, "loyalty": 58, "signatureHeroes": ["invoker", "ember-spirit", "storm-spirit"]},
+        {"id": "ilich", "handle": "ILICH-", "name": "Mario Ulianov Ilich Romero Valdivia", "nationality": "PE", "birthYear": 2003, "position": "O", "mmr": 8500, "power": 70, "talent": 72, "resilience": 40, "insight": 56, "loyalty": 58, "signatureHeroes": ["natures-prophet", "dark-seer", "mars"]},
+        {"id": "n1ght", "handle": "n1ght", "name": "Rodrigo Alonso Cueva Cruz", "nationality": "PE", "birthYear": 2000, "position": "SS", "mmr": 8200, "power": 70, "talent": 54, "resilience": 52, "insight": 64, "loyalty": 58, "signatureHeroes": ["hoodwink", "tusk", "earth-spirit"]},
+        {"id": "wu", "handle": "Mjz", "name": "Romel Augusto Quinteros Rojas", "nationality": "PE", "birthYear": 2000, "position": "HS", "mmr": 8500, "power": 71, "talent": 54, "resilience": 55, "insight": 68, "loyalty": 62, "signatureHeroes": ["oracle", "phoenix", "disruptor"]}
+      ]
+    },
+    {
+      "id": "team-smg", "name": "Team SMG", "tag": "SMG", "region": "SEA", "honor": 110, "funds": 350000, "color": "#E53935",
+      "atTI": true, "tiResult": "17-20",
+      "coach": {"id": "heen", "name": "Lee Seung-gon", "nationality": "KR", "birthYear": 1987, "tier": "A", "insight": 87},
+      "players": [
+        {"id": "midone", "handle": "MidOne", "name": "Yeik Nai Zheng", "nationality": "MY", "birthYear": 1996, "position": "C", "mmr": 11500, "power": 74, "talent": 38, "resilience": 66, "insight": 62, "loyalty": 60, "signatureHeroes": ["faceless-void", "ember-spirit", "templar-assassin"]},
+        {"id": "noone", "handle": "No[o]ne-", "name": "Volodymyr Minenko", "nationality": "UA", "birthYear": 1997, "position": "M", "mmr": 11000, "power": 74, "talent": 40, "resilience": 62, "insight": 68, "loyalty": 55, "signatureHeroes": ["dragon-knight", "invoker", "void-spirit"]},
+        {"id": "mindcontrol", "handle": "MinD_ContRoL", "name": "Ivan Borislavov Ivanov", "nationality": "BG", "birthYear": 1995, "position": "O", "mmr": 10500, "power": 75, "talent": 35, "resilience": 80, "insight": 80, "loyalty": 50, "signatureHeroes": ["dark-seer", "beastmaster", "mars"]},
+        {"id": "ahfu", "handle": "ah fu", "name": "Tue Soon Chuan", "nationality": "MY", "birthYear": 1994, "position": "SS", "mmr": 9000, "power": 72, "talent": 32, "resilience": 72, "insight": 74, "loyalty": 66, "signatureHeroes": ["earth-spirit", "elder-titan", "tusk"]},
+        {"id": "jaunuel", "handle": "Jaunuel", "name": "Jaunuel Arcilla", "nationality": "PH", "birthYear": 1998, "position": "HS", "mmr": 8500, "power": 71, "talent": 45, "resilience": 58, "insight": 70, "loyalty": 60, "signatureHeroes": ["phoenix", "oracle", "disruptor"]}
+      ]
+    },
+    {
+      "id": "psg-quest", "name": "PSG Quest", "tag": "PSG.Q", "region": "EU", "honor": 110, "funds": 700000, "color": "#004170",
+      "atTI": true, "tiResult": "17-20",
+      "coach": {"id": "daxak", "name": "Nikita Kuzmin", "nationality": "RU", "birthYear": 1997, "tier": "A", "insight": 74},
+      "players": [
+        {"id": "ta2000", "handle": "TA2000", "name": "Aybek Tokayev", "nationality": "KZ", "birthYear": 2000, "position": "C", "mmr": 10500, "power": 72, "talent": 55, "resilience": 55, "insight": 55, "loyalty": 66, "signatureHeroes": ["terrorblade", "faceless-void", "morphling"]},
+        {"id": "noob", "handle": "No!ob", "name": "Tony Assaf", "nationality": "LB", "birthYear": 2000, "position": "M", "mmr": 10000, "power": 72, "talent": 58, "resilience": 52, "insight": 60, "loyalty": 66, "signatureHeroes": ["void-spirit", "lina", "ember-spirit"]},
+        {"id": "tobi", "handle": "Tobi", "name": "Tobias Buchner", "nationality": "AT", "birthYear": 1996, "position": "O", "mmr": 9000, "power": 71, "talent": 40, "resilience": 66, "insight": 66, "loyalty": 64, "signatureHeroes": ["beastmaster", "centaur-warrunner", "mars"]},
+        {"id": "omar", "handle": "OmaR", "name": "Omar Moughrabi", "nationality": "LB", "birthYear": 2002, "position": "SS", "mmr": 9000, "power": 71, "talent": 66, "resilience": 48, "insight": 66, "loyalty": 66, "signatureHeroes": ["techies", "rubick", "hoodwink"]},
+        {"id": "kaori", "handle": "kaori", "name": "Oleh Medvedok", "nationality": "UA", "birthYear": 2002, "position": "HS", "mmr": 8500, "power": 70, "talent": 62, "resilience": 48, "insight": 64, "loyalty": 58, "signatureHeroes": ["phoenix", "shadow-shaman", "oracle"]}
+      ]
+    },
+    {
+      "id": "team-aster", "name": "Team Aster", "tag": "Aster", "region": "CN", "honor": 240, "funds": 1400000, "color": "#9B59B6",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "monet", "handle": "Monet", "name": "杜鹏", "nationality": "CN", "birthYear": 1999, "position": "C", "mmr": 11000, "power": 75, "talent": 50, "resilience": 60, "insight": 58, "loyalty": 70, "signatureHeroes": ["faceless-void", "gyrocopter", "morphling"]},
+        {"id": "sumail", "handle": "SumaiL", "name": "Syed Sumail Hassan", "nationality": "PK", "birthYear": 1999, "position": "M", "mmr": 13000, "power": 76, "talent": 52, "resilience": 60, "insight": 66, "loyalty": 50, "signatureHeroes": ["storm-spirit", "ember-spirit", "void-spirit"]},
+        {"id": "xxs", "handle": "Xxs", "name": "林靖", "nationality": "CN", "birthYear": 1999, "position": "O", "mmr": 10500, "power": 74, "talent": 50, "resilience": 62, "insight": 66, "loyalty": 66, "signatureHeroes": ["batrider", "legion-commander", "mars"]},
+        {"id": "kaka", "handle": "Kaka", "name": "胡良智", "nationality": "CN", "birthYear": 1992, "position": "SS", "mmr": 10000, "power": 73, "talent": 30, "resilience": 80, "insight": 84, "loyalty": 70, "signatureHeroes": ["rubick", "nyx-assassin", "tusk"]},
+        {"id": "piqiu", "handle": "皮球", "name": "余亚军", "nationality": "CN", "birthYear": 1996, "position": "HS", "mmr": 9000, "power": 71, "talent": 38, "resilience": 66, "insight": 72, "loyalty": 66, "signatureHeroes": ["grimstroke", "clockwerk", "oracle"]}
+      ]
+    },
+    {
+      "id": "xtreme-gaming", "name": "Xtreme Gaming", "tag": "XG", "region": "CN", "honor": 130, "funds": 1400000, "color": "#D50000",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "ghost", "handle": "Ghost", "name": "Daniel Chan Kok Hong", "nationality": "MY", "birthYear": 1998, "position": "C", "mmr": 10500, "power": 73, "talent": 45, "resilience": 55, "insight": 52, "loyalty": 60, "signatureHeroes": ["medusa", "troll-warlord", "naga-siren"]},
+        {"id": "xm", "handle": "Xm", "name": "郭鸿铖", "nationality": "CN", "birthYear": 1999, "position": "M", "mmr": 10500, "power": 73, "talent": 52, "resilience": 55, "insight": 60, "loyalty": 66, "signatureHeroes": ["razor", "death-prophet", "void-spirit"]},
+        {"id": "jt", "handle": "JT-", "name": "Thiay Jun Wen", "nationality": "MY", "birthYear": 1998, "position": "O", "mmr": 10000, "power": 73, "talent": 42, "resilience": 62, "insight": 66, "loyalty": 60, "signatureHeroes": ["mars", "centaur-warrunner", "primal-beast"]},
+        {"id": "xinq", "handle": "XinQ", "name": "赵子星", "nationality": "CN", "birthYear": 1998, "position": "SS", "mmr": 11000, "power": 75, "talent": 45, "resilience": 68, "insight": 80, "loyalty": 62, "signatureHeroes": ["mirana", "rubick", "tusk"]},
+        {"id": "dy", "handle": "Dy", "name": "丁聪", "nationality": "CN", "birthYear": 1997, "position": "HS", "mmr": 9500, "power": 72, "talent": 40, "resilience": 68, "insight": 72, "loyalty": 62, "signatureHeroes": ["disruptor", "grimstroke", "oracle"]}
+      ]
+    },
+    {
+      "id": "invictus-gaming", "name": "Invictus Gaming", "tag": "iG", "region": "CN", "honor": 2080, "funds": 1400000, "color": "#B22222",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "dust", "handle": "Dust", "name": "周世圆", "nationality": "CN", "birthYear": 1999, "position": "C", "mmr": 9500, "power": 70, "talent": 50, "resilience": 52, "insight": 52, "loyalty": 60, "signatureHeroes": ["gyrocopter", "juggernaut", "faceless-void"]},
+        {"id": "emo", "handle": "Emo", "name": "周一", "nationality": "CN", "birthYear": 2001, "position": "M", "mmr": 10800, "power": 73, "talent": 62, "resilience": 50, "insight": 60, "loyalty": 66, "signatureHeroes": ["storm-spirit", "ember-spirit", "void-spirit"]},
+        {"id": "zeal", "handle": "zeal", "name": "Nicholas Lim Eng Han", "nationality": "MY", "birthYear": 1998, "position": "O", "mmr": 9000, "power": 70, "talent": 45, "resilience": 58, "insight": 62, "loyalty": 58, "signatureHeroes": ["natures-prophet", "beastmaster", "mars"]},
+        {"id": "pyw", "handle": "Pyw", "name": "熊家晗", "nationality": "CN", "birthYear": 1994, "position": "SS", "mmr": 9000, "power": 70, "talent": 32, "resilience": 72, "insight": 74, "loyalty": 60, "signatureHeroes": ["rubick", "mirana", "tusk"]},
+        {"id": "qyqx", "handle": "qyqx", "name": "崔晨洋", "nationality": "CN", "birthYear": 1998, "position": "HS", "mmr": 8500, "power": 69, "talent": 42, "resilience": 60, "insight": 70, "loyalty": 60, "signatureHeroes": ["lich", "undying", "oracle"]}
+      ]
+    },
+    {
+      "id": "natus-vincere", "name": "Natus Vincere", "tag": "NAVI", "region": "CIS", "honor": 2180, "funds": 1400000, "color": "#FFE600",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "shigetsu", "handle": "shigetsu", "name": "Maxim Popadinec", "nationality": "UA", "birthYear": 2003, "position": "C", "mmr": 10000, "power": 72, "talent": 74, "resilience": 42, "insight": 52, "loyalty": 60, "signatureHeroes": ["weaver", "slark", "faceless-void"]},
+        {"id": "mellojul", "handle": "mellojul", "name": "Maksym Pnov", "nationality": "UA", "birthYear": 2000, "position": "M", "mmr": 9500, "power": 70, "talent": 58, "resilience": 50, "insight": 60, "loyalty": 62, "signatureHeroes": ["monkey-king", "ember-spirit", "void-spirit"]},
+        {"id": "malik", "handle": "Malik", "name": "Abdimalik Sailau", "nationality": "KZ", "birthYear": 1999, "position": "O", "mmr": 9000, "power": 70, "talent": 50, "resilience": 58, "insight": 62, "loyalty": 60, "signatureHeroes": ["brewmaster", "beastmaster", "mars"]},
+        {"id": "xsvampire", "handle": "Danial", "name": "Danial Alibaev", "nationality": "KZ", "birthYear": 1997, "position": "SS", "mmr": 8800, "power": 69, "talent": 40, "resilience": 60, "insight": 68, "loyalty": 60, "signatureHeroes": ["earth-spirit", "rubick", "tusk"]},
+        {"id": "malady", "handle": "Malady", "name": "Arman Orazbayev", "nationality": "KZ", "birthYear": 2000, "position": "HS", "mmr": 8500, "power": 69, "talent": 52, "resilience": 55, "insight": 66, "loyalty": 62, "signatureHeroes": ["treant-protector", "bane", "oracle"]}
+      ]
+    },
+    {
+      "id": "nemiga-gaming", "name": "Nemiga Gaming", "tag": "Nemiga", "region": "CIS", "honor": 120, "funds": 350000, "color": "#1E88E5",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "v1olent", "handle": "v1olent`", "name": "Alexander Pak", "nationality": "KZ", "birthYear": 2002, "position": "C", "mmr": 9000, "power": 68, "talent": 66, "resilience": 45, "insight": 50, "loyalty": 58, "signatureHeroes": ["juggernaut", "terrorblade", "faceless-void"]},
+        {"id": "malr1ne", "handle": "Malr1ne", "name": "Stanislav Potorak", "nationality": "RU", "birthYear": 2004, "position": "M", "mmr": 11000, "power": 72, "talent": 93, "resilience": 38, "insight": 60, "loyalty": 55, "signatureHeroes": ["puck", "timbersaw", "void-spirit"]},
+        {"id": "vazya", "handle": "Vazya", "name": "Ivan German", "nationality": "RU", "birthYear": 1996, "position": "O", "mmr": 8500, "power": 67, "talent": 40, "resilience": 60, "insight": 60, "loyalty": 58, "signatureHeroes": ["centaur-warrunner", "mars", "beastmaster"]},
+        {"id": "hellscream", "handle": "Hellscream", "name": "Kiryl Lahutsik", "nationality": "BY", "birthYear": 2001, "position": "SS", "mmr": 8000, "power": 66, "talent": 58, "resilience": 50, "insight": 62, "loyalty": 58, "signatureHeroes": ["rubick", "earth-spirit", "hoodwink"]},
+        {"id": "rodjer", "handle": "RodjER", "name": "Vladimir Nikogosian", "nationality": "RU", "birthYear": 1993, "position": "HS", "mmr": 9000, "power": 68, "talent": 30, "resilience": 78, "insight": 82, "loyalty": 55, "signatureHeroes": ["chen", "enchantress", "oracle"]}
+      ]
+    },
+    {
+      "id": "og", "name": "OG", "tag": "OG", "region": "EU", "honor": 2440, "funds": 1400000, "color": "#3AA0FF",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": {"id": "chu", "name": "Evgenii Makarov", "nationality": "RU", "birthYear": 1998, "tier": "A", "insight": 76},
+      "players": [
+        {"id": "yuragi", "handle": "Yuragi", "name": "Artem Golubiev", "nationality": "UA", "birthYear": 2001, "position": "C", "mmr": 12000, "power": 75, "talent": 66, "resilience": 52, "insight": 58, "loyalty": 80, "signatureHeroes": ["phantom-lancer", "terrorblade", "naga-siren"]},
+        {"id": "bzm", "handle": "bzm", "name": "Bozhidar Bogdanov", "nationality": "BG", "birthYear": 2005, "position": "M", "mmr": 12000, "power": 75, "talent": 90, "resilience": 40, "insight": 66, "loyalty": 80, "signatureHeroes": ["invoker", "puck", "void-spirit"]},
+        {"id": "dm", "handle": "DM", "name": "Dmitry Dorokhin", "nationality": "RU", "birthYear": 2000, "position": "O", "mmr": 9500, "power": 71, "talent": 55, "resilience": 55, "insight": 64, "loyalty": 58, "signatureHeroes": ["timbersaw", "beastmaster", "mars"]},
+        {"id": "ceb", "handle": "Ceb", "name": "Sébastien Debs", "nationality": "FR", "birthYear": 1992, "position": "SS", "mmr": 10000, "power": 73, "talent": 30, "resilience": 92, "insight": 90, "loyalty": 92, "signatureHeroes": ["axe", "windranger", "tusk"]},
+        {"id": "kitrak", "handle": "Kitrak", "name": "Kartik Rathi", "nationality": "US", "birthYear": 1999, "position": "HS", "mmr": 8800, "power": 70, "talent": 50, "resilience": 58, "insight": 70, "loyalty": 58, "signatureHeroes": ["bane", "disruptor", "oracle"]}
+      ]
+    },
+    {
+      "id": "team-secret", "name": "Team Secret", "tag": "Secret", "region": "EU", "honor": 1780, "funds": 1400000, "color": "#C0C0C0",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "crystallis", "handle": "Crystallis", "name": "Remco Arets", "nationality": "NL", "birthYear": 2001, "position": "C", "mmr": 11500, "power": 74, "talent": 68, "resilience": 48, "insight": 55, "loyalty": 60, "signatureHeroes": ["monkey-king", "bloodseeker", "faceless-void"]},
+        {"id": "armel", "handle": "Armel", "name": "Armel Paul Tabios", "nationality": "PH", "birthYear": 2000, "position": "M", "mmr": 11500, "power": 74, "talent": 58, "resilience": 55, "insight": 62, "loyalty": 58, "signatureHeroes": ["puck", "templar-assassin", "void-spirit"]},
+        {"id": "fbz", "handle": "Fbz", "name": "Muhammad Saieful Ilham", "nationality": "ID", "birthYear": 2001, "position": "O", "mmr": 9500, "power": 72, "talent": 60, "resilience": 52, "insight": 62, "loyalty": 58, "signatureHeroes": ["centaur-warrunner", "puck", "mars"]},
+        {"id": "yamich", "handle": "yamich", "name": "Daniyal Lazebnyy", "nationality": "RU", "birthYear": 2001, "position": "SS", "mmr": 9000, "power": 71, "talent": 58, "resilience": 52, "insight": 66, "loyalty": 58, "signatureHeroes": ["rubick", "clockwerk", "tusk"]},
+        {"id": "puppey", "handle": "Puppey", "name": "Clement Ivanov", "nationality": "EE", "birthYear": 1990, "position": "HS", "mmr": 10000, "power": 73, "talent": 30, "resilience": 95, "insight": 95, "loyalty": 95, "signatureHeroes": ["chen", "enchantress", "io"]}
+      ]
+    },
+    {
+      "id": "b8", "name": "B8", "tag": "B8", "region": "NA", "honor": 110, "funds": 350000, "color": "#FFC107",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "vtune", "handle": "V-Tune", "name": "Alik Vorobey", "nationality": "UA", "birthYear": 2000, "position": "C", "mmr": 8200, "power": 66, "talent": 55, "resilience": 50, "insight": 52, "loyalty": 66, "signatureHeroes": ["phantom-assassin", "templar-assassin", "faceless-void"]},
+        {"id": "dendi", "handle": "Dendi", "name": "Danil Ishutin", "nationality": "UA", "birthYear": 1989, "position": "M", "mmr": 8000, "power": 64, "talent": 30, "resilience": 85, "insight": 80, "loyalty": 90, "signatureHeroes": ["pudge", "shadow-fiend", "invoker"]},
+        {"id": "stonebank", "handle": "StoneBank", "name": "Denis Korzh", "nationality": "UA", "birthYear": 1999, "position": "O", "mmr": 7600, "power": 64, "talent": 50, "resilience": 55, "insight": 58, "loyalty": 66, "signatureHeroes": ["mars", "beastmaster", "phantom-lancer"]},
+        {"id": "ctomaheh1", "handle": "CTOMAHEH1", "name": "Nikolay Kalchev", "nationality": "BG", "birthYear": 1995, "position": "SS", "mmr": 7300, "power": 63, "talent": 35, "resilience": 62, "insight": 66, "loyalty": 62, "signatureHeroes": ["earth-spirit", "bane", "tusk"]},
+        {"id": "lodine", "handle": "Lodine", "name": "Oleg Kvasha", "nationality": "UA", "birthYear": 1995, "position": "HS", "mmr": 7000, "power": 62, "talent": 35, "resilience": 62, "insight": 66, "loyalty": 62, "signatureHeroes": ["oracle", "disruptor", "undying"]}
+      ]
+    },
+    {
+      "id": "blacklist-international", "name": "Blacklist International", "tag": "BLCK", "region": "SEA", "honor": 120, "funds": 700000, "color": "#212121",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "raven", "handle": "Raven", "name": "Marc Polo Luis Fausto", "nationality": "PH", "birthYear": 1998, "position": "C", "mmr": 11000, "power": 74, "talent": 45, "resilience": 60, "insight": 58, "loyalty": 62, "signatureHeroes": ["juggernaut", "gyrocopter", "faceless-void"]},
+        {"id": "karl", "handle": "Karl", "name": "Karl Matthew Baldovino", "nationality": "PH", "birthYear": 1998, "position": "M", "mmr": 10500, "power": 73, "talent": 45, "resilience": 55, "insight": 62, "loyalty": 58, "signatureHeroes": ["dragon-knight", "puck", "void-spirit"]},
+        {"id": "kpii", "handle": "kpii", "name": "Damien Chok", "nationality": "AU", "birthYear": 1993, "position": "O", "mmr": 10000, "power": 73, "talent": 32, "resilience": 74, "insight": 74, "loyalty": 58, "signatureHeroes": ["enigma", "axe", "mars"]},
+        {"id": "tims", "handle": "TIMS", "name": "Timothy John Randrup", "nationality": "PH", "birthYear": 1997, "position": "SS", "mmr": 9500, "power": 72, "talent": 38, "resilience": 72, "insight": 80, "loyalty": 70, "signatureHeroes": ["earth-spirit", "earthshaker", "tusk"]},
+        {"id": "kuku", "handle": "Kuku", "name": "Carlo Palad", "nationality": "PH", "birthYear": 1996, "position": "HS", "mmr": 9500, "power": 72, "talent": 38, "resilience": 70, "insight": 78, "loyalty": 60, "signatureHeroes": ["batrider", "snapfire", "undying"]}
+      ]
+    },
+    {
+      "id": "infinity", "name": "Infinity", "tag": "Infinity", "region": "SA", "honor": 110, "funds": 350000, "color": "#7C4DFF",
+      "atTI": false, "tiResult": "DNQ",
+      "coach": null,
+      "players": [
+        {"id": "lumiere", "handle": "Lumière", "name": "Edward Anthony Guillen Valencia", "nationality": "PE", "birthYear": 2000, "position": "C", "mmr": 9000, "power": 67, "talent": 52, "resilience": 50, "insight": 52, "loyalty": 60, "signatureHeroes": ["terrorblade", "troll-warlord", "faceless-void"]},
+        {"id": "faker-pe", "handle": "Faker", "name": "Eliseo Arancibia Temoche", "nationality": "PE", "birthYear": 2001, "position": "M", "mmr": 9000, "power": 67, "talent": 56, "resilience": 48, "insight": 58, "loyalty": 60, "signatureHeroes": ["queen-of-pain", "ember-spirit", "void-spirit"]},
+        {"id": "vitaly", "handle": "Vitaly", "name": "Pablo Cesar Angulo Roman", "nationality": "PE", "birthYear": 1998, "position": "O", "mmr": 8500, "power": 66, "talent": 45, "resilience": 55, "insight": 58, "loyalty": 60, "signatureHeroes": ["slardar", "mars", "beastmaster"]},
+        {"id": "michael", "handle": "Michael~", "name": "Miguel Angel Choque Gomez", "nationality": "BO", "birthYear": 1998, "position": "SS", "mmr": 8000, "power": 65, "talent": 45, "resilience": 55, "insight": 64, "loyalty": 60, "signatureHeroes": ["mirana", "earth-spirit", "tusk"]},
+        {"id": "gardick", "handle": "Gardick", "name": "Brayan Antony López Cárdenas", "nationality": "PE", "birthYear": 1997, "position": "HS", "mmr": 8000, "power": 65, "talent": 40, "resilience": 58, "insight": 66, "loyalty": 60, "signatureHeroes": ["winter-wyvern", "undying", "oracle"]}
+      ]
+    }
+  ],
+  "freeAgents": [
+    {"id": "miracle", "handle": "Miracle-", "name": "Amer Al-Barkawi", "nationality": "JO", "birthYear": 1997, "position": "C", "mmr": 13500, "power": 70, "talent": 45, "resilience": 55, "insight": 62, "loyalty": 50, "signatureHeroes": ["anti-mage", "invoker", "faceless-void"]},
+    {"id": "ame", "handle": "Ame", "name": "王淳煜", "nationality": "CN", "birthYear": 1997, "position": "C", "mmr": 13000, "power": 70, "talent": 42, "resilience": 60, "insight": 60, "loyalty": 50, "signatureHeroes": ["terrorblade", "morphling", "faceless-void"]},
+    {"id": "faithbian", "handle": "Faith_bian", "name": "张睿达", "nationality": "CN", "birthYear": 1998, "position": "O", "mmr": 11000, "power": 68, "talent": 42, "resilience": 75, "insight": 80, "loyalty": 50, "signatureHeroes": ["beastmaster", "batrider", "mars"]},
+    {"id": "saksa", "handle": "Saksa", "name": "Martin Sazdov", "nationality": "MK", "birthYear": 1995, "position": "SS", "mmr": 11000, "power": 66, "talent": 35, "resilience": 75, "insight": 82, "loyalty": 55, "signatureHeroes": ["rubick", "shadow-demon", "tusk"]},
+    {"id": "kuroky", "handle": "KuroKy", "name": "Kuro Salehi Takhasomi", "nationality": "DE", "birthYear": 1992, "position": "HS", "mmr": 10000, "power": 64, "talent": 30, "resilience": 92, "insight": 94, "loyalty": 60, "signatureHeroes": ["rubick", "visage", "io"]},
+    {"id": "gh", "handle": "GH", "name": "Maroun Merhej", "nationality": "LB", "birthYear": 1995, "position": "SS", "mmr": 10000, "power": 64, "talent": 35, "resilience": 75, "insight": 80, "loyalty": 55, "signatureHeroes": ["io", "rubick", "earth-spirit"]},
+    {"id": "ana", "handle": "ana", "name": "Anathan Pham", "nationality": "AU", "birthYear": 1999, "position": "C", "mmr": 10500, "power": 62, "talent": 50, "resilience": 45, "insight": 60, "loyalty": 50, "signatureHeroes": ["ember-spirit", "phantom-lancer", "io"]},
+    {"id": "resolut1on", "handle": "Resolut1on", "name": "Roman Fomynok", "nationality": "UA", "birthYear": 1996, "position": "C", "mmr": 10500, "power": 62, "talent": 38, "resilience": 60, "insight": 58, "loyalty": 45, "signatureHeroes": ["faceless-void", "invoker", "puck"]},
+    {"id": "matumbaman", "handle": "MATUMBAMAN", "name": "Lasse Urpalainen", "nationality": "FI", "birthYear": 1995, "position": "C", "mmr": 10000, "power": 60, "talent": 32, "resilience": 70, "insight": 64, "loyalty": 50, "signatureHeroes": ["lone-druid", "lycan", "troll-warlord"]},
+    {"id": "paparazi", "handle": "Paparazi灬", "name": "张成俊", "nationality": "CN", "birthYear": 1996, "position": "C", "mmr": 10000, "power": 60, "talent": 35, "resilience": 55, "insight": 55, "loyalty": 50, "signatureHeroes": ["lifestealer", "sven", "juggernaut"]},
+    {"id": "flyfly", "handle": "flyfly", "name": "金志意", "nationality": "CN", "birthYear": 1996, "position": "C", "mmr": 9500, "power": 60, "talent": 35, "resilience": 55, "insight": 55, "loyalty": 50, "signatureHeroes": ["juggernaut", "anti-mage", "faceless-void"]},
+    {"id": "iceberg", "handle": "Iceberg", "name": "Bogdan Vasylenko", "nationality": "UA", "birthYear": 1997, "position": "M", "mmr": 10000, "power": 60, "talent": 38, "resilience": 55, "insight": 60, "loyalty": 50, "signatureHeroes": ["invoker", "templar-assassin", "void-spirit"]},
+    {"id": "sccc", "handle": "Sccc", "name": "宋淳", "nationality": "CN", "birthYear": 1995, "position": "M", "mmr": 9500, "power": 58, "talent": 32, "resilience": 60, "insight": 62, "loyalty": 50, "signatureHeroes": ["storm-spirit", "gyrocopter", "invoker"]},
+    {"id": "w33", "handle": "w33", "name": "Aliwi Omar", "nationality": "RO", "birthYear": 1995, "position": "M", "mmr": 10000, "power": 58, "talent": 32, "resilience": 55, "insight": 66, "loyalty": 45, "signatureHeroes": ["invoker", "meepo", "shadow-fiend"]},
+    {"id": "eternalenvy", "handle": "EternaLEnVy", "name": "Jacky Mao", "nationality": "CA", "birthYear": 1991, "position": "C", "mmr": 9000, "power": 52, "talent": 30, "resilience": 50, "insight": 62, "loyalty": 50, "signatureHeroes": ["terrorblade", "drow-ranger", "naga-siren"]},
+    {"id": "satanic", "handle": "Satanic", "name": "Alan Gallyamov", "nationality": "RU", "birthYear": 2007, "position": "C", "mmr": 9000, "power": 55, "talent": 95, "resilience": 30, "insight": 48, "loyalty": 50, "signatureHeroes": ["morphling", "terrorblade", "faceless-void"]}
+  ],
+  "freeCoaches": [
+    {"id": "artstyle", "name": "Ivan Antonov", "nationality": "UA", "birthYear": 1989, "tier": "SS", "insight": 90},
+    {"id": "rotk", "name": "白帆", "nationality": "CN", "birthYear": 1992, "tier": "SS", "insight": 85},
+    {"id": "fear", "name": "Clinton Loomis", "nationality": "US", "birthYear": 1988, "tier": "SS", "insight": 88},
+    {"id": "mag", "name": "Andrij Chipenko", "nationality": "UA", "birthYear": 1990, "tier": "S", "insight": 82},
+    {"id": "sockshka", "name": "Titouan Merloz", "nationality": "FR", "birthYear": 1992, "tier": "A", "insight": 85},
+    {"id": "super", "name": "谢俊豪", "nationality": "CN", "birthYear": 1993, "tier": "SS", "insight": 82}
+  ]
+}

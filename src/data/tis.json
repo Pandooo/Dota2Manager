@@ -1,0 +1,447 @@
+[
+  {
+    "ti": 1,
+    "year": 2011,
+    "name": "The International 2011",
+    "city": "科隆",
+    "country": "德国",
+    "hostRegion": "EU",
+    "startDate": "2011-08-17",
+    "endDate": "2011-08-21",
+    "prizePool": 1600000,
+    "teams": 16,
+    "directInvites": 16,
+    "qualifierSlots": {},
+    "champion": "natus-vincere",
+    "runnerUp": "ehome",
+    "theme": {
+      "name": "急速神符 · 赤红",
+      "primary": "#C0392B",
+      "secondary": "#1C0B0A",
+      "accent": "#F0B54A"
+    }
+  },
+  {
+    "ti": 2,
+    "year": 2012,
+    "name": "The International 2012",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2012-08-26",
+    "endDate": "2012-09-02",
+    "prizePool": 1600000,
+    "teams": 16,
+    "directInvites": 13,
+    "qualifierSlots": {
+      "EU": 2,
+      "CN": 1
+    },
+    "champion": "invictus-gaming",
+    "runnerUp": "natus-vincere",
+    "theme": {
+      "name": "双倍神符 · 湛蓝",
+      "primary": "#2F6FE0",
+      "secondary": "#0A1530",
+      "accent": "#8CC8FF"
+    }
+  },
+  {
+    "ti": 3,
+    "year": 2013,
+    "name": "The International 2013",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2013-08-02",
+    "endDate": "2013-08-11",
+    "prizePool": 2874380,
+    "teams": 16,
+    "directInvites": 13,
+    "qualifierSlots": {
+      "EU": 1,
+      "CN": 2
+    },
+    "champion": "alliance",
+    "runnerUp": "natus-vincere",
+    "theme": {
+      "name": "恢复神符 · 翠绿",
+      "primary": "#2E9E4F",
+      "secondary": "#0A2113",
+      "accent": "#B6E36B"
+    }
+  },
+  {
+    "ti": 4,
+    "year": 2014,
+    "name": "The International 2014",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2014-07-08",
+    "endDate": "2014-07-21",
+    "prizePool": 10923977,
+    "teams": 16,
+    "directInvites": 11,
+    "qualifierSlots": {
+      "EU": 1,
+      "CN": 1,
+      "SEA": 1,
+      "NA": 2
+    },
+    "champion": "newbee",
+    "runnerUp": "vici-gaming",
+    "theme": {
+      "name": "隐身神符 · 紫罗兰",
+      "primary": "#7D4CD1",
+      "secondary": "#170E2C",
+      "accent": "#D2B4FF"
+    }
+  },
+  {
+    "ti": 5,
+    "year": 2015,
+    "name": "The International 2015",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2015-07-27",
+    "endDate": "2015-08-08",
+    "prizePool": 18429613,
+    "teams": 16,
+    "directInvites": 10,
+    "qualifierSlots": {
+      "EU": 1,
+      "CN": 2,
+      "SEA": 2,
+      "NA": 1
+    },
+    "champion": "evil-geniuses",
+    "runnerUp": "cdec-gaming",
+    "theme": {
+      "name": "赏金神符 · 鎏金",
+      "primary": "#D9A126",
+      "secondary": "#22180A",
+      "accent": "#FFE38F",
+      "text": "#1E1406"
+    }
+  },
+  {
+    "ti": 6,
+    "year": 2016,
+    "name": "The International 2016",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2016-08-02",
+    "endDate": "2016-08-13",
+    "prizePool": 20770460,
+    "teams": 16,
+    "directInvites": 6,
+    "qualifierSlots": {
+      "EU": 3,
+      "CN": 3,
+      "SEA": 2,
+      "NA": 2
+    },
+    "champion": "wings-gaming",
+    "runnerUp": "digital-chaos",
+    "theme": {
+      "name": "冠军之红",
+      "primary": "#B3122E",
+      "secondary": "#200810",
+      "accent": "#F3C766"
+    }
+  },
+  {
+    "ti": 7,
+    "year": 2017,
+    "name": "The International 2017",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2017-08-02",
+    "endDate": "2017-08-12",
+    "prizePool": 24787916,
+    "teams": 18,
+    "directInvites": 6,
+    "qualifierSlots": {
+      "EU": 2,
+      "CIS": 1,
+      "CN": 3,
+      "SEA": 3,
+      "NA": 2,
+      "SA": 1
+    },
+    "champion": "team-liquid",
+    "runnerUp": "newbee",
+    "theme": {
+      "name": "深海暗礁 · 水蓝",
+      "primary": "#138FA8",
+      "secondary": "#04212E",
+      "accent": "#7BE7E1"
+    }
+  },
+  {
+    "ti": 8,
+    "year": 2018,
+    "name": "The International 2018",
+    "city": "温哥华",
+    "country": "加拿大",
+    "hostRegion": "NA",
+    "startDate": "2018-08-15",
+    "endDate": "2018-08-25",
+    "prizePool": 25532177,
+    "teams": 18,
+    "directInvites": 8,
+    "qualifierSlots": {
+      "EU": 1,
+      "CIS": 1,
+      "CN": 2,
+      "SEA": 2,
+      "NA": 3,
+      "SA": 1
+    },
+    "champion": "og",
+    "runnerUp": "psg-lgd",
+    "theme": {
+      "name": "地下洞窟 · 幽绿",
+      "primary": "#3C8F5A",
+      "secondary": "#0B1A13",
+      "accent": "#C9E86F"
+    }
+  },
+  {
+    "ti": 9,
+    "year": 2019,
+    "name": "The International 2019",
+    "city": "上海",
+    "country": "中国",
+    "hostRegion": "CN",
+    "startDate": "2019-08-15",
+    "endDate": "2019-08-25",
+    "prizePool": 34330068,
+    "teams": 18,
+    "directInvites": 12,
+    "qualifierSlots": {
+      "EU": 1,
+      "CIS": 1,
+      "CN": 1,
+      "SEA": 1,
+      "NA": 1,
+      "SA": 1
+    },
+    "champion": "og",
+    "runnerUp": "team-liquid",
+    "theme": {
+      "name": "丛林秘境 · 暗紫",
+      "primary": "#8B3FD0",
+      "secondary": "#190B2B",
+      "accent": "#F2B65A"
+    }
+  },
+  {
+    "ti": 10,
+    "year": 2021,
+    "name": "The International 2021",
+    "city": "布加勒斯特",
+    "country": "罗马尼亚",
+    "hostRegion": "EU",
+    "startDate": "2021-10-07",
+    "endDate": "2021-10-17",
+    "prizePool": 40018195,
+    "teams": 18,
+    "directInvites": 12,
+    "qualifierSlots": {
+      "EU": 1,
+      "CIS": 1,
+      "CN": 1,
+      "SEA": 1,
+      "NA": 1,
+      "SA": 1
+    },
+    "champion": "team-spirit",
+    "runnerUp": "psg-lgd",
+    "theme": {
+      "name": "苍穹黑金",
+      "primary": "#C9A24A",
+      "secondary": "#0C0B0E",
+      "accent": "#F6DE9A",
+      "text": "#17120A"
+    }
+  },
+  {
+    "ti": 11,
+    "year": 2022,
+    "name": "The International 2022",
+    "city": "新加坡",
+    "country": "新加坡",
+    "hostRegion": "SEA",
+    "startDate": "2022-10-15",
+    "endDate": "2022-10-30",
+    "prizePool": 18930775,
+    "teams": 20,
+    "directInvites": 12,
+    "qualifierSlots": {
+      "EU": 3,
+      "CIS": 1,
+      "CN": 1,
+      "SEA": 1,
+      "NA": 1,
+      "SA": 1
+    },
+    "champion": "tundra-esports",
+    "runnerUp": "team-secret",
+    "theme": {
+      "name": "熔火 · 赤焰",
+      "primary": "#D9441E",
+      "secondary": "#1C0805",
+      "accent": "#FF9E3D"
+    }
+  },
+  {
+    "ti": 12,
+    "year": 2023,
+    "name": "The International 2023",
+    "city": "西雅图",
+    "country": "美国",
+    "hostRegion": "NA",
+    "startDate": "2023-10-12",
+    "endDate": "2023-10-29",
+    "prizePool": 3380455,
+    "teams": 20,
+    "directInvites": 12,
+    "qualifierSlots": {
+      "EU": 2,
+      "CIS": 1,
+      "CN": 1,
+      "SEA": 1,
+      "NA": 1,
+      "SA": 2
+    },
+    "champion": "team-spirit",
+    "runnerUp": "gaimin-gladiators",
+    "theme": {
+      "name": "彩绘玻璃 · 蔚蓝",
+      "primary": "#3B8FE0",
+      "secondary": "#0B1633",
+      "accent": "#9AD9FF"
+    }
+  },
+  {
+    "ti": 13,
+    "year": 2024,
+    "name": "The International 2024",
+    "city": "哥本哈根",
+    "country": "丹麦",
+    "hostRegion": "EU",
+    "startDate": "2024-09-04",
+    "endDate": "2024-09-15",
+    "prizePool": 2776566,
+    "teams": 16,
+    "directInvites": 6,
+    "qualifierSlots": {
+      "EU": 2,
+      "CIS": 1,
+      "CN": 2,
+      "SEA": 2,
+      "NA": 1,
+      "SA": 2
+    },
+    "champion": "team-liquid",
+    "runnerUp": "gaimin-gladiators",
+    "theme": {
+      "name": "嘉年华 · 翠绿",
+      "primary": "#27A35A",
+      "secondary": "#08200F",
+      "accent": "#F2C14E"
+    }
+  },
+  {
+    "ti": 14,
+    "year": 2025,
+    "name": "The International 2025",
+    "city": "汉堡",
+    "country": "德国",
+    "hostRegion": "EU",
+    "startDate": "2025-09-04",
+    "endDate": "2025-09-14",
+    "prizePool": 2881791,
+    "teams": 16,
+    "directInvites": 8,
+    "qualifierSlots": {
+      "EU": 2,
+      "CIS": 1,
+      "CN": 1,
+      "SEA": 2,
+      "NA": 1,
+      "SA": 1
+    },
+    "champion": "team-falcons",
+    "runnerUp": "xtreme-gaming",
+    "theme": {
+      "name": "泰尔紫 · 王权",
+      "primary": "#7E2B8F",
+      "secondary": "#1B0A22",
+      "accent": "#E0A6F2"
+    }
+  },
+  {
+    "ti": 15,
+    "year": 2026,
+    "name": "The International 2026",
+    "city": "上海",
+    "country": "中国",
+    "hostRegion": "CN",
+    "startDate": "2026-08-13",
+    "endDate": "2026-08-23",
+    "prizePool": 3906263,
+    "teams": 16,
+    "directInvites": 7,
+    "qualifierSlots": {
+      "EU": 2,
+      "CIS": 2,
+      "CN": 2,
+      "SEA": 1,
+      "NA": 1,
+      "SA": 1
+    },
+    "champion": "team-spirit",
+    "runnerUp": "team-vision",
+    "theme": {
+      "name": "锦绣金线",
+      "primary": "#D8AE55",
+      "secondary": "#3A0E15",
+      "accent": "#E5533D",
+      "text": "#24120A"
+    }
+  },
+  {
+    "ti": 16,
+    "year": 2027,
+    "name": "The International 2027",
+    "city": "待定",
+    "country": "待定",
+    "hostRegion": "SEA",
+    "startDate": "2027-08-12",
+    "endDate": "2027-08-22",
+    "prizePool": 3600000,
+    "teams": 16,
+    "directInvites": 8,
+    "qualifierSlots": {
+      "EU": 2,
+      "CIS": 2,
+      "CN": 1,
+      "SEA": 1,
+      "NA": 1,
+      "SA": 1
+    },
+    "projected": true,
+    "theme": {
+      "name": "未来篇章（推演）",
+      "primary": "#C23C2A",
+      "secondary": "#0E1118",
+      "accent": "#E5B24D"
+    }
+  }
+]
