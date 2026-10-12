@@ -75,12 +75,12 @@ describe('奖金压缩（awardedPrizePool）', () => {
     const [lo, hi] = CONFIG.economy.prize.tiMultRange;
     expect(big / small).toBeLessThanOrEqual(hi / lo + 1e-9);
     // TI 冠军奖金（约 45%，队员 + 俱乐部合计）≈ 3~4.5 倍顶级战队年工资（econ=1 时顶级战队年工资约 90 万）；
-    // 第九波起俱乐部只拿 (1 − 奖金分成)：默认 70% 分成时俱乐部约 1~1.4 倍年工资（第九波 QA 放大奖金池前为 2~3 倍全归俱乐部）
+    // 第九波起俱乐部只拿 (1 − 奖金分成)：默认 50% 分成（2026-10-10）时俱乐部约 1.5~2.2 倍年工资（第九波 QA 放大奖金池前为 2~3 倍全归俱乐部）
     const champ = awardedPrize(s, s.tournaments['ti-b'], 18, 1, 1);
     expect(champ).toBeGreaterThan(2_700_000);
     expect(champ).toBeLessThan(4_100_000);
-    expect(champ * (1 - CONFIG.prizeShare.newClub)).toBeGreaterThan(800_000);
-    expect(champ * (1 - CONFIG.prizeShare.newClub)).toBeLessThan(1_300_000);
+    expect(champ * (1 - CONFIG.prizeShare.initial)).toBeGreaterThan(1_300_000);
+    expect(champ * (1 - CONFIG.prizeShare.initial)).toBeLessThan(2_100_000);
   });
 
   it('同赛季同等级按真实奖池相对大小浮动，等级越高奖池越大', () => {
@@ -311,30 +311,21 @@ describe('经常性收入（赞助 / 直播与内容 / 周边）', () => {
 });
 
 describe('起始资金', () => {
-  it('真实俱乐部：数据资金 × 缩放（玩家再 × 难度倍数），豪门约一个赛季工资', () => {
-    const scale = CONFIG.economy.startingFunds.realClubScale;
-    expect(realClubStartingFunds(4_000_000, null)).toBe(Math.round((4_000_000 * scale) / 1000) * 1000);
-    expect(realClubStartingFunds(4_000_000, 'easy')).toBeGreaterThan(realClubStartingFunds(4_000_000, 'normal'));
-    expect(realClubStartingFunds(4_000_000, 'hard')).toBeLessThan(realClubStartingFunds(4_000_000, 'normal'));
-    expect(realClubStartingFunds(NaN, 'normal')).toBe(0);
-    // TI9 豪门：数据资金 400 万、每回合工资约 4.5 万 → 起始资金约 18~24 回合工资
-    const rounds = realClubStartingFunds(4_000_000, 'normal') / 45_000;
-    expect(rounds).toBeGreaterThan(15);
-    expect(rounds).toBeLessThan(25);
+  // 锚定额（TI1 新俱乐部 20 万 / 最强真实俱乐部 10 万）、年代折算、预览 = 实际：见 tests/startingFunds.test.ts
+  it('真实俱乐部：最强俱乐部按锚定额 × 年代系数，玩家再 × 难度倍数；TI9 豪门约 10 回合 AI 工资', () => {
+    expect(realClubStartingFunds(4_000_000, null, 9)).toBe(400_000);
+    expect(realClubStartingFunds(4_000_000, 'easy', 9)).toBeGreaterThan(realClubStartingFunds(4_000_000, 'normal', 9));
+    expect(realClubStartingFunds(4_000_000, 'hard', 9)).toBeLessThan(realClubStartingFunds(4_000_000, 'normal', 9));
+    expect(realClubStartingFunds(NaN, 'normal', 9)).toBe(0);
+    // TI9 豪门：每回合 AI 工资约 4 万 → 起始资金约 8~12 回合工资（原 × 0.2 时约 20 回合；2026-10-10 第二次调整）
+    const rounds = realClubStartingFunds(4_000_000, 'normal', 9) / 40_000;
+    expect(rounds).toBeGreaterThan(8);
+    expect(rounds).toBeLessThan(12);
   });
 
-  it('新俱乐部：初始阵容工资 × 难度回合数（6~8 回合）；预估值与实际同量级', () => {
-    const s = makeTestState(2);
-    const wage = roundWageBill(s, 't0');
-    const n = CONFIG.economy.startingFunds.newClubWageRounds;
-    expect(newClubStartingFunds(s, 't0', 'normal')).toBe(Math.round((wage * n.normal) / 1000) * 1000);
-    expect(n.easy).toBeGreaterThanOrEqual(n.normal);
-    expect(n.hard).toBeLessThanOrEqual(n.normal);
-    expect(n.normal).toBeGreaterThanOrEqual(6);
-    expect(n.normal).toBeLessThanOrEqual(8);
+  it('新俱乐部：锚定额与阵容无关；向导预估 = 实际，早期年代更低，困难不低于普通', () => {
     const est = estimateNewClubStartingFunds(9, 'normal');
-    expect(est).toBeGreaterThan(40_000);
-    expect(est).toBeLessThan(200_000);
+    expect(est).toBe(newClubStartingFunds(9, 'normal'));
     expect(estimateNewClubStartingFunds(3, 'normal')).toBeLessThan(est); // 早期年代更低
     // 向导预估：起始资金 + 创立礼包（第八波取消抽卡后礼包关闭 → 总额 = 起始资金）
     const full = estimateNewClubStart(9, 'normal');
@@ -342,7 +333,9 @@ describe('起始资金', () => {
     expect(full.total).toBe(full.funds + full.grantGold);
     expect(full.grantGold).toBe(0);
     expect(full.grantPulls).toBe(0);
-    expect(estimateNewClubStart(9, 'hard').total).toBeLessThan(estimateNewClubStart(9, 'easy').total);
+    expect(full.wagePerRound).toBeGreaterThan(0);
+    expect(estimateNewClubStart(9, 'hard').total).toBeGreaterThanOrEqual(estimateNewClubStart(9, 'normal').total);
+    expect(estimateNewClubStart(9, 'easy').total).toBeGreaterThanOrEqual(estimateNewClubStart(9, 'normal').total);
   });
 
   /** 旧版创立礼包的计算规则（第八波起 CONFIG.season.newClubGachaGrant = false，函数在关闭时恒为 0） */
@@ -389,7 +382,7 @@ describe('起始资金', () => {
     expect(newClubGachaGrant(8, NaN).pulls).toBe(max);
   }));
 
-  it('新游戏：新俱乐部起始资金 ≈ 6~8 回合（初始阵容）工资，不再发放抽卡礼包', async () => {
+  it('新游戏：新俱乐部起始资金 = 锚定额（与初始阵容工资无关），不再发放抽卡礼包', async () => {
     const { createNewGame } = await import('../src/engine/game');
     const { registerNodeRosterLoader } = await import('../scripts/nodeData');
     registerNodeRosterLoader();
@@ -399,13 +392,13 @@ describe('起始资金', () => {
         newClub: { name: '测试俱乐部', tag: 'TST', region: 'CN', color: '#123456' },
       });
       const me = s.teams[s.settings.playerTeamId];
-      // 起始资金按初始 5 人的工资计算；赛季初选秀选中的新秀（新秀合同）在其后加入
-      const rookieWage = me.playerIds.map((id) => s.players[id]).filter((p) => p?.draft).reduce((a, p) => a + p.salary, 0);
-      const wage = roundWageBill(s, me.id) - rookieWage;
       const grant = s.finance.filter((f) => f.category === 'event' && f.note.includes('创立礼包')).reduce((a, f) => a + f.amount, 0);
       expect(grant).toBe(0);
-      expect(me.gold / wage).toBeGreaterThanOrEqual(6);
-      expect(me.gold / wage).toBeLessThanOrEqual(8.5);
+      const gold0 = me.gold - s.finance.reduce((a, f) => a + f.amount, 0);
+      expect(gold0).toBe(newClubStartingFunds(startTi, 'normal'));
+      // 起始资金远多于初始阵容的工资（TI1 约 50 回合）：新俱乐部有钱运作和转会
+      const rookieWage = me.playerIds.map((id) => s.players[id]).filter((p) => p?.draft).reduce((a, p) => a + p.salary, 0);
+      expect(gold0 / (roundWageBill(s, me.id) - rookieWage)).toBeGreaterThan(20);
       expect(me.playerIds.length).toBeLessThanOrEqual(CONFIG.team.maxRoster);
     }
   });

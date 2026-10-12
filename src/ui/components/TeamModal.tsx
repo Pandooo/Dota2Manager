@@ -7,6 +7,7 @@ import {
   playerRating, playerTier, rankTeamsByRating, seasonStandings, teamRating, trainingBlockReason,
 } from '../../engine';
 import { Badge, Button, EmptyState, Modal, PosBadge, RegionBadge, TierBadge, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { TourTierBadge, openTournamentView, rankClass, safe } from './TourShared';
 import { PediaEntryButton } from './PediaKit';
 
@@ -63,7 +64,7 @@ export default function TeamModal() {
       width="max-w-4xl"
       title={
         <span className="flex items-center gap-2">
-          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: team.color }} />
+          <TeamEmblem tag={team.tag} color={team.color} teamId={team.id} />
           战队详情
         </span>
       }

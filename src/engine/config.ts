@@ -520,30 +520,27 @@ export const CONFIG = {
 
   // -------------------------------------------------------------------------
   // 选手奖金分成（prizeShare.ts，第九波）：赛事奖金的 50%–100% 分给队员，俱乐部只拿剩余部分
-  // （出场费与经常性收入全归俱乐部）。人机共用；玩家每回合最多调整一次，步长 5%。
+  // （出场费与经常性收入全归俱乐部）。人机共用；玩家每回合最多调整一次，步长 5%。全部战队默认 50%（2026-10-10）。
   // -------------------------------------------------------------------------
   prizeShare: {
     /** 分成比例范围与步长 */
     min: 0.5,
     max: 1,
     step: 0.05,
-    /** 新俱乐部（玩家新建；多人模式全部玩家战队，保证公平）的初始比例 */
-    newClub: 0.7,
     /**
-     * 真实俱乐部 / AI 战队的初始比例：按战队 id 哈希（同一俱乐部在任何存档中相同）在 initRange 内取三角分布（中心 ≈ 0.68），
-     * 荣誉 ≥ eliteHonor 的豪门再 + eliteBonus，取整到步长 → 大致 55%–85%
+     * 全部战队的初始比例（用户决策 2026-10-10「比赛奖金默认调整为 50% 给队员，剩下 50% 给俱乐部」）：新俱乐部、真实俱乐部、
+     * AI 战队、多人模式全部玩家战队一律 50%（原为新俱乐部 70%、真实俱乐部按 id 哈希 55%–85%）；AI 战队之后仍会偶尔调整（见 ai）
      */
-    initRange: [0.55, 0.8] as [number, number],
-    eliteHonor: 1200,
-    eliteBonus: 0.05,
+    initial: 0.5,
     /** 队员之间的分配权重：首发（赛事结束时的首发，含临时替补）1，其余签约队员 benchWeight */
     benchWeight: 0.5,
     loyalty: {
       /**
        * 每回合环境项（人机共用，不乘在队时长倍数）：比例高于 norm → +abovePer10 × (比例 − norm)/0.1；
-       * 低于 → −belowPer10 × (norm − 比例)/0.1。100% ≈ +0.45/回合，50% ≈ −0.5/回合（一个赛季约 ±9~10）
+       * 低于 → −belowPer10 × (norm − 比例)/0.1。默认比例 50% 起即为中性（2026-10-10 随默认值从 70% 下移；norm = 下限时
+       * belowPer10 不再生效）：70% ≈ +0.3/回合，100% ≈ +0.75/回合（一个赛季约 +6 / +15）
        */
-      norm: 0.7,
+      norm: 0.5,
       abovePer10: 0.15,
       belowPer10: 0.25,
       /**
@@ -568,10 +565,12 @@ export const CONFIG = {
       prizeRef: 6,
     },
     /**
-     * 队员分到的奖金部分计入薪资满意度（预期薪资仍不显示）：有效薪水 = 工资 + 近期奖金 / roundsPerSeason × weight
-     * （近期奖金每赛季 × seasonDecay；只计在当前战队分到的；至多工资 × maxSalaryRatio）
+     * 队员分到的奖金计入薪资满意度（预期薪资仍不显示）：有效薪水 = 工资 + 近期奖金余额 / windowRounds × weight，
+     * 余额每回合 × (1 − 1/windowRounds)（一笔奖金折算到之后各回合的补贴合计正好等于奖金本身；只计在当前战队分到的）。
+     * 用户决策 2026-10-10「给队员后计入总薪资，提升薪资满意度」：weight 0.3 → 1（全额计入），取消原先「至多工资 × 30%」的上限；
+     * windowRounds 20 ≈ 一个赛季的付薪回合（原为按赛季 × 0.5 阶梯衰减）
      */
-    salary: { weight: 0.3, roundsPerSeason: 20, seasonDecay: 0.5, maxSalaryRatio: 0.3 },
+    salary: { weight: 1, windowRounds: 20 },
     /** 调整记录保留条数 */
     logMax: 8,
     /**
@@ -610,10 +609,20 @@ export const CONFIG = {
     hardMaxRoster: 12,
     offRoleFactor: 0.85,
     newClubHonor: 100,
-    newClubFunds: { easy: 800000, normal: 500000, hard: 300000 } as Record<string, number>,
+    /** 玩家接管真实俱乐部时起始资金的难度倍数（economy.realClubStartingFunds；新俱乐部见 economy.startingFunds.newClubDifficultyMult） */
     realClubFundsMult: { easy: 1.5, normal: 1.0, hard: 0.7 } as Record<string, number>,
     /** 战队数量下限：不足时程序化生成 AI 战队补足 */
     minTeams: 28,
+    /**
+     * AI 战队首发优先级（lineupPriority.ts，用户决策 2026-10-10「首发优先使命选手和巅峰选手，然后再基于评分安排」）：
+     * mission = 本俱乐部使命（现实巅峰阵容）的在队成员最优先，peak = 历届巅峰阵容（synergies.json 的冠军 / 标志性阵容，
+     * 该届真实 TI 已打完）的成员其次；优先选手排在各自的本位置（同一位置先比优先级、再比评分），其余位置按评分排。
+     * 人类玩家战队的自动排阵不受影响。两项都为 false 时与原来一样只按评分（对照模拟用）。
+     * lockTransfers：AI 转会补强 / 换人（ai.tryUpgrade、转会潮的补强 / 主动换人 / 明星去向 / 对玩家选手的求购）跳过被优先选手占据的本位置
+     * （lineupPriority.lineupPriorityLocks）——否则按评分引进的同位置选手只会坐替补，白花转会费与工资（审阅实测：不配套时每届 TI
+     * 全联盟约 4–8 名本赛季引进的 AI 选手坐在更早加盟的使命选手身后，AI 首发评分多降约 0.3%–0.5%）。false = 不配套（对照模拟用）。
+     */
+    aiLineupPriority: { mission: true, peak: true, lockTransfers: true } as { mission: boolean; peak: boolean; lockTransfers: boolean },
   },
 
   // -------------------------------------------------------------------------
@@ -710,19 +719,58 @@ export const CONFIG = {
     minAppearanceFee: 5000,
     debtRoundsBeforeArrears: 0,    // 资金不足立即触发欠薪
     /**
-     * 起始资金（第五波经济重做：开局不再「第一回合就能买买买」）：
-     * - 新俱乐部 = 初始 5 人每回合工资 × newClubWageRounds[难度]（取整到 1000）；
-     * - 真实俱乐部 = 数据资金 × realClubScale（玩家接管的战队再 × team.realClubFundsMult[难度]；AI 战队同样 × realClubScale）。
-     *   标定：TI9 豪门数据资金 400 万、每回合工资约 4.5 万 → 起始 90 万 ≈ 一个赛季（20 个付薪回合）的工资。
+     * 起始资金（第五波经济重做：开局不再「第一回合就能买买买」；2026-10-10 第二次调整改为锚定额）：
+     * - 新俱乐部 = newClubTi1Funds × 年代系数 × newClubDifficultyMult[难度]（economy.newClubStartingFunds）；
+     * - 真实俱乐部 = max(realClubTopTi1Funds × 年代系数 × min(1, 相对财力 / realClubFullWealth), 数据阵容每回合工资 × realClubMinWageRounds)
+     *   （economy.realClubStartingFunds / seedTeamStartingFunds；相对财力 = 数据资金 / (realClubTopDataFunds × econIndex(该届年份))，至多 1）
+     *   = 原口径「数据资金 × 0.2」封顶于强队锚定额、不低于 9 回合工资；玩家接管的战队再 × team.realClubFundsMult[难度]；
+     *   开局 AI 战队与程序化生成的 AI 战队（generation.generateAiTeam：开局补足、赛季初补足联赛规模、假赛除名补位）同一公式（不乘难度倍数）。
+     * - 年代系数 = econIndex(起始届年份) / econIndex(TI1 年份)（economy.eraFundsFactor）：各年代起步的购买力相同（TI9 = ×4、TI13 = ×2.4）。
+     * 用户决策（2026-10-10「新队伍初始资金太少，强队初始资金太多，建议平衡，新队TI1的初始资金至少是20W，强队是10W」）：
+     * 原为新俱乐部 = 初始工资 × 18 / 15 / 12 回合（实测 TI1 普通约 4.7 万、TI9 约 17 万），真实俱乐部 = 数据资金 × 0.2（TI1 豪门 20 万、TI9 OG 80 万）。
+     * 中途成立的真实俱乐部（clubs.ts）同一公式，另有 CONFIG.clubs.minFundsWageRounds 的工资下限。实测见 DESIGN.md 3.6「2026-10-10 开局资金锚定」。
      */
     startingFunds: {
-      newClubWageRounds: { easy: 8, normal: 7, hard: 6 } as Record<string, number>,
-      realClubScale: 0.225,
+      /**
+       * 【用户指定，2026-10-10「新队TI1的初始资金至少是20W」】新俱乐部 TI1 普通难度起始资金 20 万；其他起始届 × 年代系数。
+       * 平衡调整时不要修改。单机新建俱乐部、多人「各自组建」与「选择已有战队」（重置为新俱乐部标准）共用
+       */
+      newClubTi1Funds: 200000,
+      /** 新俱乐部难度倍数：「至少 20 万」→ 任何难度都不低于锚定额（困难 = 普通），简单略多 */
+      newClubDifficultyMult: { easy: 1.2, normal: 1.0, hard: 1.0 } as Record<string, number>,
+      /**
+       * 【用户指定，2026-10-10「强队是10W」】最强真实俱乐部（该届数据资金最高者，如 TI1 的 NaVi / EHOME / iG）TI1 普通难度接管时的起始资金 10 万；
+       * 其他起始届 × 年代系数（TI9 Liquid / EG 40 万；工资最高的 OG 由 9 回合工资下限决定 41.8 万）。同时是封顶额（见 realClubFullWealth）。平衡调整时不要修改
+       */
+      realClubTopTi1Funds: 100000,
+      /**
+       * 数据约定：各届阵容数据中最富真实俱乐部的数据资金 = 此值 × econIndex(该届年份)（ti1 100 万 … ti9 400 万 … ti13 240 万；
+       * tests/startingFunds.test.ts 校验）。相对财力 = 数据资金 / 此参照
+       */
+      realClubTopDataFunds: 4000000,
+      /**
+       * 相对财力达到此值即拿满锚定额，以下按比例：realClubTopTi1Funds × 年代系数 × min(1, 相对财力 / 此值)。
+       * 取 1/2 → 低于锚定额的部分正好等于原口径「数据资金 × 0.2」，锚定额成为封顶额：只有原来超过锚定额的最富一档（强队）被压到锚定额，
+       * 其余俱乐部开局资金不变（数据资金按 1 : 1/2 : 1/4 : 1/8 分档，第二档原本就正好是锚定额）。
+       * 审阅对照（2026-10-11）：开平方（第二档 −29%）让入不敷出的第二档俱乐部被动经营 4 季破产 NiP TI9 9 → 37 / 90、XG TI13 7 → 19 / 90；
+       * 本口径 13 / 90、12 / 90（与调整前在随机波动内），见 DESIGN.md 3.6
+       */
+      realClubFullWealth: 0.5,
+      /**
+       * 真实俱乐部起始资金下限 = 数据阵容（首发 + 替补 + 主教练）按标准工资计算的每回合工资 × 此回合数（economy.seedTeamWageBill；
+       * 新游戏向导可在开局前算出同一数值）。取 9 = 【用户指定】锚定额给 TI1 最强俱乐部的储备（NaVi：10 万 / 每回合约 1.1 万 ≈ 9.1 回合）向下取整，
+       * 不改变 TI1 最强俱乐部的 10 万（tests/startingFunds.test.ts 校验）；主要抬高原本只有 4~8 回合工资的后两档（406 支中 147 支由下限决定）。
+       * 注意口径：这是「数据阵容 / AI 工资」下的 9 回合。玩家接管后工资会对齐预期薪资（明星加薪），且困难 × 0.7 乘在下限之上，
+       * 所以接管豪门的实际储备更少（TI1 / 5 / 9 / 13 全部接管实测，不含选秀新秀）：普通难度最强一档 5.6~18 回合（TI1 9.1~13.4、TI9 6.5~9.5、TI13 5.6~12.3），
+       * 困难 3.9~12.8 回合；其余三档普通 ≥ 8.5、困难 ≥ 5.9 回合（均高于财务页的 3 回合预警线）。
+       * 实测（DESIGN.md 3.6）：6 / 8 / 9 回合时，中游明星队（TI8 OG、TI11 Tundra、TI13 XG）被动经营的首季破产明显随回合数下降
+       */
+      realClubMinWageRounds: 9,
       /** 新俱乐部创立礼包：赠送 N 次单抽的资金（不超过阵容空位，避免抽卡超编；0 = 不送）。抽卡价格为用户指定值，不随年代缩放 */
       newClubGachaGrantPulls: 3,
       /**
-       * 礼包价值上限 ≈ 初始阵容此数回合的工资（至少 1 次单抽）：抽卡价格固定，早期年代工资低，
-       * 3 次单抽（3 万）会超过 7 回合工资的起始资金本身（TI1 起始资金 2.1 万），故按年代收缩次数
+       * 礼包价值上限 ≈ 初始阵容此数回合的工资（至少 1 次单抽）：抽卡价格固定，早期年代工资低，故按年代收缩次数。
+       * （第五波设定，当时 TI1 新俱乐部起始资金只有 2.1 万；第八波取消抽卡后礼包恒为 0，现起始资金为锚定额 20 万 × 年代系数，此项仅保留兼容）
        */
       newClubGachaGrantMaxWageRounds: 3,
       /** 取整单位 */
@@ -742,7 +790,7 @@ export const CONFIG = {
      *   联盟 AI 平均资金翻倍，与「强队有盈余但不至于钱多到没意义」冲突；当前取中间值（赛季预算 900 万）。
      * 第九波 QA（选手奖金分成）：奖金池为「队员 + 俱乐部」合计，俱乐部只拿 (1 − 分成比例)。非 TI 赛事锚定额与赛季预算 × 2、
      *   TI × 1.5（众筹奖池是王朝囤钱的主要来源，放大更少）：分成 50% 时俱乐部所得 ≈ 分成前的 100% / 75%（弱队不因此多拿钱），
-     *   默认 70% 时 ≈ 60% / 45%。上表 W 倍数此后指奖金池合计（TI 冠军奖金池 ≈ 3~4.5W，俱乐部按分成拿其中一部分）。
+     *   默认 70% 时 ≈ 60% / 45%（2026-10-10 起全部战队默认 50%）。上表 W 倍数此后指奖金池合计（TI 冠军奖金池 ≈ 3~4.5W，俱乐部按分成拿其中一部分）。
      *   实测见 DESIGN.md 3.6.1：接管 OG（TI9 起 6 季）峰值资金均值 633 万（分成前）→ 200 万（× 1）→ 333 万（本值），中游 Fnatic 收支持平。
      */
     prize: {
@@ -1027,8 +1075,31 @@ export const CONFIG = {
     teamBuildingCost: 20000,
     teamBuildingLoyalty: [4, 8] as [number, number],
     teamBuildingResilience: 0.5,
-    /** 挂牌等待回合（仅转会窗口开放的回合计数）：到期无人报价 → 自动解约，无补偿、不扣荣誉 */
-    listingRounds: 3,
+    /**
+     * 挂牌期（用户需求 2026-10-12：「队员挂牌到解约持续一整个赛季，而不是三个回合」）：listingSeasons 个赛季。
+     * 等待回合数 = listingSeasons × 每赛季的倒计时回合数（squadOps.listingRoundsPerSeason = calendar.regularRounds：
+     * 转会窗口开放的回合是赛季初 + 各常规赛回合，但赛季初没有回合结算、直接进入第 1 回合，所以每个常规赛回合结束时计一次；
+     * TI 预选 / 正赛转会锁定期间暂停）。挂牌在下赛季的同一时间点到期；到期时整个挂牌期无人报价 → 自动解约，无补偿、不扣荣誉。
+     */
+    listingSeasons: 1,
+    /** 旧存档的挂牌等待回合（原「3 个转会回合」规则）：读档 / 回合结算时按已经过的回合迁移到新的挂牌期，仅用于迁移 */
+    legacyListingRounds: 3,
+    /** 剩余这么多个倒计时回合且从未收到报价时，追加一条提醒新闻（另有「仅剩最后 1 个回合」提醒） */
+    listingReminderRounds: 3,
+    /**
+     * 挂牌过久的报价意愿衰减（整赛季挂牌后防止「高标价挂一整季等人接盘」）：前 listingFreshRolls 次出价机会与原 3 回合规则完全相同；
+     * 之后每次出价概率 × (1 - 强度 × (1 - listingStaleDecay^(已过出价机会 - listingFreshRolls + 1)))，
+     * 强度 = (标价/当前身价 - lo) / (hi - lo) 夹紧到 [0, 1]（listingStaleRatioRange = [lo, hi]）：标价不高于身价时不衰减。
+     * 实测（DESIGN.md 3.4「整赛季挂牌」）：2 倍标价整季成交率 35% → 14%（原 3 回合 3%），1.5 倍 69% → 40%（原 15%），≤ 1 倍不变。
+     */
+    listingFreshRolls: 3,
+    listingStaleDecay: 0.7,
+    listingStaleRatioRange: [1.0, 1.3] as [number, number],
+    /**
+     * 撤牌记忆：撤销挂牌后 relistStaleMemorySeasons 个赛季的转会回合（× calendar.regularRounds）内重新挂牌，
+     * 沿用撤牌前已经历的出价机会次数（衰减不因撤牌 / 重挂而重置；标价不高于身价时衰减本来就不起作用）。0 = 不记忆。
+     */
+    relistStaleMemorySeasons: 1,
     /** 标价范围（× 身价） */
     listingPriceRange: [0.5, 2.0] as [number, number],
     /** 每回合出价概率曲线：[标价/身价, 基础概率]，区间内线性插值，两端取端点值 */
@@ -1370,6 +1441,35 @@ export const CONFIG = {
   },
 
   // -------------------------------------------------------------------------
+  // 俱乐部品牌变迁（branding.ts，第十波 #4）：数据 src/data/branding.json，赛季开始时套用该届有效的名称 / 简称 / 配色
+  // -------------------------------------------------------------------------
+  branding: {
+    /** 总开关（关闭后保持阵容数据中的名称 / 简称 / 配色不变） */
+    enabled: true,
+    /** 「更名为」新闻是否标为重要（进入回合要闻的权重更高） */
+    renameNewsImportant: true,
+    /** 「启用新视觉」（只换简称 / 配色）新闻是否标为重要 */
+    visualNewsImportant: false,
+    /** 每支战队保留的品牌沿革条数（Team.brandHistory，存档体积上限） */
+    historyMax: 12,
+    /** 品牌数据允许的最大届次（与 TI16 一致） */
+    maxTi: 16,
+    /** 简称最长字符数（界面 TeamTag / 队徽首字母） */
+    maxTagLength: 8,
+  },
+
+  // -------------------------------------------------------------------------
+  // 破产（bankruptcy.ts，第十波 #1）：只作用于人类俱乐部（单机玩家 + 多人每个座位）；AI 俱乐部沿用 ai.ts / shuffle.ts 的负债处理。
+  // 每个回合结算（收入、工资、挂牌转会之后）检查一次资金：
+  // -------------------------------------------------------------------------
+  bankruptcy: {
+    /** 资金连续 N 个回合结算后仍为负 → 破产（资金转正即清零） */
+    rounds: 3,
+    /** 负债（负资金的绝对值）超过 N × 每回合工资（选手 + 教练）→ 立即破产；每回合工资为 0 时此条不适用 */
+    debtWageRounds: 6,
+  },
+
+  // -------------------------------------------------------------------------
   // 玩家战队负面事件降频（第九波 #4；events.ts / scandal.ts）。只作用于人类战队（单机玩家 + 多人模式每个座位），
   // AI 战队的事件概率不变。负面事件：情感受挫、伤病、丑闻、战队 beef、假赛风波、签证问题（与难度倍数相乘；正面事件不变；
   // 用户设定的无厘头事件 funEvents.ts 不受影响）。
@@ -1524,6 +1624,35 @@ export const CONFIG = {
     },
     /** 选手称号：TI 冠军数 ≥ legendTi「不朽传奇」/ ≥ doubleTi「双冠名宿」/ ≥ 1「不朽盾得主」；Major 冠军 ≥ 1「大赛冠军」；其他冠军 ≥ 1「冠军选手」 */
     playerTitles: { legendTi: 3, doubleTi: 2 },
+  },
+
+  // -------------------------------------------------------------------------
+  // 羁绊（第十波 #5，synergy.ts）：历届 TI 冠军阵容（及少数标志性阵容）五人同队集齐 → 全队属性加成
+  // -------------------------------------------------------------------------
+  synergy: {
+    /** 总开关（关闭时全部羁绊失效、修正器收回；用于对照模拟） */
+    enabled: true as boolean,
+    /**
+     * 只有对应届次的真实 TI 已经打完（当前赛季 > 羁绊届次）才能觉醒，避免开局剧透未来的冠军
+     * （如 TI9 开局时 OG 的 TI8 阵容可以觉醒，Spirit 的 TI10 阵容要到 TI11 赛季起）
+     */
+    activateAfterRealTi: true as boolean,
+    /** 五人是否必须都是首发（false = 同队签约即可，不含赛事临时替补 / 野外替补） */
+    requireStarters: false as boolean,
+    /**
+     * 加成：激活期间全队每名在役队员一个永久修正器（来源「羁绊：{名称}」），羁绊失效时移除。
+     * 战斗力 ×1.03 ≈ 同实力单局胜率 +4 个百分点（strengthShare 指数 9 × 权重 0.6）；天梯 +600 约 15% 的 SS 选手跨档；
+     * 灵性 +5 ≈ 大老师胜率 +2%；韧性 +5 / 天赋 +3 作用于事件影响与训练成长
+     */
+    bonus: {
+      insight: { kind: 'add', value: 5 },
+      resilience: { kind: 'add', value: 5 },
+      talent: { kind: 'add', value: 3 },
+      power: { kind: 'mul', value: 1.03 },
+      mmr: { kind: 'add', value: 600 },
+    } as Record<'insight' | 'resilience' | 'talent' | 'power' | 'mmr', { kind: 'add' | 'mul'; value: number }>,
+    /** 同一战队同时激活多个同属性羁绊（如 Spirit 的三套阵容共享核心）时是否叠加：false = 只生效最早的一个 */
+    stackSameAttr: false as boolean,
   },
 
   // -------------------------------------------------------------------------
@@ -1727,6 +1856,109 @@ export const CONFIG = {
   },
 
   // -------------------------------------------------------------------------
+  // 新俱乐部涌现（第十波 #2，clubs.ts）：赛季初（新秀选秀与休赛期转会潮之前）全局执行一次（新游戏第一个赛季不执行）。
+  // 真实组织（src/data/clubIndex.json）出现在当届 roster、而本局从未有过该组织的战队 → 以当届品牌 / 荣誉 / 资金成立并签回当届真实选手；
+  // 偶尔成立一个虚构新组织。联赛规模保持在 [team.minTeams, maxTeams]（下限由 ai.aiEnsureRosters 补足）。
+  // -------------------------------------------------------------------------
+  clubs: {
+    enabled: true,
+    /** 联赛规模上限（未解散战队数，含玩家）：成立新俱乐部不会超过此数 */
+    maxTeams: 34,
+    /** 每个赛季至多成立的真实俱乐部数（按重要程度：现实 TI 冠军次数 / 最好名次、当届 TI 正赛队、荣誉） */
+    maxRealPerSeason: 3,
+    /**
+     * 联赛已满时，为「重要」真实俱乐部（当届 TI 正赛队，或现实最好 TI 名次 ≤ majorBestRank）腾出席位：
+     * 解散一支「过气」AI 俱乐部（虚构组织，或现实中已连续两届以上不在阵容数据中、且从未夺得 TI 的组织；荣誉 < retireHonorMax、
+     * 战力排名在后 retireRankShare），每赛季至多 maxRetirePerSeason 支
+     */
+    majorBestRank: 8,
+    maxRetirePerSeason: 2,
+    retireHonorMax: 700,
+    retireRankShare: 0.5,
+    /**
+     * 起始资金 = economy.realClubStartingFunds（与开局的 AI 真实俱乐部同一公式：原口径「数据资金 × 0.2」封顶于强队锚定额 × 年代系数，不乘难度倍数），
+     * 不低于签约后每回合工资 × minFundsWageRounds（与开局的 9 回合下限分开：成立后还要付转会费签回真实选手，见 budgetRounds）。
+     * 只有最富一档的组织比原口径少（封顶）；成立时签回的真实选手、每局成立 / 解散数见 DESIGN.md 3.6
+     */
+    minFundsWageRounds: 12,
+    /**
+     * 新俱乐部的「上赛季排名」：插入到排名表的 round(规模 × rankShare) 处、其后战队顺延（排名保持唯一）——选秀顺位 / 邀请 / 赞助的依据
+     * （不排在最后，避免新俱乐部白拿状元签概率）
+     */
+    rankShare: 0.6,
+    /**
+     * 签回当届真实选手（自由选手直接签；AI 战队的选手付转会费求购，从不动人类玩家战队的选手）：
+     * 转会费 = 身价 × U(fee)；卖家放人概率 = sellChance - 头号选手 sellStarPenalty - 卖家自己的使命成员 sellMissionPenalty
+     */
+    fee: [1.0, 1.3] as [number, number],
+    sellChance: 0.75,
+    sellStarPenalty: 0.25,
+    sellMissionPenalty: 0.45,
+    /** 付完费用后余额 ≥ (工资 + 新增工资) × budgetRounds（成立时的预算） */
+    budgetRounds: 3,
+    /** 签回的真实选手：合同 U{signContractSeasons} 个赛季、初始归属感 signLoyalty */
+    signContractSeasons: [2, 3] as [number, number],
+    signLoyalty: 72,
+    /** 阵容已满时为当届真实选手腾位：被放走的补位队员综合评分最多比该真实选手高 spareMaxGap（否则不签） */
+    spareMaxGap: 10,
+    /**
+     * 本局中从未出现过的当届真实选手按当届水平加入：天赋 = 真实天赋峰值 − bringBackTalentDecline × max(0, 年龄 − bringBackTalentAgeFrom)
+     *（战力 / 天梯取当届真实生涯轨迹）
+     */
+    bringBackTalentAgeFrom: 24,
+    bringBackTalentDecline: 1.5,
+    /**
+     * 虚构新组织：每个赛季的成立概率（至多 1 个；联赛已满时由一支过气 AI 俱乐部让出席位，与真实俱乐部共用解散名额、真实俱乐部优先），
+     * 荣誉 U(fictionalHonor)，资金 = AI 战队资金中位数 × U(fictionalFundsMedianMult)
+     */
+    fictionalChance: 0.3,
+    fictionalHonor: [150, 300] as [number, number],
+    fictionalFundsMedianMult: [0.9, 1.3] as [number, number],
+  },
+
+  // -------------------------------------------------------------------------
+  // 俱乐部使命（第十波 #3，missions.ts）：每个非玩家的真实俱乐部以组建现实巅峰阵容为目标
+  // （clubIndex.json 的 peak：TI 冠军阵容，否则最好名次的阵容）。休赛期转会潮 / AI 转会窗口中优先引进、尽量留住使命成员，不保证成功。
+  // -------------------------------------------------------------------------
+  missions: {
+    enabled: true,
+    /** 每个窗口每支俱乐部至多引进的使命成员：休赛期转会潮 / AI 季前窗口 / 中期窗口 */
+    maxBuys: { shuffle: 2, preseason: 1, midseason: 1 } as Record<'shuffle' | 'preseason' | 'midseason', number>,
+    /** 中期窗口向其他 AI 战队求购的概率（自由身的使命成员总会尝试签下） */
+    midseasonBuyChance: 0.3,
+    /**
+     * 求购（溢价）：报价 = 身价 × U(bidFee)；卖家放人概率 = sellBase - 头号选手 sellStarPenalty - 卖家自己的使命成员 sellMissionPenalty
+     * + (50 - 归属感)/100 × sellLoyaltyFactor，夹在 [0.02, 0.95]
+     */
+    bidFee: [1.3, 1.7] as [number, number],
+    sellBase: 0.5,
+    sellStarPenalty: 0.2,
+    sellMissionPenalty: 0.45,
+    sellLoyaltyFactor: 0.5,
+    /** 资金门槛：付完费用后余额 ≥ (工资 + 新增工资) × budgetRounds（比普通引援宽松） */
+    budgetRounds: 3,
+    /** 使命成员对本俱乐部的加盟意愿加成（加在 market.playerWillingness 上） */
+    willBonus: 0.1,
+    /** 使命引进（AI 窗口）的合同 U{signContractSeasons} 个赛季、初始归属感 signLoyalty */
+    signContractSeasons: [2, 3] as [number, number],
+    signLoyalty: 70,
+    /** 转会潮明星去向：使命成员求变时，本俱乐部（使命方）的争夺权重 × starWeightMult */
+    starWeightMult: 3,
+    /**
+     * 留人：转会潮换人候选分 - replaceSticky；求变 / 新挑战 / 老将下放 / 低归属感求去的挂牌概率 × listMult；
+     * 被挖角时卖家放人概率 - poachPenalty；合同到期时以 renewChance 概率续约 renewSeasons 个赛季（其余按原规则）
+     */
+    replaceSticky: 0.8,
+    listMult: 0.3,
+    poachPenalty: 0.35,
+    renewChance: 0.9,
+    renewSeasons: [1, 2] as [number, number],
+    /** 玩家战队里的使命成员：休赛期按概率向玩家报价（溢价，玩家可拒绝；从不强制带走），每支玩家战队每个休赛期至多 1 份 */
+    humanOfferChance: 0.35,
+    humanOfferFee: [1.2, 1.5] as [number, number],
+  },
+
+  // -------------------------------------------------------------------------
   // 新闻编辑部（news.ts / newsroom.ts）：世界动态、回合要闻、刀塔周报、社区趋势
   // -------------------------------------------------------------------------
   newsroom: {
@@ -1793,6 +2025,8 @@ export const CONFIG = {
       'ti-champion': 100, disband: 90, champion: 55, weekly: 50, upset: 45, record: 45, 'ti-story': 42,
       scandal: 38, 'big-transfer': 38, patch: 32, season: 30, trend: 30, 'tournament-start': 24, tier: 22,
       'transfer-window': 48, transfer: 15, rumor: 14, result: 12, 'player-event': 12, gossip: 3,
+      synergy: 40, // 羁绊觉醒（第十波 #5）
+      'new-club': 44, mission: 40, // 新俱乐部成立 / 俱乐部使命（第十波 #2 #3）
     } as Record<string, number>,
     /** 赛事类新闻（带 level:<等级> 标签）按赛事等级缩放；线上公开赛（filler 标签）再 × fillerScoreMult */
     levelScoreMult: { ti: 1, major: 1, premier: 0.8, minor: 0.55, qualifier: 0.5 } as Record<TournamentTier, number>,

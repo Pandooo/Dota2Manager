@@ -144,7 +144,7 @@ export function salaryGap(state: GameState, p: Player, salary?: number, teamId?:
   const exp = expectedSalary(state, p, teamId);
   if (!(exp > 0)) return 0;
   const base = Math.max(0, num(salary ?? p.salary, 0));
-  // 第九波：近期分到的赛事奖金部分计入薪资满意度（只计在该战队分到的）
+  // 奖金分成：近期分到的赛事奖金按每回合折算全额计入薪资满意度（只计在该战队分到的；2026-10-10 用户决策）
   const s = base + prizeSalaryCredit(state, p, teamId ?? p.teamId, base);
   return clamp((exp - s) / exp, -Math.abs(CONFIG.salary.gapFloor), 1);
 }
@@ -166,39 +166,64 @@ export function prizeShareLoyaltyDelta(share: number | null | undefined): number
   return Math.round(v * 1000) / 1000;
 }
 
-/** 近期分到的奖金（按赛季衰减；只计在 teamId 战队分到的；无记录为 0） */
+/** 回合键：赛季 × 100 + 回合（与 prizeShare / squadOps 的回合键一致） */
+function roundKeyNow(state: GameState): number {
+  return seasonTi(state) * 100 + Math.max(0, Math.floor(num(state.roundIndex, 0)));
+}
+
+/** 从回合键 key 到现在经过的回合数（跨赛季按每赛季回合数估算；不为负） */
+function roundsSince(state: GameState, key: number): number {
+  const perSeason = Math.max(1, state.season?.rounds?.length || CONFIG.calendar.regularRounds + 3);
+  const now = roundKeyNow(state);
+  const d = (Math.floor(now / 100) - Math.floor(key / 100)) * perSeason + ((now % 100) - (key % 100));
+  return Number.isFinite(d) ? Math.max(0, d) : 0;
+}
+
+/** 奖金折算薪资的窗口回合数（CONFIG.prizeShare.salary.windowRounds，至少 1） */
+function prizeWindowRounds(): number {
+  return Math.max(1, num(CONFIG.prizeShare.salary.windowRounds, 20));
+}
+
+/**
+ * 近期分到的奖金余额（只计在 teamId 战队分到的；无记录为 0）：每过一个回合 × (1 − 1/窗口回合数)，
+ * 与 prizeSalaryCredit 的「余额 / 窗口回合数」配合，一笔奖金在之后的各回合中合计正好全额计入一次。
+ * 余额低于一回合的最低工资（economy.minSalary）时视为 0。
+ */
 export function recentPrizeEarned(state: GameState, p: Player, teamId?: string | null): number {
   const t = p?.salaryTrack;
   if (!t || !(num(t.prizeEarned) > 0)) return 0;
   const tid = teamId === undefined ? p.teamId : teamId;
   if (!tid || t.prizeTeamId !== tid) return 0;
-  const seasons = Math.max(0, seasonTi(state) - num(t.prizeTi, seasonTi(state)));
-  const decay = clamp(num(CONFIG.prizeShare.salary.seasonDecay, 0.5), 0, 1);
-  const v = num(t.prizeEarned) * (seasons > 0 ? Math.pow(decay, Math.min(seasons, 64)) : 1);
-  return Number.isFinite(v) ? Math.max(0, v) : 0;
+  // 旧存档只记录了赛季：按该赛季第 0 回合计
+  const key = typeof t.prizeRound === 'number' && Number.isFinite(t.prizeRound)
+    ? t.prizeRound
+    : num(t.prizeTi, seasonTi(state)) * 100;
+  const elapsed = Math.min(roundsSince(state, key), 2000);
+  const v = num(t.prizeEarned) * Math.pow(1 - 1 / prizeWindowRounds(), elapsed);
+  return Number.isFinite(v) && v >= CONFIG.economy.minSalary ? v : 0;
 }
 
 /**
- * 奖金收入折算的「薪资补贴」（每回合，部分计入薪资满意度；不改变实际工资）：
- * 近期奖金 / roundsPerSeason × weight，至多 基础工资 × maxSalaryRatio。
+ * 奖金收入折算的「薪资补贴」（每回合计入薪资满意度；不改变实际工资，预期薪资仍不显示）：
+ * 近期奖金余额 / windowRounds × weight（用户决策 2026-10-10：队员分到的奖金全额计入总薪资，weight = 1；
+ * 余额每回合按 1/windowRounds 衰减，一笔奖金折算到之后各回合的补贴合计 = 奖金本身）。不设上限：薪资差 g 本身有下限 gapFloor。
  */
-export function prizeSalaryCredit(state: GameState, p: Player, teamId?: string | null, baseSalary?: number): number {
+export function prizeSalaryCredit(state: GameState, p: Player, teamId?: string | null, _baseSalary?: number): number {
   const S = CONFIG.prizeShare.salary;
   const earned = recentPrizeEarned(state, p, teamId);
   if (!(earned > 0)) return 0;
-  const per = (earned / Math.max(1, num(S.roundsPerSeason, 20))) * Math.max(0, num(S.weight, 0));
-  const base = Math.max(CONFIG.economy.minSalary, num(baseSalary ?? p.salary, 0));
-  const v = Math.min(per, base * Math.max(0, num(S.maxSalaryRatio, 0)));
+  const v = (earned / prizeWindowRounds()) * Math.max(0, num(S.weight, 0));
   return Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0;
 }
 
-/** 记录队员分到的奖金（prizeShare.payTournamentPrize 调用；换队后从零开始累计） */
+/** 记录队员分到的奖金（prizeShare.payTournamentPrize 调用；先把旧余额衰减到当前回合再累加；换队后从零开始累计） */
 export function recordPrizeIncome(state: GameState, p: Player, amount: number, teamId: string): void {
   if (!p || !teamId || !(num(amount) > 0)) return;
   const t = trackOf(p);
   const prev = recentPrizeEarned(state, p, teamId);
   t.prizeEarned = Math.round(prev + num(amount));
   t.prizeTi = seasonTi(state);
+  t.prizeRound = roundKeyNow(state);
   t.prizeTeamId = teamId;
 }
 

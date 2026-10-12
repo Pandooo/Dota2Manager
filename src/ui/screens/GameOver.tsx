@@ -1,4 +1,4 @@
-// 游戏结束：类似《文明》的生涯总结（生涯期满 / 解散 / 全员假赛禁赛）。
+// 游戏结束：类似《文明》的生涯总结（生涯期满 / 解散 / 全员假赛禁赛 / 破产）。
 // 数据全部来自引擎 legacy.computeLegacyReport（纯计算，不修改游戏状态）。多人模式：已出局的座位也能看到自己的总结
 // （onSpectate = 返回观战），终局时额外对比全部人类俱乐部。
 import { useMemo, type ReactNode } from 'react';
@@ -44,6 +44,15 @@ const THEMES: Record<GameOverReason, EndingTheme> = {
     accent: 'text-bad',
     ring: 'border-bad/70',
   },
+  bankrupt: {
+    kicker: 'Bankrupt',
+    heading: '俱乐部破产',
+    sub: (r, endTi) => `资金链断裂，${r.teamName} 在 TI${endTi} 赛季宣告破产。`,
+    banner: 'bg-gradient-to-br from-[#2a1d0c] via-panel to-bg',
+    glow: 'rgba(255,159,26,0.24)',
+    accent: 'text-tier-ss',
+    ring: 'border-tier-ss/70',
+  },
   banned: {
     kicker: 'Banned For Life',
     heading: '永久除名',
@@ -72,7 +81,7 @@ const GRADE_STYLE: Record<string, string> = {
   'S+': 'ssr-text', S: 'text-gold', A: 'text-tier-ss', B: 'text-tier-a', C: 'text-tier-b', D: 'text-mute',
 };
 
-const ENDING_LABEL: Record<GameOverReason, string> = { completed: '生涯期满', disbanded: '解散', banned: '假赛除名' };
+const ENDING_LABEL: Record<GameOverReason, string> = { completed: '生涯期满', disbanded: '解散', banned: '假赛除名', bankrupt: '破产' };
 
 const tiList = (list: readonly number[]) => (list.length ? list.map((t) => `TI${t}`).join(' · ') : '—');
 
@@ -155,6 +164,12 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
             style={{ backgroundImage: 'repeating-linear-gradient(135deg, #ff5c8a 0 2px, transparent 2px 22px)' }}
           />
         )}
+        {ending === 'bankrupt' && (
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.05]"
+            style={{ backgroundImage: 'repeating-linear-gradient(0deg, #ff9f1a 0 1px, transparent 1px 26px)' }}
+          />
+        )}
         <div className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-8 px-6 py-10">
           <div className="min-w-0 flex-1">
             <div className={cx('text-xs font-semibold uppercase tracking-[0.4em]', theme.accent)}>{theme.kicker}</div>
@@ -220,6 +235,11 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
               {ending === 'banned' && (
                 <div className="absolute -right-3 top-2 rotate-12 rounded border-2 border-[#ff5c8a] bg-bg/90 px-2 py-0.5 text-sm font-black tracking-widest text-[#ff5c8a]">
                   禁赛
+                </div>
+              )}
+              {ending === 'bankrupt' && (
+                <div className="absolute -right-3 top-2 rotate-12 rounded border-2 border-tier-ss bg-bg/90 px-2 py-0.5 text-sm font-black tracking-widest text-tier-ss">
+                  破产
                 </div>
               )}
             </div>
@@ -358,7 +378,8 @@ function Timeline({ rows }: { rows: LegacyTimelineRow[] }) {
                 <span
                   className={cx(
                     'absolute -left-[27px] top-1 grid h-3.5 w-3.5 place-items-center rounded-full border-2',
-                    won ? 'border-gold bg-gold' : r.ending === 'banned' ? 'border-[#ff5c8a] bg-[#ff5c8a]/40' : r.ending ? 'border-bad bg-bad/40' : 'border-line bg-panel-3',
+                    won ? 'border-gold bg-gold' : r.ending === 'banned' ? 'border-[#ff5c8a] bg-[#ff5c8a]/40'
+                      : r.ending === 'bankrupt' ? 'border-tier-ss bg-tier-ss/40' : r.ending ? 'border-bad bg-bad/40' : 'border-line bg-panel-3',
                   )}
                 />
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -366,7 +387,7 @@ function Timeline({ rows }: { rows: LegacyTimelineRow[] }) {
                   <span className="text-[11px] text-faint">{r.year}</span>
                   <span className={cx('text-sm', tiCellClass(r))}>{r.tiLabel}</span>
                   {r.partial && (
-                    <Badge className={r.ending === 'banned' ? 'bg-[#ff5c8a]/15 text-[#ff8fb0]' : r.ending ? 'bg-bad/15 text-bad' : 'bg-panel-3 text-mute'}>
+                    <Badge className={r.ending === 'banned' ? 'bg-[#ff5c8a]/15 text-[#ff8fb0]' : r.ending === 'bankrupt' ? 'bg-tier-ss/15 text-tier-ss' : r.ending ? 'bg-bad/15 text-bad' : 'bg-panel-3 text-mute'}>
                       {r.ending ? `赛季中${ENDING_LABEL[r.ending]}` : '赛季未完成'}
                     </Badge>
                   )}
@@ -507,7 +528,7 @@ function HumanComparison({ reports, me }: { reports: LegacyReport[]; me: string 
                     <span className="text-xs text-mute">{r.teamName}</span>
                   </span>
                 </td>
-                <td className={cx('text-xs', r.ending === 'banned' ? 'text-[#ff8fb0]' : r.ending === 'disbanded' ? 'text-bad' : 'text-good')}>
+                <td className={cx('text-xs', r.ending === 'banned' ? 'text-[#ff8fb0]' : r.ending === 'bankrupt' ? 'text-tier-ss' : r.ending === 'disbanded' ? 'text-bad' : 'text-good')}>
                   {ENDING_LABEL[r.ending]}
                 </td>
                 <td className={cx('text-xs', TITLE_STYLE[r.title.id] ?? 'text-mute')}>{r.title.name}</td>

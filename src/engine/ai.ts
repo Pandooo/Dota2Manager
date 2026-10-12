@@ -17,6 +17,8 @@ import {
 import { generateAiTeam } from './generation';
 import { allPendingDecisions } from './seat';
 import { aiCoachCandidates, aiCoachPickWeight } from './coaches';
+import { aiPursueMission, isRetainedMissionPlayer, missionAwareTrim, refreshMissions } from './missions';
+import { aiLineupPriority, lineupPriorityLocks } from './lineupPriority';
 
 const FOCI: TrainingFocus[] = ['power', 'mmr', 'insight', 'balanced'];
 
@@ -111,10 +113,14 @@ export function aiTrainRound(state: GameState): void {
 /**
  * 补强：以更强的选手替换最弱首发。优先自由市场；找不到时挖角其他 AI 战队归属感低迷的选手（支付违约金）。
  * poachPool 为全联盟低归属感 AI 选手（按评分降序，窗口内一次性计算）。返回是否发生签约。
+ * 首发优先级（lineupPriority.ts）锁定的位置（使命 / 巅峰选手打本位置）不在补强之列：按评分引进的人只会坐替补。
  */
 function tryUpgrade(state: GameState, team: Team, pool: Player[], poachPool: Player[]): boolean {
-  const slots = lineupPlayers(state, team.id).filter((s) => s.player);
-  if (slots.length < 5) return false;
+  const all = lineupPlayers(state, team.id).filter((s) => s.player);
+  if (all.length < 5) return false;
+  const prio = aiLineupPriority(state, team.id);
+  const slots = prio ? all.filter((s) => !lineupPriorityLocks(state, team.id, s.player, s.pos, null, prio)) : all;
+  if (!slots.length) return false;
   let weakest = slots[0];
   let weakestRating = playerRating(weakest.player!, weakest.pos);
   for (const s of slots) {
@@ -157,6 +163,8 @@ function tryPoach(
     const p = poachPool[i];
     if (overallRating(p) <= minRating) return false; // 降序：后面只会更弱
     if (p.position !== pos || !p.teamId || p.teamId === team.id || p.status !== 'active') continue;
+    // 俱乐部使命（第十波 #3）：使命俱乐部不放走自己的使命成员（留人）
+    if (isRetainedMissionPlayer(state, p)) continue;
     const seller = state.teams[p.teamId];
     if (!seller || seller.isPlayer || seller.disbanded) continue;
     const fee = roundFee(marketValue(state, p) * (lo + hi) / 2);
@@ -234,7 +242,10 @@ function handleDebt(state: GameState, team: Team, rng: Rng): void {
     if (!allBench.length) break;
     // 只出售位置有人顶替的替补：阵中唯一的本职选手（被客串者挤到替补席）不卖，避免出现缺本职位置的阵容（卖无可卖 → 降薪）
     const regulars = roster(state, team.id);
-    const bench = allBench.filter((p) => regulars.some((q) => q.id !== p.id && q.position === p.position));
+    const sellable = allBench.filter((p) => regulars.some((q) => q.id !== p.id && q.position === p.position));
+    // 俱乐部使命：先卖非使命成员
+    const nonMission = sellable.filter((p) => !isRetainedMissionPlayer(state, p));
+    const bench = nonMission.length ? nonMission : sellable;
     if (!bench.length) break;
     let star = bench[0];
     for (const p of bench) if (p.salary > star.salary) star = p;
@@ -314,9 +325,12 @@ export function aiTransferWindow(
   }
   poachPool.sort((a, b) => overallRating(b) - overallRating(a));
 
+  // 俱乐部使命（第十波 #3，missions.ts）：使命俱乐部先于其他操作引进缺失的现实巅峰阵容成员（自由身签下 / 溢价求购）
+  for (const team of teams) if (!team.disbanded) aiPursueMission(state, team, pool, mode, rng);
   for (const team of teams) {
     if (team.disbanded) continue;
     handleDebt(state, team, rng);
+    missionAwareTrim(state, team.id, CONFIG.ai.maxRoster);
     trimRoster(state, team.id, CONFIG.ai.maxRoster);
     fillRosterFromMarket(state, team.id, CONFIG.ai.minRoster, pool);
     if (opts.upgrades !== false && team.gold > 0 && rng.chance(upgradeChance)) tryUpgrade(state, team, pool, poachPool);
@@ -324,9 +338,12 @@ export function aiTransferWindow(
       maybeAddBench(state, team, pool);
       maybeHireCoach(state, team, coachPool, rng);
     }
+    missionAwareTrim(state, team.id, CONFIG.ai.maxRoster);
     trimRoster(state, team.id, CONFIG.ai.maxRoster);
     autoLineup(state, team.id);
   }
+  // 俱乐部使命：刷新进度（新集齐巅峰阵容的发新闻）
+  refreshMissions(state);
 }
 
 /** 某战队在 pos 位置首发的评分（空位为 0） */
@@ -409,6 +426,7 @@ export function aiEnsureRosters(state: GameState): void {
       pool ??= freeAgents(state);
       fillRosterFromMarket(state, team.id, CONFIG.ai.minRoster, pool);
     } else if (n > CONFIG.ai.maxRoster) {
+      missionAwareTrim(state, team.id, CONFIG.ai.maxRoster);
       trimRoster(state, team.id, CONFIG.ai.maxRoster);
     }
     autoLineup(state, team.id);

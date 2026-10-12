@@ -1,4 +1,4 @@
-// DotaPedia 中心页：总览 | 战队 | 选手 | 赛事 | 英雄（只读百科；标签行右侧为全站搜索）
+// DotaPedia 中心页：总览 | 战队 | 选手 | 赛事 | 英雄 | 羁绊图鉴（只读百科；标签行右侧为全站搜索）
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame, useGameStore, type PediaTab as Tab } from '../../store/gameStore';
 import { pediaSearch } from '../../engine';
@@ -11,6 +11,7 @@ import PediaTeams from './PediaTeams';
 import PediaPlayers from './PediaPlayers';
 import PediaTours from './PediaTours';
 import PediaHeroes from './PediaHeroes';
+import PediaSynergies from './PediaSynergies';
 
 export default function PediaHub() {
   const game = useGame();
@@ -24,6 +25,7 @@ export default function PediaHub() {
     { key: 'pediaPlayers', label: '选手', title: '全部选手的词条：生涯数据、成就、战队履历与常用英雄' },
     { key: 'pediaTours', label: '赛事', title: '历届赛事的冠亚军与名次' },
     { key: 'pediaHeroes', label: '英雄', title: '英雄出场、胜率与禁用（按赛季）' },
+    { key: 'pediaSynergies', label: '羁绊图鉴', title: '羁绊图鉴：历届 TI 冠军阵容（及少数经典阵容）的隐藏羁绊，五人同队集齐后觉醒并解锁' },
   ];
 
   return (
@@ -34,6 +36,7 @@ export default function PediaHub() {
       {tab === 'pediaPlayers' && <PediaPlayers />}
       {tab === 'pediaTours' && <PediaTours />}
       {tab === 'pediaHeroes' && <PediaHeroes />}
+      {tab === 'pediaSynergies' && <PediaSynergies />}
     </HubShell>
   );
 }

@@ -365,7 +365,7 @@ function randomActions(g: GameState, st: Stats, id: string, rnd: Rng): void {
     // 选手奖金分成（第九波）：偶尔调整一档；只改本队，每回合最多一次
     () => {
       if (!rnd.chance(0.08)) return;
-      const cur = team().prizeShare ?? 0.7;
+      const cur = team().prizeShare ?? CONFIG.prizeShare.initial;
       const others = Object.keys(g.teams).filter((t) => t !== id).map((t) => [t, g.teams[t].prizeShare] as const);
       const to = Math.round(Math.min(1, Math.max(0.5, cur + (rnd.chance(0.5) ? 0.05 : -0.05))) * 100) / 100;
       if (rpc(g, st, id, 'setPrizeShare', to).ok) {
@@ -623,7 +623,8 @@ async function runGame(mode: 'build' | 'existing', seed: number, verbose: boolea
   st.eliminated = ids.filter((id) => g.multiplayer!.seats[id].eliminated).length;
   // 正常结束（到达终点 TI），或全部玩家出局（每个座位都已出局、战队解散）
   const allOut = ids.every((id) => g.multiplayer!.seats[id].eliminated && g.teams[id].disbanded);
-  check(g.gameOver.reason === 'completed' || ((g.gameOver.reason === 'disbanded' || g.gameOver.reason === 'banned') && allOut),
+  check(g.gameOver.reason === 'completed'
+    || ((g.gameOver.reason === 'disbanded' || g.gameOver.reason === 'banned' || g.gameOver.reason === 'bankrupt') && allOut),
     `游戏应正常结束或全部出局（${g.gameOver.reason}，出局 ${st.eliminated}/${ids.length}）`);
   if (g.gameOver.reason === 'disbanded' && verbose) log(`  全部玩家出局，游戏提前结束（TI${g.season.ti} 第 ${g.roundIndex} 回合）`);
   // 生涯档案（legacy.ts）：每个座位按赛季递增、无重复；出局座位恰好冻结一次且是最后一条；结算页报告可算
@@ -646,7 +647,8 @@ async function runGame(mode: 'build' | 'existing', seed: number, verbose: boolea
       const r = computeLegacyReport(M.seatView(g, id), id, ids);
       check(r.board.some((b) => b.kind === 'self') && r.board.filter((b) => b.kind === 'human').length === ids.length - 1,
         `${seat.name} 结算页排行榜应含全部人类俱乐部`);
-      check(r.ending === (g.teams[id].banned ? 'banned' : seat.eliminated ? 'disbanded' : 'completed'), `${seat.name} 结局判定错误（${r.ending}）`);
+      check(r.ending === (g.teams[id].banned ? 'banned' : g.teams[id].bankrupt ? 'bankrupt' : seat.eliminated ? 'disbanded' : 'completed'),
+        `${seat.name} 结局判定错误（${r.ending}）`);
     } catch (e) {
       if (e instanceof Fail) throw e;
       check(false, `${seat.name} 生涯总结计算失败：${String(e)}`);

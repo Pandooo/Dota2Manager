@@ -27,6 +27,7 @@ import { ageOf, effectiveAttr, overallRating, playerRating, playerTier, seasonEc
 import { activeTeams, addPlayerToTeam, autoLineup, rankTeamsByRating } from './team';
 import { generatePlayer, rookieFromIndex } from './generation';
 import { departToFreeAgency } from './market';
+import { syncSynergies } from './synergy';
 import { prdConstant } from './gacha';
 import { forEachSeat, isHumanTeam } from './seat';
 import { getPlayerIndex } from '../data/index';
@@ -655,5 +656,6 @@ export function releaseDraftedRookie(state: GameState, playerId: string): OpResu
     false,
     { teamIds: [team.id], playerIds: [p.id], actorTeamId: team.id, tags: ['draft'] },
   );
+  syncSynergies(state); // 羁绊（第十波 #5）：真实新秀也可能是羁绊成员，放弃后立即同步
   return ok(`已放弃 ${p.handle}（无费用），他已进入自由市场`);
 }

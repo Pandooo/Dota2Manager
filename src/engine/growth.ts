@@ -394,6 +394,8 @@ export function processRetirements(state: GameState): { retired: Player[]; newCo
     const wasOnTeam = !!p.teamId;
     if (p.teamId) removePlayerFromTeam(state, p.id);
     p.status = 'retired';
+    delete p.transferListing; // 挂牌期跨赛季：挂牌中的选手退役时挂牌随之结束
+    delete p.listingStaleMemo;
     p.modifiers = [];
     p.unavailableTournamentIds = undefined;
     retired.push(p);

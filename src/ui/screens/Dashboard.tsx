@@ -13,10 +13,12 @@ import {
   activeTeams, currentPlayerTournament, currentRound, formatGold, formatRank, getCoach,
   draftedRookiesOf, isTransferWindowOpen, rankTeamsByRating, regularRoundCount, roundKindForPlayer, roundRevenue,
   roundWageBill, rosterOverflowNotice, seasonStandings, teamPlayers, teamRating, trainingSessionsLeft, validateLineup,
-  type GameState, type RoundInfo, type RoundRevenue, type Team, type Tournament,
+  bankruptcyCountdownText, bankruptcyRules, bankruptcyStatus,
+  type BankruptcyStatus, type GameState, type RoundInfo, type RoundRevenue, type Team, type Tournament,
 } from '../../engine';
 import { getTiInfo } from '../../data/index';
 import { Button, Card, Delta, EmptyState, Gold, PageHeader, TeamLink, cx } from '../components/common';
+import { TeamEmblem } from '../components/TeamEmblem';
 import { MiniTitle, ROUND_KIND_TEXT, TourTierBadge, roundLabel, safe } from '../components/ShellKit';
 import NewsTicker from '../components/NewsTicker';
 import RoundDigest from '../components/RoundDigest';
@@ -257,6 +259,15 @@ export default function Dashboard() {
   const rosterCount = roster.filter((p) => !p.tempSubUntilTournament).length;
   // 超出常规上限只是提醒（不阻塞推进）：工资照付、替补归属感下降更快
   const overflowNote = safe<string | null>(() => rosterOverflowNotice(game, me), null);
+  // 破产倒计时（第十波 #1，engine/bankruptcy.ts）：资金为负时常驻在「待处理」标题行（不必展开也能看到）
+  const bk = safe<BankruptcyStatus | null>(() => bankruptcyStatus(game, me), null);
+  const bkWarn = !!bk?.warning && !spectating;
+  const bkRules = safe(() => bankruptcyRules(), { rounds: 3, debtWageRounds: 6 });
+  const bkTitle = bk
+    ? `破产规则：资金连续 ${bk.limitRounds} 个回合结算后仍为负，或负债超过 ${bkRules.debtWageRounds} 个回合的工资`
+      + `${bk.debtLimit !== null ? `（${formatGold(bk.debtLimit)}）` : ''}，俱乐部破产、执教生涯提前结束。\n`
+      + `预计本回合结算后资金 ${formatGold(team.gold + income - wage)}（收入 − 工资，不含赛事奖金与转会）。点击查看财务。`
+    : undefined;
 
   // ---------------- 接下来 ----------------
   const patchesNow = round.patchVersions ?? [];
@@ -400,7 +411,7 @@ export default function Dashboard() {
       {(() => {
         const urgent =
           decisions.length + offers.length + (lineupErrors.length ? 1 : 0) + (fundsShort ? 1 : 0) +
-          (team.honor < 50 ? 1 : 0) + (rosterCount < 5 ? 1 : 0);
+          (team.honor < 50 ? 1 : 0) + (rosterCount < 5 ? 1 : 0) + (bkWarn ? 1 : 0);
         const info = (rookies ? 1 : 0) + (overflowNote ? 1 : 0) + (expiring.length ? 1 : 0) + (lowLoyal.length ? 1 : 0) + (!coach ? 1 : 0);
         const total = urgent + info;
         return (
@@ -413,10 +424,45 @@ export default function Dashboard() {
               <span className="ml-2 text-xs text-mute">
                 {total === 0 ? '✓ 一切就绪，没有待办事项' : urgent ? `${urgent} 项需要尽快处理${info ? `，另有 ${info} 项提醒` : ''}` : `${info} 项提醒`}
               </span>
+              {bkWarn && bk && (
+                <span
+                  className={cx('rounded border px-2 py-0.5 text-xs font-semibold', bk.negative ? 'animate-pulse border-bad/60 bg-bad/15 text-bad' : 'border-gold/40 bg-gold/10 text-gold')}
+                  title={bkTitle}
+                >
+                  {bk.negative ? bankruptcyCountdownText(bk.roundsLeft) : '资金已回正：回合结算时仍 ≥ 0 即解除破产倒计时'}
+                </span>
+              )}
               <span className="ml-auto text-xs text-faint">{todoOpen ? '收起 ▴' : '展开 ▾'}</span>
             </button>
             {todoOpen && (
               <div className="grid gap-x-4 border-t border-line px-2 py-2 md:grid-cols-2">
+                {bkWarn && bk && (
+                  <div className="md:col-span-2">
+                    <TodoRow icon="!" tone="bg-bad text-white" onClick={() => setView('finance')} title={bkTitle}>
+                      {bk.negative ? (
+                        <>
+                          <span className="font-semibold text-bad">{bankruptcyCountdownText(bk.roundsLeft)}</span>
+                          <span className="ml-1 text-xs text-mute">
+                            负债 <Gold value={bk.debt} />
+                            {bk.debtLimit !== null && <> / 上限 <Gold value={bk.debtLimit} /></>}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          资金已回正：本回合结算时资金 ≥ 0 即解除破产倒计时
+                          <span className="ml-1 text-xs text-mute">（已连续 {bk.negativeRounds} 个回合为负）</span>
+                        </>
+                      )}
+                    </TodoRow>
+                  </div>
+                )}
+                {bkWarn && bk?.debtOver && (
+                  <div className="md:col-span-2">
+                    <TodoRow icon="!" tone="bg-bad text-white" onClick={() => setView('finance')} title={bkTitle}>
+                      <span className="text-bad">负债已超过 {bkRules.debtWageRounds} 个回合的工资：本回合结算时仍超过将立即破产</span>
+                    </TodoRow>
+                  </div>
+                )}
                 {decisions.length > 0 && (
                   <TodoRow icon="!" tone="bg-dota text-white" count={decisions.length} onClick={() => setView('inbox')}>
                     待决策事件{blockingDecisions ? <span className="ml-1 text-xs text-bad">（{blockingDecisions} 个阻塞推进）</span> : null}
@@ -439,8 +485,9 @@ export default function Dashboard() {
                   </TodoRow>
                 )}
                 {fundsShort && (
-                  <TodoRow icon="¥" tone="bg-bad/20 text-bad" onClick={() => setView('finance')}>
+                  <TodoRow icon="¥" tone="bg-bad/20 text-bad" onClick={() => setView('finance')} title={bkTitle}>
                     资金不足以支付本回合结束时的工资（工资 <Gold value={wage} />，预计收入 <Gold value={income} />），将触发欠薪
+                    {!bkWarn && <span className="ml-1 text-xs text-bad">；结算后资金为负将进入破产倒计时</span>}
                   </TodoRow>
                 )}
                 {team.honor < 50 && (
@@ -680,7 +727,7 @@ function StandRow({ rank, t, isMe }: { rank: number; t: Team; isMe: boolean }) {
       <td className={cx('w-8 tabular', rank <= 3 ? 'font-bold text-gold' : 'text-mute')}>{rank}</td>
       <td>
         <div className="flex max-w-[220px] items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: t.color }} />
+          <TeamEmblem tag={t.tag} color={t.color} teamId={t.id} />
           <TeamLink teamId={t.id} name={t.name} className={cx('min-w-0 truncate text-left', isMe && 'font-semibold text-gold')} />
           {isMe && <span className="shrink-0 text-[10px] text-gold">（你）</span>}
         </div>

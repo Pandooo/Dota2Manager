@@ -13,6 +13,9 @@ import { adjustLoyalty } from './growth';
 import { addFinance, econ, roundWageBill } from './economy';
 import { createTransferOffer, departToFreeAgency, isTransferWindowOpen, playerTeamOrNull, roundFee } from './market';
 import { SALARY_MOOD_LABEL, raiseGapMultiplier, salaryGap, salaryMoodOf, type SalaryMood } from './salary';
+import {
+  LISTING_RULE_VERSION, listingClock, listingDurationLabel, listingDurationRounds, listingProgress, listingRoundsPerSeason,
+} from './listingRules';
 
 // ---------------------------------------------------------------------------
 // 通用工具
@@ -249,9 +252,71 @@ export function teamBuilding(state: GameState): OpResult {
 // 挂牌转会
 // ---------------------------------------------------------------------------
 
+// 挂牌期规则（整赛季挂牌）的纯函数在 listingRules.ts（market 的合同到期提示也要用，避免循环引用），这里转出
+export {
+  LISTING_RULE_VERSION, listingRoundsPerSeason, listingDurationRounds, listingDurationLabel, listingProgress, listingClock,
+  listingListedAtLabel,
+} from './listingRules';
+export type { ListingProgress } from './listingRules';
+
+/** 旧存档的挂牌迁移到整赛季挂牌期（幂等、确定性、不消耗随机数）；返回是否有改动 */
+export function migrateListing(L: TransferListing | null | undefined): boolean {
+  if (!L || typeof L !== 'object' || L.v === LISTING_RULE_VERSION) return false;
+  const pr = listingProgress(L);
+  L.roundsLeft = pr.roundsLeft;
+  L.totalRounds = pr.totalRounds;
+  L.bidRolls = pr.bidRolls;
+  L.v = LISTING_RULE_VERSION;
+  return true;
+}
+
+/** 读档时迁移全部旧挂牌（save.importSave；多人房间的旧挂牌在各座位的回合结算中迁移），返回迁移条数 */
+export function migrateTransferListings(state: GameState): number {
+  let n = 0;
+  for (const id in state.players) {
+    const L = state.players[id]?.transferListing;
+    if (L && typeof L === 'object' && migrateListing(L)) n++;
+  }
+  return n;
+}
+
+/**
+ * 挂牌过久的报价意愿系数（CONFIG.squadOps.listingStaleDecay）：bidRolls = 此前已经历的出价机会次数，ratio = 标价 / 当前身价。
+ * 前 listingFreshRolls 次出价机会为 1（与原 3 回合规则相同）；之后标价高于身价越多、挂得越久，系数越低；标价不高于身价时始终为 1。
+ */
+export function listingStaleFactor(bidRolls: number, ratio: number): number {
+  const S = CONFIG.squadOps;
+  const k = Math.floor(bidRolls) - Math.max(0, Math.floor(S.listingFreshRolls));
+  if (!(k >= 0) || !Number.isFinite(ratio)) return 1;
+  const [lo, hi] = S.listingStaleRatioRange;
+  const strength = hi > lo ? clamp((ratio - lo) / (hi - lo), 0, 1) : ratio > lo ? 1 : 0;
+  if (!(strength > 0)) return 1;
+  const d = clamp(Number.isFinite(S.listingStaleDecay) ? S.listingStaleDecay : 1, 0, 1);
+  return clamp(1 - strength * (1 - Math.pow(d, k + 1)), 0, 1);
+}
+
+/** 本回合结束时挂牌的处理方式（界面提示与 processTransferListings 共用） */
+export interface ListingRoundStatus {
+  /** 倒计时是否走一格 */
+  counts: boolean;
+  /** 是否可能收到新报价 */
+  bids: boolean;
+  /** 不计时 / 不出价的说明（正常时为空串） */
+  note: string;
+}
+
+export function listingRoundStatus(state: GameState): ListingRoundStatus {
+  if (!isTransferWindowOpen(state)) return { counts: false, bids: false, note: '转会窗口锁定中（TI 预选 / 正赛），倒计时暂停' };
+  if (state.phase === 'preseason') return { counts: false, bids: false, note: '赛季初不计时，从第 1 回合结束时起计时' };
+  if (!nextRoundWindowOpen(state)) {
+    return { counts: true, bids: false, note: '本回合结束后转会窗口锁定：本回合照常计时，但不会再收到新报价' };
+  }
+  return { counts: true, bids: true, note: '' };
+}
+
 /** 选手当前有效的挂牌（须仍是玩家战队的 active 正式队员），否则 null */
 export function activeListing(state: GameState, p: Player | undefined | null): TransferListing | null {
-  if (!p || !p.transferListing || typeof p.transferListing !== 'object') return null;
+  if (!p || !p.transferListing || typeof p.transferListing !== 'object' || state.gameOver) return null;
   const team = playerTeamOrNull(state);
   if (!team || p.teamId !== team.id || p.status !== 'active' || p.tempSubUntilTournament) return null;
   return p.transferListing;
@@ -320,25 +385,44 @@ export function listPlayerForTransfer(state: GameState, playerId: string, asking
     price = roundFee(askingPrice) || step;
   }
 
-  const n = CONFIG.squadOps.listingRounds;
+  const n = listingDurationRounds();
+  // 撤牌记忆：近期撤牌后重新挂牌，沿用此前已经历的出价机会（挂牌过久的衰减不因撤牌 / 重挂而重置）
+  const carried = relistCarriedRolls(state, p);
+  delete p.listingStaleMemo;
   p.transferListing = {
     season: state.season?.ti ?? 0,
     listedRound: state.roundIndex,
     roundsLeft: n,
     askingPrice: price,
+    v: LISTING_RULE_VERSION,
+    totalRounds: n,
+    bidRolls: carried,
   };
   addNews(
     state,
     'transfer',
     `【挂牌】${team.name} 将 ${p.handle} 挂牌出售，标价 ${formatGold(price)}`,
     `${team.name} 将 ${p.handle}（${playerTier(p)} 级 · ${POSITION_LABEL[p.position]}）挂上转会名单，标价 ${formatGold(price)}（身价约 ${formatGold(mv)}）。` +
-      `有意的俱乐部可在 ${n} 个转会回合内报价。`,
+      `挂牌期为${listingDurationLabel()}，有意的俱乐部可在此期间报价。`,
     isHighProfile(p),
   );
+  const carriedNote = carried > 0
+    ? `（${p.handle} 不久前撤过牌，此前已经历的 ${carried} 次报价机会继续累计）`
+    : '';
   return {
     ok: true,
-    message: `已将 ${p.handle} 挂牌，标价 ${formatGold(price)}。${n} 个回合内若无人报价，将自动解约（不支付补偿）。`,
+    message: `已将 ${p.handle} 挂牌，标价 ${formatGold(price)}。挂牌期为${listingDurationLabel()}，期满仍未收到任何报价将自动解约（不支付补偿）。${carriedNote}`,
   };
+}
+
+/** 重新挂牌时沿用的出价机会次数：撤牌后 relistStaleMemorySeasons 个赛季的转会回合内重新挂牌 → 撤牌时的次数，否则 0 */
+function relistCarriedRolls(state: GameState, p: Player): number {
+  const memo = p.listingStaleMemo;
+  if (!memo || typeof memo !== 'object' || !Number.isFinite(memo.clock) || !Number.isFinite(memo.rolls)) return 0;
+  const seasons = CONFIG.squadOps.relistStaleMemorySeasons;
+  const window = Number.isFinite(seasons) && seasons > 0 ? seasons * listingRoundsPerSeason() : 0;
+  const elapsed = listingClock(state) - memo.clock;
+  return elapsed >= 0 && elapsed < window ? Math.max(0, Math.floor(memo.rolls)) : 0;
 }
 
 /** 批量挂牌（标价 = 各自身价），汇总结果（任一成功即 ok） */
@@ -354,7 +438,7 @@ export function listPlayersForTransfer(state: GameState, playerIds: string[]): O
     else failed.push(`${p.handle}（${r.message}）`);
   }
   if (!done.length) return { ok: false, message: failed.length ? `挂牌失败：${failed.join('；')}` : '未选择选手' };
-  let message = `已挂牌 ${done.length} 人：${done.join('、')}（标价 = 身价）。${CONFIG.squadOps.listingRounds} 个回合内无人报价将自动解约（不支付补偿）。`;
+  let message = `已挂牌 ${done.length} 人：${done.join('、')}（标价 = 身价）。挂牌期为${listingDurationLabel()}，期满仍未收到任何报价将自动解约（不支付补偿）。`;
   if (failed.length) message += `\n未能挂牌：${failed.join('；')}`;
   return { ok: true, message };
 }
@@ -366,6 +450,11 @@ export function unlistPlayer(state: GameState, playerId: string): OpResult {
   const p = typeof playerId === 'string' ? state.players[playerId] : undefined;
   if (!p || p.teamId !== team.id) return { ok: false, message: '该选手不在你的战队' };
   if (!p.transferListing) return { ok: false, message: `${p.handle} 不在挂牌名单中` };
+  // 撤牌记忆：记录已经历的出价机会，近期重新挂牌时沿用（防止靠撤牌 / 重挂刷新「挂牌过久」的衰减）
+  const L = p.transferListing;
+  const rolls = typeof L === 'object' ? listingProgress(L).bidRolls : 0;
+  if (rolls > 0) p.listingStaleMemo = { clock: listingClock(state), rolls };
+  else delete p.listingStaleMemo;
   delete p.transferListing;
   addNews(state, 'transfer', `【撤牌】${team.name} 撤销 ${p.handle} 的挂牌`, `${team.name} 将 ${p.handle} 从转会名单中撤下，他将继续留队效力。`);
   const pending = listingOffers(state, p.id).length;
@@ -436,28 +525,33 @@ function depthFade(ratio: number): number {
 }
 
 export interface ListingBidOutlook {
-  /** 每回合收到出价的概率 */
+  /** 每回合收到出价的概率（当前挂牌已含挂牌过久的衰减） */
   chance: number;
   /** 感兴趣且负担得起的俱乐部数 */
   interested: number;
   /** 标价 / 身价 */
   ratio: number;
+  /** 挂牌过久的报价意愿系数（1 = 未衰减；当前挂牌按已经历的出价机会，预览新标价时按撤牌记忆沿用的次数） */
+  stale: number;
 }
 
-/** 挂牌出价前景（UI 展示/测试用）：askingPrice 缺省时用当前标价或身价 */
+/** 挂牌出价前景（UI 展示/测试用）：askingPrice 缺省时用当前挂牌（含挂牌过久的衰减）或身价 */
 export function listingBidOutlook(state: GameState, playerId: string, askingPrice?: number): ListingBidOutlook {
   const p = state.players[playerId];
-  if (!p) return { chance: 0, interested: 0, ratio: 0 };
+  if (!p) return { chance: 0, interested: 0, ratio: 0, stale: 1 };
   const mv = Math.max(1, marketValue(state, p));
-  const price = askingPrice !== undefined && Number.isFinite(askingPrice) && askingPrice > 0
-    ? askingPrice
-    : p.transferListing?.askingPrice ?? mv;
+  const preview = askingPrice !== undefined && Number.isFinite(askingPrice) && askingPrice > 0;
+  const L = !preview && p.transferListing && typeof p.transferListing === 'object' ? p.transferListing : null;
+  const price = preview ? (askingPrice as number) : L?.askingPrice ?? mv;
   const ratio = price / mv;
   const buyers = listingBuyers(state, p, price);
-  return { chance: bidChanceFor(p, ratio, buyers), interested: buyers.length, ratio };
+  // 预览新标价（未挂牌）：近期撤过牌时按沿用的出价机会计算衰减，与真正挂牌后一致
+  const rolls = L ? listingProgress(L).bidRolls : !p.transferListing ? relistCarriedRolls(state, p) : 0;
+  const stale = rolls > 0 ? listingStaleFactor(rolls, ratio) : 1;
+  return { chance: bidChanceFor(p, ratio, buyers, stale), interested: buyers.length, ratio, stale };
 }
 
-function bidChanceFor(p: Player, ratio: number, buyers: { interest: number }[]): number {
+function bidChanceFor(p: Player, ratio: number, buyers: { interest: number }[], stale = 1): number {
   if (!buyers.length) return 0;
   const S = CONFIG.squadOps;
   const sumInterest = buyers.reduce((s, b) => s + b.interest, 0);
@@ -465,7 +559,8 @@ function bidChanceFor(p: Player, ratio: number, buyers: { interest: number }[]):
   const [dLo, dHi] = S.bidDemandMult;
   const tierMult = S.bidTierMult[playerTier(p)] ?? 1;
   const v = curveChance(ratio) * tierMult * lerp(dLo, dHi, demand);
-  return clamp(Number.isFinite(v) ? v : 0, 0, S.bidMaxChance);
+  // 挂牌过久的衰减在概率上限之后相乘（前 listingFreshRolls 次出价机会 stale = 1，与原规则完全一致）
+  return clamp(Number.isFinite(v) ? v : 0, 0, S.bidMaxChance) * clamp(Number.isFinite(stale) ? stale : 1, 0, 1);
 }
 
 /** 尝试为挂牌选手生成一份 AI 出价（写入 transferOffers，出现在「收到的报价」中），返回报价或 null */
@@ -473,7 +568,8 @@ function rollListingBid(state: GameState, team: Team, p: Player, L: TransferList
   const mv = Math.max(1, marketValue(state, p));
   const pendingBuyers = new Set(listingOffers(state, p.id).map((o) => o.fromTeamId));
   const buyers = listingBuyers(state, p, L.askingPrice).filter((b) => !pendingBuyers.has(b.team.id));
-  const chance = bidChanceFor(p, L.askingPrice / mv, buyers);
+  const ratio = L.askingPrice / mv;
+  const chance = bidChanceFor(p, ratio, buyers, listingStaleFactor(L.bidRolls ?? 0, ratio));
   if (chance <= 0 || !rng.chance(chance)) return null;
   const buyer = rng.weighted(
     buyers.map((b) => b.team),
@@ -491,15 +587,32 @@ function rollListingBid(state: GameState, team: Team, p: Player, L: TransferList
   offer.listing = true;
   // 回合结束时生成：从下一回合起有效 offerExpireRounds 个回合（与回合开始时生成的普通报价一致）
   offer.expiresRound = state.roundIndex + 1 + CONFIG.market.offerExpireRounds;
+  const usable = offerUsableRounds(state);
   addNews(
     state,
     'transfer',
     `【挂牌报价】${buyer.name} 求购挂牌中的 ${p.handle}`,
     `${buyer.name} 对 ${team.name} 挂牌出售的 ${p.handle} 开出 ${formatGold(offer.fee)}（标价 ${formatGold(L.askingPrice)}），并承诺工资 ${formatGold(offer.salary)}/回合。` +
-      `请在 转会市场 → 我的挂牌 中回应（${CONFIG.market.offerExpireRounds} 回合内有效）。`,
+      `请在 转会市场 → 我的挂牌 中回应（${usable >= CONFIG.market.offerExpireRounds ? `${usable} 回合内有效` : usable === 1 ? '仅下一回合内有效，之后 TI 转会锁定、报价作废' : `${usable} 回合内有效，之后 TI 转会锁定、报价作废`}）。`,
     true,
   );
   return offer;
+}
+
+/**
+ * 回合结束时生成的报价实际可处理的回合数：从下一回合起最多 offerExpireRounds 个回合，
+ * 但转会窗口锁定前的最后一回合结束时未处理的报价会作废（market.expireOffers），所以只数窗口开放的回合。
+ */
+function offerUsableRounds(state: GameState): number {
+  const max = Math.max(1, Math.floor(CONFIG.market.offerExpireRounds));
+  const rounds = state.season?.rounds;
+  if (!rounds?.length) return max;
+  let n = 0;
+  for (let i = state.roundIndex + 1; i < rounds.length && n < max; i++) {
+    if (rounds[i].phase !== 'regular' && rounds[i].phase !== 'preseason') break;
+    n++;
+  }
+  return Math.max(1, n);
 }
 
 /** 挂牌到期且无人报价：自动解约（无补偿、不扣荣誉） */
@@ -517,12 +630,61 @@ function releaseUnsoldListing(state: GameState, team: Team, p: Player): void {
   );
 }
 
+/** 下一次倒计时回合结束时是否还能收到报价（「仅剩最后 1 个回合」提醒的措辞用） */
+function nextTickCanBid(state: GameState): boolean {
+  const rounds = state.season?.rounds;
+  if (!rounds?.length) return true;
+  const next = rounds[state.roundIndex + 1];
+  // 下回合不是常规赛（TI 锁定）：下一次计时在下赛季第 1 回合，第 2 回合仍开放转会窗口
+  if (!next || next.phase !== 'regular') return listingRoundsPerSeason() >= 2;
+  const after = rounds[state.roundIndex + 2];
+  return !!after && (after.phase === 'regular' || after.phase === 'preseason');
+}
+
+/**
+ * 挂牌倒计时提醒（只对从未收到报价、当前也没有待处理报价的挂牌）：剩 listingReminderRounds 个回合、剩最后 1 个回合。
+ * 提醒是写给挂牌方的私有消息（多人模式下对手看不到「无人报价」与经营建议）。
+ */
+function listingReminderNews(state: GameState, team: Team, p: Player, L: TransferListing): void {
+  if (L.hadBids || listingOffers(state, p.id).length > 0) return;
+  const opts = { teamIds: [team.id], playerIds: [p.id], actorTeamId: team.id, scope: 'mine' as const, visibility: 'private' as const, noInfer: true };
+  if (L.roundsLeft === 1) {
+    addNews(
+      state,
+      'transfer',
+      `【挂牌】${p.handle} 挂牌仅剩最后 1 个回合`,
+      nextTickCanBid(state)
+        ? `${p.handle} 挂牌至今尚无俱乐部报价。若下一个转会回合结束时仍未收到任何报价，${team.name} 将与其自动解约（不支付补偿）。可考虑降低标价或撤销挂牌。`
+        : `${p.handle} 挂牌至今尚无俱乐部报价。下一个转会回合是 TI 转会锁定前的最后一回合，挂牌不会再收到新的报价，回合结束时转会窗口锁定；` +
+          `届时若他仍未收到任何报价，${team.name} 将与其自动解约（不支付补偿）。如想留下他，请撤销挂牌。`,
+      false,
+      opts,
+    );
+    return;
+  }
+  const remind = Math.floor(CONFIG.squadOps.listingReminderRounds);
+  if (remind > 1 && L.roundsLeft === remind && (L.totalRounds ?? 0) > remind) {
+    addNews(
+      state,
+      'transfer',
+      `【挂牌】${p.handle} 挂牌还剩 ${remind} 个转会回合`,
+      `${p.handle} 挂牌至今尚无俱乐部报价，挂牌期还剩 ${remind} 个转会回合（TI 锁定期间暂停）。` +
+        `到期仍未收到任何报价，${team.name} 将与其自动解约（不支付补偿）。可考虑降低标价或撤销挂牌。`,
+      false,
+      opts,
+    );
+  }
+}
+
 /**
  * 每回合结束时（season.endRound）处理玩家战队的挂牌：
- * - 清理失效挂牌（选手已离队/退役/成为临时替补）；
- * - 转会窗口锁定（本回合或下一回合）时倒计时暂停、不产生出价；
- * - 否则 AI 俱乐部按「标价/身价、等级、需求、资金」概率出价（创建 TransferOffer），剩余回合 -1；
+ * - 清理失效挂牌（选手已离队/退役/成为临时替补）；旧存档的 3 回合挂牌按已过回合迁移到整赛季挂牌期；
+ * - TI 预选 / 正赛（转会锁定）与赛季初：倒计时暂停、不产生出价；
+ * - 常规赛回合：倒计时 -1；下一回合仍开放转会窗口时，AI 俱乐部按「标价/身价、等级、需求、资金」概率出价（创建 TransferOffer），
+ *   挂牌超过 listingFreshRolls 次出价机会且标价高于身价时出价概率逐次衰减；常规赛最后一回合照常计时但不出价（报价会落在锁定期）；
  * - 剩余回合归零且没有待处理报价：整个挂牌期从未收到报价 → 自动解约（无补偿、不扣荣誉）；收到过报价 → 挂牌结束、选手留队。
+ *   「收到过报价」（hadBids）在 market.createTransferOffer 创建报价时记录（挂牌报价、普通报价、挖角均算，含当回合就被拒绝 /
+ *   被转会锁定作废的报价），挂牌前就已收到、仍待处理的报价在这里补记。
  */
 export function processTransferListings(state: GameState): void {
   if (state.gameOver) return;
@@ -530,6 +692,8 @@ export function processTransferListings(state: GameState): void {
   const listed: Player[] = [];
   for (const id in state.players) {
     const p = state.players[id];
+    // 过期的撤牌记忆：顺手清理（与座位无关、不消耗随机数）
+    if (p?.listingStaleMemo && !p.transferListing && relistCarriedRolls(state, p) === 0) delete p.listingStaleMemo;
     if (!p?.transferListing) continue;
     // 失效挂牌：选手已离开人类玩家战队 / 非 active / 临时替补 / 数据损坏。
     // 仅以「所在战队是否为人类玩家战队」判定，而不是「是否为当前玩家战队」，
@@ -546,31 +710,31 @@ export function processTransferListings(state: GameState): void {
     if (team && owner.id === team.id) listed.push(p);
   }
   if (!team || !listed.length) return;
-  if (!isTransferWindowOpen(state)) return; // 窗口锁定：倒计时暂停
+  // 旧存档：只迁移当前座位的挂牌（其他座位在各自的调用中迁移）
+  for (const p of listed) migrateListing(p.transferListing);
+  const status = listingRoundStatus(state);
+  if (!status.counts) return; // TI 锁定 / 赛季初：倒计时暂停
 
-  const canBid = nextRoundWindowOpen(state);
   const rng = rngOf(state);
   for (const p of listed) {
     const L = p.transferListing!;
-    // 数据损坏的剩余回合：重置为完整等待期（宁可多等，也不因坏数据立即解约）
-    if (!Number.isFinite(L.roundsLeft)) L.roundsLeft = CONFIG.squadOps.listingRounds;
+    if (!Number.isFinite(L.totalRounds) || (L.totalRounds as number) <= 0) L.totalRounds = listingDurationRounds();
+    // 数据损坏的剩余回合：重置为完整挂牌期（宁可多等，也不因坏数据立即解约）
+    if (!Number.isFinite(L.roundsLeft)) L.roundsLeft = L.totalRounds as number;
+    if (!Number.isFinite(L.bidRolls) || (L.bidRolls as number) < 0) L.bidRolls = 0;
     if (!Number.isFinite(L.askingPrice) || L.askingPrice <= 0) L.askingPrice = roundFee(marketValue(state, p)) || CONFIG.market.feeRounding;
-    if (L.roundsLeft > 0 && canBid) {
-      rollListingBid(state, team, p, L, rng);
-      if (listingOffers(state, p.id).length > 0) L.hadBids = true;
-      L.roundsLeft -= 1;
-      if (L.roundsLeft === 1 && listingOffers(state, p.id).length === 0) {
-        addNews(
-          state,
-          'transfer',
-          `【挂牌】${p.handle} 挂牌仅剩最后 1 个回合`,
-          `${p.handle} 挂牌至今尚无俱乐部报价。若下回合结束时仍无人出价，${team.name} 将与其自动解约（不支付补偿）。可考虑降低标价或撤销挂牌。`,
-        );
+    if (L.roundsLeft > 0) {
+      if (status.bids) {
+        rollListingBid(state, team, p, L, rng);
+        L.bidRolls = (L.bidRolls as number) + 1;
       }
+      if (listingOffers(state, p.id).length > 0) L.hadBids = true; // 挂牌前就已收到、仍待处理的报价
+      L.roundsLeft -= 1;
+      listingReminderNews(state, team, p, L);
     }
     if (L.roundsLeft <= 0 && listingOffers(state, p.id).length === 0) {
       if (L.hadBids) {
-        // 用户规则：只有「等不到报价」才自动解约；收到过报价但未成交 → 挂牌结束，选手留队
+        // 用户规则：只有「等不到报价」才自动解约；收到过报价但未成交 → 挂牌结束、选手留队
         delete p.transferListing;
         addNews(
           state,

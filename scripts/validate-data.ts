@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { HeroInfo, PatchInfo, RosterFile, TiInfo, TournamentTemplate } from '../src/engine/types';
 import { POSITIONS, REGIONS } from '../src/engine/types';
 import { ROSTER_DIR, readRosterSync } from './nodeData';
+import { brandOrgs, brandingProblems } from '../src/engine/branding';
 
 const DATA = join(ROSTER_DIR, '..');
 const read = <T,>(f: string): T => JSON.parse(readFileSync(join(DATA, f), 'utf8')) as T;
@@ -84,6 +85,14 @@ for (const ti of rosterTis) {
     if (seen.has(p.id)) err(`${tag}: free agent duplicate ${p.id}`);
     seen.add(p.id);
   }
+}
+
+// 俱乐部品牌变迁（第十波 #4，src/data/branding.json）：结构合法，teamIds 都是 roster 中出现过的战队 id
+{
+  for (const p of brandingProblems()) err(`branding: ${p}`);
+  const known = new Set<string>();
+  for (const ti of rosterTis) for (const t of readRosterSync(ti).teams) known.add(t.id);
+  for (const org of brandOrgs()) for (const id of org.teamIds) if (!known.has(id)) err(`branding ${org.id}: 战队 id ${id} 不在任何 roster 中`);
 }
 
 console.log(`heroes ${heroes.length}, patches ${patches.length}, tis ${tis.length}, rosters ${rosterTis.join(',')}`);

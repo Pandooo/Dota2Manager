@@ -85,24 +85,21 @@ describe('prizeShare · 拆分与发放', () => {
 });
 
 describe('prizeShare · 初始比例', () => {
-  it('新俱乐部 70%；真实俱乐部按 id 哈希各不相同、在范围内且是 5% 的整数倍；豪门不低于普通', () => {
+  it('全部战队默认 50%（新俱乐部 / 真实俱乐部 / 豪门 / AI 战队相同，用户决策 2026-10-10），且在范围内、是步长的整数倍', () => {
     const s = state();
+    expect(PS.initial).toBe(0.5);
     s.teams['club-new'] = { ...s.teams.t1, id: 'club-new', isPlayer: true, prizeShare: undefined };
-    expect(defaultPrizeShare(s, s.teams['club-new'])).toBe(PS.newClub);
-    const values = new Set<number>();
-    for (let i = 0; i < 40; i++) {
-      const team = { ...s.teams.t1, id: `real-${i}`, honor: 300, prizeShare: undefined };
-      const v = defaultPrizeShare(s, team);
-      expect(v).toBeGreaterThanOrEqual(PS.initRange[0] - 1e-9);
-      expect(v).toBeLessThanOrEqual(PS.initRange[1] + 1e-9);
-      expect(Math.abs(v / PS.step - Math.round(v / PS.step))).toBeLessThan(1e-6);
-      values.add(v);
-      // 同一俱乐部结果固定；荣誉达到豪门线 + eliteBonus
-      expect(defaultPrizeShare(s, team)).toBe(v);
-      const elite = defaultPrizeShare(s, { ...team, honor: PS.eliteHonor + 100 });
-      expect(elite).toBeCloseTo(Math.min(PS.max, v + PS.eliteBonus), 6);
+    expect(defaultPrizeShare(s, s.teams['club-new'])).toBe(PS.initial);
+    for (let i = 0; i < 20; i++) {
+      const team = { ...s.teams.t1, id: `real-${i}`, honor: 300 + i * 150, prizeShare: undefined };
+      expect(defaultPrizeShare(s, team)).toBe(PS.initial);
+      expect(prizeShareOf(s, team)).toBe(PS.initial);
     }
-    expect(values.size).toBeGreaterThanOrEqual(3);
+    expect(PS.initial).toBeGreaterThanOrEqual(PS.min);
+    expect(PS.initial).toBeLessThanOrEqual(PS.max);
+    expect(Math.abs(PS.initial / PS.step - Math.round(PS.initial / PS.step))).toBeLessThan(1e-6);
+    // 默认比例即为每回合环境项的中性点
+    expect(prizeShareLoyaltyDelta(PS.initial)).toBe(0);
   });
 
   it('ensurePrizeShares 补齐缺失值并规范化异常值；prizeShareOf 不写入', () => {
@@ -116,7 +113,7 @@ describe('prizeShare · 初始比例', () => {
     expect(s.teams.t1.prizeShare).toBe(v);
     expect(s.teams.t2.prizeShare).toBe(0.75);
     expect(s.teams.t3.prizeShare).toBe(PS.max);
-    expect(normalizePrizeShare(Number.NaN)).toBe(PS.newClub);
+    expect(normalizePrizeShare(Number.NaN)).toBe(PS.initial);
     expect(normalizePrizeShare(0.1)).toBe(PS.min);
   });
 });
@@ -257,12 +254,16 @@ describe('prizeShare · 玩家调整', () => {
 });
 
 describe('prizeShare · 归属感与薪资满意度', () => {
-  it('每回合环境项：高于 70% 加分、低于扣分（下方更陡），缺失为 0；计入 loyaltyEnvironment', () => {
+  it('每回合环境项：默认 50% 为中性、越高加分越多（中性点以下扣分更陡），缺失为 0；计入 loyaltyEnvironment', () => {
     expect(prizeShareLoyaltyDelta(undefined)).toBe(0);
+    expect(PS.loyalty.norm).toBe(PS.initial);
     expect(prizeShareLoyaltyDelta(PS.loyalty.norm)).toBe(0);
-    expect(prizeShareLoyaltyDelta(1)).toBeGreaterThan(0);
-    expect(prizeShareLoyaltyDelta(0.5)).toBeLessThan(0);
-    expect(-prizeShareLoyaltyDelta(0.6)).toBeGreaterThan(prizeShareLoyaltyDelta(0.8));
+    expect(prizeShareLoyaltyDelta(PS.min)).toBe(0);
+    expect(prizeShareLoyaltyDelta(0.7)).toBeGreaterThan(0);
+    expect(prizeShareLoyaltyDelta(1)).toBeGreaterThan(prizeShareLoyaltyDelta(0.7));
+    // 公式本身仍支持中性点以下扣分（损失厌恶，更陡）；当前中性点即下限，实际不会出现
+    expect(prizeShareLoyaltyDelta(PS.loyalty.norm - 0.1)).toBeLessThan(0);
+    expect(-prizeShareLoyaltyDelta(PS.loyalty.norm - 0.1)).toBeGreaterThan(prizeShareLoyaltyDelta(PS.loyalty.norm + 0.1));
     const s = state();
     s.teams.t0.prizeShare = 1;
     const p = s.players['t0-C'];
@@ -274,14 +275,15 @@ describe('prizeShare · 归属感与薪资满意度', () => {
 
   it('AI 战队选手同样受环境项影响（每回合）', () => {
     const s = state();
-    s.teams.t1.prizeShare = 0.5;
+    s.teams.t1.prizeShare = 0.9;
     s.teams.t2.prizeShare = PS.loyalty.norm;
     const a = s.players['t1-C'];
     const b = s.players['t2-C'];
     a.loyalty = 60;
     b.loyalty = 60;
     roundLoyaltyUpdate(s);
-    expect(a.loyalty - 60).toBeCloseTo(prizeShareLoyaltyDelta(0.5) + (b.loyalty - 60), 6);
+    expect(prizeShareLoyaltyDelta(0.9)).toBeGreaterThan(0);
+    expect(a.loyalty - 60).toBeCloseTo(prizeShareLoyaltyDelta(0.9) + (b.loyalty - 60), 6);
   });
 
   it('发奖金：分到的越多（相对工资）归属感提升越多；临时替补不计；记入近期奖金收入', () => {
@@ -305,23 +307,52 @@ describe('prizeShare · 归属感与薪资满意度', () => {
     expect(recentPrizeEarned(s, temp)).toBe(0);
   });
 
-  it('近期奖金部分计入薪资满意度：差距缩小、按赛季衰减、换队后不再计入', () => {
+  it('近期奖金全额计入薪资满意度：差距缩小、按回合衰减、各回合补贴合计 ≈ 奖金本身、换队后不再计入', () => {
     const s = state();
     s.teams.t0.prizeShare = 0.8;
     const p = s.players['t0-C'];
     p.salary = 3000;
     const gapBefore = salaryGap(s, p);
     payTournamentPrize(s, 't0', 400_000, '大赛 冠军');
-    const credit = prizeSalaryCredit(s, p);
-    expect(credit).toBeGreaterThan(0);
-    expect(credit).toBeLessThanOrEqual(Math.round(p.salary * PS.salary.maxSalaryRatio));
-    expect(salaryGap(s, p)).toBeLessThan(gapBefore);
     const earned = recentPrizeEarned(s, p);
+    const W = PS.salary.windowRounds;
+    const credit = prizeSalaryCredit(s, p);
+    expect(PS.salary.weight).toBe(1);
+    expect(credit).toBe(Math.round((earned / W) * PS.salary.weight));
+    // 不再有「至多工资 × 30%」的上限：大额奖金可以超过工资本身
+    expect(credit).toBeGreaterThan(p.salary * 0.3);
+    expect(salaryGap(s, p)).toBeLessThan(gapBefore);
+    // 每回合 × (1 − 1/W)；跨赛季按每赛季回合数计算
+    s.roundIndex += 4;
+    expect(recentPrizeEarned(s, p)).toBeCloseTo(earned * Math.pow(1 - 1 / W, 4), 0);
+    const perSeason = s.season.rounds.length || CONFIG.calendar.regularRounds + 3;
     s.season.ti += 1;
-    expect(recentPrizeEarned(s, p)).toBeCloseTo(earned * PS.salary.seasonDecay, 0);
+    expect(recentPrizeEarned(s, p)).toBeCloseTo(earned * Math.pow(1 - 1 / W, 4 + perSeason), 0);
     s.season.ti -= 1;
+    s.roundIndex -= 4;
+    // 一笔奖金折算到之后各回合的补贴合计 ≈ 奖金本身（余额低于最低工资后视为 0）
+    let total = 0;
+    const r0 = s.roundIndex;
+    const ti0 = s.season.ti;
+    for (let k = 0; k < 400; k++) {
+      s.season.ti = ti0 + Math.floor((r0 + k) / perSeason);
+      s.roundIndex = (r0 + k) % perSeason;
+      total += prizeSalaryCredit(s, p);
+    }
+    expect(total).toBeGreaterThan(earned * 0.97);
+    expect(total).toBeLessThanOrEqual(earned * 1.01);
+    s.season.ti = ti0;
+    s.roundIndex = r0;
     expect(recentPrizeEarned(s, p, 't1')).toBe(0);
     expect(prizeSalaryCredit(s, p, 't1')).toBe(0);
+  });
+
+  it('旧存档只记录了赛季（无回合键）：按该赛季第 0 回合起衰减', () => {
+    const s = state();
+    const p = s.players['t0-C'];
+    p.salaryTrack = { prizeEarned: 100_000, prizeTi: s.season.ti, prizeTeamId: 't0' };
+    const W = PS.salary.windowRounds;
+    expect(recentPrizeEarned(s, p)).toBeCloseTo(100_000 * Math.pow(1 - 1 / W, s.roundIndex), 0);
   });
 });
 
@@ -386,19 +417,19 @@ describe('prizeShare · 多人模式', () => {
     registerNodeRosterLoader();
   });
 
-  it('白名单 RPC 在调用者座位执行；玩家战队初始 70%（existing 玩法同样重置）；每回合一次按战队计', async () => {
+  it('白名单 RPC 在调用者座位执行；玩家战队初始 50%（existing 玩法同样重置）；每回合一次按战队计', async () => {
     expect((RPC_WHITELIST as readonly string[]).includes('setPrizeShare')).toBe(true);
     const g = await M.createMultiplayerGame({
       startTi: 9, endTi: 10, difficulty: 'normal', mode: 'existing', seed: 5,
       players: [{ sessionId: 's-a', name: '甲', teamId: 'og' }, { sessionId: 's-b', name: '乙', teamId: 'team-liquid' }],
     });
     const [a, b] = g.multiplayer!.order;
-    expect(g.teams[a].prizeShare).toBe(PS.newClub);
-    expect(g.teams[b].prizeShare).toBe(PS.newClub);
+    expect(g.teams[a].prizeShare).toBe(PS.initial);
+    expect(g.teams[b].prizeShare).toBe(PS.initial);
     const call = (id: string, ...args: unknown[]) => M.callAsSeat(g, id, 'setPrizeShare', args) as OpResult;
     expect(call(a, 0.9).ok).toBe(true);
     expect(g.teams[a].prizeShare).toBe(0.9);
-    expect(g.teams[b].prizeShare).toBe(PS.newClub);
+    expect(g.teams[b].prizeShare).toBe(PS.initial);
     expect(call(a, 0.85).ok).toBe(false);
     expect(call(b, 0.6).ok).toBe(true);
     expect(g.teams[b].prizeShare).toBe(0.6);

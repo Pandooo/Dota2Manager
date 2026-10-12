@@ -779,7 +779,7 @@ function PrizeShareCard({ g, me, roundLabel }: { g: GameState; me: string; round
     playersSum += num(st.prizePlayers);
   }
   const league = Object.values(g.teams).filter((t) => t && !t.disbanded);
-  const leagueAvg = league.length ? league.reduce((a, t) => a + safe(() => prizeShareOf(g, t), C.newClub), 0) / league.length : C.newClub;
+  const leagueAvg = league.length ? league.reduce((a, t) => a + safe(() => prizeShareOf(g, t), C.initial), 0) / league.length : C.initial;
   const ratio = C.loyalty.raisePerStep > 0 ? C.loyalty.cutPerStep / C.loyalty.raisePerStep : 0;
   const deltas = pv?.members.map((m) => m.delta) ?? [];
   const lo = deltas.length ? Math.min(...deltas) : 0;
@@ -906,12 +906,17 @@ function PrizeShareCard({ g, me, roundLabel }: { g: GameState; me: string; round
             <Stat label="本赛季奖金 · 队员" value={<span className="text-info">{formatGold(playersSum)}</span>} />
           </div>
           <ul className="list-disc space-y-1 pl-4 leading-relaxed text-mute">
-            <li>比例越高队员越满意：高于 {pct(C.loyalty.norm)} 每回合小幅提升归属感，低于则每回合下降。</li>
+            <li>
+              比例越高队员越满意：高于 {pct(C.loyalty.norm)} 每回合小幅提升归属感
+              {C.loyalty.norm > status.min + 1e-9 ? '，低于则每回合下降' : `（默认 ${pct(C.initial)}，即俱乐部与队员各一半）`}。
+            </li>
             <li>
               上调立即小幅提升归属感；下调立即明显下降（约为同幅上调的 {ratio.toFixed(1)} 倍），效力越久的队员反应越强烈；
               下调后 {C.loyalty.raiseCooldownRounds} 个回合内把比例调回原来的水平，队员并不领情（只有超出原水平的部分才算上调）。
             </li>
-            <li>赢得奖金时，队员按分到的金额（相对其工资）额外提升归属感；近期分到的奖金也会部分计入他们对薪资的满意度。</li>
+            <li>
+              赢得奖金时，队员按分到的金额（相对其工资）额外提升归属感；分到的奖金全额计入他们的总收入（按之后约 {C.salary.windowRounds} 个回合折算），奖金越丰厚，越不容易对薪资不满。
+            </li>
             <li>赛事结束时的首发全额分配，其余队员按 {Math.round(C.benchWeight * 100)}% 权重分配。</li>
           </ul>
           <div>

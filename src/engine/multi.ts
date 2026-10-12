@@ -35,7 +35,7 @@ import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './g
 import { aiEnsureRosters } from './ai';
 import { autoLineup, setLineupSlot } from './team';
 import { computeSalary } from './player';
-import { newClubStartingFunds, realClubStartingFunds } from './economy';
+import { newClubStartingFunds, seedTeamStartingFunds } from './economy';
 import { registerForTournament, unregisterFromTournament } from './schedule';
 import {
   bidForPlayer, departToFreeAgency, generateTempSubCandidates, hireTempSub, releasePlayer, releasePlayers,
@@ -169,7 +169,8 @@ function resetToNewClubLevel(state: GameState, teamId: string, difficulty: strin
     p.joinedSeason = ti;
   }
   autoLineup(state, teamId);
-  team.gold = newClubStartingFunds(state, teamId, difficulty);
+  // 资金重置为新俱乐部标准（economy.newClubStartingFunds：TI1 普通难度 20 万 × 年代系数 × 难度倍数，与「各自组建」相同，座位之间公平）
+  team.gold = newClubStartingFunds(ti, difficulty);
 }
 
 /**
@@ -227,15 +228,14 @@ export async function createMultiplayerGame(opts: MpNewGameOptions): Promise<Gam
 
   initPatchBaseline(state, state.season.startDate);
 
-  // 真实战队（AI 资金按真实俱乐部口径；玩家接管的随后重置为新俱乐部标准）
+  // 真实战队（AI 资金按真实俱乐部口径 economy.seedTeamStartingFunds，与单机同一公式；玩家接管的随后重置为新俱乐部标准）
   for (const st of seedTeams) {
     if (!st?.id || state.teams[st.id]) continue;
     const human = opts.mode === 'existing' && ids.includes(st.id);
     const team = teamFromSeed(state, st, human);
     team.isPlayer = human;
-    team.gold = realClubStartingFunds(Number.isFinite(st.funds) ? st.funds : team.gold, null);
+    team.gold = seedTeamStartingFunds(st, startTi, null);
   }
-  const seededTeamIds = new Set(Object.keys(state.teams));
   for (const fa of roster.freeAgents ?? []) if (fa?.id && !state.players[fa.id]) playerFromSeed(state, fa, null);
   for (const c of roster.freeCoaches ?? []) if (c?.id && !state.coaches[c.id]) coachFromSeed(state, c, null);
 
@@ -254,10 +254,8 @@ export async function createMultiplayerGame(opts: MpNewGameOptions): Promise<Gam
     if (e.firstTi > startTi && e.firstTi <= MAX_TI) state.futureRookies[e.id] = e.firstTi;
   }
 
+  // 补足的程序化 AI 战队：资金在 generation.generateAiTeam 中按真实俱乐部同一公式折算
   aiEnsureRosters(state);
-  for (const t of Object.values(state.teams)) {
-    if (!seededTeamIds.has(t.id) && !t.isPlayer) t.gold = realClubStartingFunds(t.gold, null);
-  }
   Object.values(state.teams)
     .filter((t) => !t.disbanded)
     .sort((a, b) => b.honor - a.honor || a.id.localeCompare(b.id))
@@ -323,7 +321,7 @@ function drainNeutral(state: GameState): void {
 }
 
 /**
- * 出局处理：荣誉跌破 0 的座位（honor.applyHonorChange 已标记 eliminated / disbanded）——
+ * 出局处理：荣誉跌破 0 的座位（honor.applyHonorChange 已标记 eliminated / disbanded）、破产的座位（bankruptcy.declareBankruptcy）——
  * 选手离队成为自由选手、主教练进入市场、清空该座位的待办与比赛；全部玩家出局 → 游戏结束。
  */
 function processEliminations(state: GameState): void {
@@ -361,7 +359,9 @@ function processEliminations(state: GameState): void {
         withSeat(state, id, () => {
           const hist = state.history?.honor;
           const lastTi = Array.isArray(hist) && hist.length ? hist[hist.length - 1]?.season : undefined;
-          recordLegacyPartial(state, id, team.banned ? 'banned' : 'disbanded', typeof lastTi === 'number' ? lastTi : undefined);
+          recordLegacyPartial(
+            state, id, team.banned ? 'banned' : team.bankrupt ? 'bankrupt' : 'disbanded', typeof lastTi === 'number' ? lastTi : undefined,
+          );
         });
       } catch (e) {
         console.error('[engine] recordLegacyPartial', e);
@@ -374,19 +374,22 @@ function processEliminations(state: GameState): void {
         if (c && c.teamId === id) c.teamId = null;
         team.coachId = null;
       }
-      addNews(state, 'system', `【出局】${team.name} 解散`,
-        `玩家「${seat.name}」执教的 ${team.name} 荣誉跌破 0，俱乐部解散，选手成为自由选手。该玩家转为观战，其余玩家继续。`,
+      // 破产（bankruptcy.ts）的座位同样在这里收尾（选手离队、教练进入市场）
+      addNews(state, 'system', `【出局】${team.name} ${team.bankrupt ? '破产' : '解散'}`,
+        `玩家「${seat.name}」执教的 ${team.name} ${team.bankrupt ? '资金链断裂宣告破产' : '荣誉跌破 0，俱乐部解散'}，选手成为自由选手。该玩家转为观战，其余玩家继续。`,
         true, { teamIds: [id], visibility: 'public' });
     }
     nudgeTournamentsOf(state, id);
   }
   if (!state.gameOver && humanTeamIds(state).length > 0 && humanTeamIds(state).every((id) => mp.seats[id]?.eliminated)) {
-    // 全部因全员假赛被除名 → 'banned'；否则（含部分解散）→ 'disbanded'（各座位结算页按自己的结局展示，见 legacy.legacyEndingOf）
+    // 全部因全员假赛被除名 → 'banned'；全部破产 → 'bankrupt'；否则（含部分解散）→ 'disbanded'（各座位结算页按自己的结局展示，见 legacy.legacyEndingOf）
     const allBanned = humanTeamIds(state).every((id) => !!state.teams[id]?.banned);
+    const allBankrupt = !allBanned && humanTeamIds(state).every((id) => !!state.teams[id]?.bankrupt);
     state.gameOver = {
-      reason: allBanned ? 'banned' : 'disbanded',
-      summary: `${allBanned ? '所有玩家的俱乐部都因全员假赛被永久除名'
-        : humanTeamIds(state).some((id) => !!state.teams[id]?.banned) ? '所有玩家的俱乐部都已解散或被除名' : '所有玩家的俱乐部都已解散'}，游戏结束。\n\n${multiplayerCareerSummary(state)}`,
+      reason: allBanned ? 'banned' : allBankrupt ? 'bankrupt' : 'disbanded',
+      summary: `${allBanned ? '所有玩家的俱乐部都因全员假赛被永久除名' : allBankrupt ? '所有玩家的俱乐部都已破产'
+        : humanTeamIds(state).some((id) => !!state.teams[id]?.banned) ? '所有玩家的俱乐部都已解散或被除名'
+          : humanTeamIds(state).some((id) => !!state.teams[id]?.bankrupt) ? '所有玩家的俱乐部都已解散或破产' : '所有玩家的俱乐部都已解散'}，游戏结束。\n\n${multiplayerCareerSummary(state)}`,
     };
     addNews(state, 'system', '游戏结束', state.gameOver.summary, true);
   }

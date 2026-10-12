@@ -1,0 +1,222 @@
+{
+  "_meta": {
+    "description": "俱乐部品牌变迁（第十波 #4，src/engine/branding.ts）：真实组织按届次的名称 / 简称 / 品牌主色变化（事实性数据）。每个赛季开始时把该届有效的品牌套用到对应俱乐部，变化时发布【品牌更新】新闻并记入俱乐部的品牌沿革（DotaPedia 战队页）。",
+    "asOf": "2026-10",
+    "conventions": [
+      "fromTi = 新品牌首次在 TI 上使用的届次：更名发生在 TI(n−1) 结束之后、TI n 之前，则从 TI n 赛季起生效（与 rosters/ti{n}.json「当届 TI 时的阵容」口径一致）。",
+      "teamIds 为本项目 roster 数据中属于同一组织的战队 id（改名 / 冠名前后可能是不同 id，如 lgd-gaming / psg-lgd），一局游戏里同一组织只有其中一支战队，品牌按届次套用到它身上。",
+      "name / tag 每个时期都给出；color / color2 只在品牌配色有明显变化时给出（color2 为队徽辅色，仅用于界面生成的风格化队徽）。开局赛季只静默对齐名称 / 简称，不改配色、不发新闻；之后每个赛季开始时对齐名称 / 简称，换届当季（fromTi = 当前届次）才套用配色。",
+      "赛季内的临时更名不计入，以 TI 时的名称为准：例如 Virtus.pro 2022 年 3 月起因赛事方要求以 Outsiders 名义参赛，同年 9 月（TI11 前）已恢复 Virtus.pro 名称。",
+      "TI15（2026，上海）期间 Valve 赛事禁止博彩赞助商名称，四支战队改用中性名称参赛（BetBoom Team → BoomBoys、PARIVISION → TEAM VISION、1win → Iron Wing、L1GA TEAM → HULIGANI）；该名称只用于 Valve 赛事，TI16 赛季按原名处理。",
+      "真实队标属于商标，不随仓库分发；界面按品牌配色生成原创的风格化队徽（src/ui/components/TeamEmblem.tsx），用户可在本地 public/local/logos/ 放入自己的队标图片覆盖显示（该目录被 git 忽略）。"
+    ],
+    "sources": [
+      "Liquipedia Dota 2 各战队页面的名称沿革（Former names）与 Wikipedia 条目",
+      "LGD × 巴黎圣日耳曼：2018-04-19 宣布合作更名 PSG.LGD；2023-09-04 宣布合作结束、恢复 LGD Gaming（PSG 官网 / LGD 官方微博）",
+      "Natus Vincere：2021-06 发布新标志与 NAVI 字标（cybersport.ru 报道）",
+      "TNC：2018-01 由 TNC Pro Team 更名 TNC Predator（Acer Predator 冠名）",
+      "G2 × Invictus Gaming：2023-12-08 宣布合作、以 G2.iG 参赛；2024-10-08 合作结束",
+      "BOOM ID：2019-09 更名 BOOM Esports",
+      "Team Nigma × Galaxy Racer：2021-09-20 宣布合并为 Nigma Galaxy",
+      "mousesports：2021-10-14 发布新品牌 MOUZ（新名称与新标志）",
+      "Thunder Predator：2022-02-04 官方宣布恢复 Thunder Awaken 名称并启用新标志",
+      "Quincy Crew：2022-08-02 被 Soniqs 签下",
+      "Team Undying：2022-01-25 被 TSM FTX 签下；2022-11-16 TSM 中止与 FTX 的冠名合作",
+      "LGD.CDEC：2014-10 脱离 LGD 品牌，成立独立的 CDEC Gaming",
+      "The International 2026：BetBoom Team / PARIVISION / 1win / L1GA TEAM 改用 BoomBoys / TEAM VISION / Iron Wing / HULIGANI 参赛（SiGMA News、players.com.ua、esports.ru 报道）"
+    ]
+  },
+  "orgs": [
+    {
+      "id": "lgd",
+      "teamIds": ["lgd-gaming", "psg-lgd"],
+      "eras": [
+        { "fromTi": 1, "name": "LGD Gaming", "tag": "LGD" },
+        {
+          "fromTi": 8, "name": "PSG.LGD", "tag": "PSG.LGD", "color": "#004170", "color2": "#DA291C",
+          "note": "2018 年 4 月与巴黎圣日耳曼足球俱乐部达成合作，更名 PSG.LGD，启用 PSG 蓝红配色。"
+        },
+        {
+          "fromTi": 12, "name": "LGD Gaming", "tag": "LGD", "color": "#F05A28", "color2": "#1A1A1A",
+          "note": "2023 年 9 月与巴黎圣日耳曼的五年合作结束，恢复 LGD Gaming 名称。"
+        }
+      ]
+    },
+    {
+      "id": "navi",
+      "teamIds": ["natus-vincere"],
+      "eras": [
+        { "fromTi": 1, "name": "Natus Vincere", "tag": "Na'Vi" },
+        {
+          "fromTi": 10, "name": "Natus Vincere", "tag": "NAVI", "color": "#FFE600", "color2": "#111111",
+          "note": "2021 年 6 月发布新标志，简称统一为 NAVI 字标，黄黑配色不变。"
+        }
+      ]
+    },
+    {
+      "id": "tnc",
+      "teamIds": ["tnc-pro-team", "tnc-predator"],
+      "eras": [
+        { "fromTi": 6, "name": "TNC Pro Team", "tag": "TNC" },
+        {
+          "fromTi": 8, "name": "TNC Predator", "tag": "TNC",
+          "note": "2018 年 1 月起以 TNC Predator 名义参赛（Acer Predator 冠名）。"
+        }
+      ]
+    },
+    {
+      "id": "invictus-gaming",
+      "teamIds": ["invictus-gaming", "g2-ig"],
+      "eras": [
+        { "fromTi": 1, "name": "Invictus Gaming", "tag": "iG" },
+        {
+          "fromTi": 13, "name": "G2.iG", "tag": "G2.iG",
+          "note": "2023 年 12 月与 G2 Esports 达成合作，以 G2.iG 名义参赛。"
+        },
+        {
+          "fromTi": 14, "name": "Invictus Gaming", "tag": "iG",
+          "note": "2024 年 10 月与 G2 Esports 的合作结束，恢复 Invictus Gaming 名称。"
+        }
+      ]
+    },
+    {
+      "id": "boom",
+      "teamIds": ["boom-id", "boom-esports"],
+      "eras": [
+        { "fromTi": 8, "name": "BOOM ID", "tag": "BOOM" },
+        {
+          "fromTi": 10, "name": "BOOM Esports", "tag": "BOOM",
+          "note": "2019 年 9 月由 BOOM ID 更名为 BOOM Esports。"
+        }
+      ]
+    },
+    {
+      "id": "nigma",
+      "teamIds": ["team-nigma", "nigma-galaxy"],
+      "eras": [
+        {
+          "fromTi": 10, "name": "Nigma Galaxy", "tag": "NGX",
+          "note": "2021 年 9 月 Team Nigma 与 Galaxy Racer 合并，更名 Nigma Galaxy，沿用 Team Nigma 的配色。"
+        }
+      ]
+    },
+    {
+      "id": "mouz",
+      "teamIds": ["mousesports", "mouz"],
+      "eras": [
+        { "fromTi": 1, "name": "mousesports", "tag": "mouz" },
+        {
+          "fromTi": 11, "name": "MOUZ", "tag": "MOUZ", "color": "#E2001A", "color2": "#FFFFFF",
+          "note": "2021 年 10 月发布新品牌：更名 MOUZ 并启用全新标志。"
+        }
+      ]
+    },
+    {
+      "id": "thunder-awaken",
+      "teamIds": ["thunder-predator", "thunder-awaken"],
+      "eras": [
+        { "fromTi": 9, "name": "Thunder Predator", "tag": "TP" },
+        {
+          "fromTi": 11, "name": "Thunder Awaken", "tag": "TA", "color": "#F5C518", "color2": "#141414",
+          "note": "2022 年 2 月 Acer Predator 冠名结束，恢复 Thunder Awaken 名称并启用新标志。"
+        }
+      ]
+    },
+    {
+      "id": "quincy-crew",
+      "teamIds": ["quincy-crew", "soniqs"],
+      "eras": [
+        { "fromTi": 10, "name": "Quincy Crew", "tag": "QC" },
+        {
+          "fromTi": 11, "name": "Soniqs", "tag": "Soniqs", "color": "#7D3CFF",
+          "note": "2022 年 8 月 Quincy Crew 阵容被 Soniqs 签下，以 Soniqs 名义参赛。"
+        }
+      ]
+    },
+    {
+      "id": "tsm",
+      "teamIds": ["team-undying", "tsm"],
+      "eras": [
+        { "fromTi": 10, "name": "Team Undying", "tag": "Undying" },
+        {
+          "fromTi": 11, "name": "TSM FTX", "tag": "TSM", "color": "#A6A6A6", "color2": "#111111",
+          "note": "2022 年 1 月 Team Undying 阵容被 TSM FTX 签下。"
+        },
+        {
+          "fromTi": 12, "name": "TSM", "tag": "TSM",
+          "note": "2022 年 11 月 TSM 中止与 FTX 的冠名合作，恢复 TSM 名称。"
+        }
+      ]
+    },
+    {
+      "id": "cdec",
+      "teamIds": ["cdec-gaming"],
+      "eras": [
+        { "fromTi": 4, "name": "LGD.CDEC", "tag": "CDEC" },
+        {
+          "fromTi": 5, "name": "CDEC Gaming", "tag": "CDEC",
+          "note": "2014 年 10 月脱离 LGD 品牌，成立独立的 CDEC Gaming。"
+        }
+      ]
+    },
+    {
+      "id": "betboom",
+      "teamIds": ["betboom-team"],
+      "eras": [
+        { "fromTi": 11, "name": "BetBoom Team", "tag": "BB" },
+        {
+          "fromTi": 15, "name": "BoomBoys", "tag": "BB",
+          "note": "TI15 在上海举行，Valve 赛事不允许博彩赞助商名称，改用 BoomBoys 名义参赛。"
+        },
+        {
+          "fromTi": 16, "name": "BetBoom Team", "tag": "BB",
+          "note": "BoomBoys 名称只用于 TI15，之后恢复 BetBoom Team。"
+        }
+      ]
+    },
+    {
+      "id": "parivision",
+      "teamIds": ["parivision", "team-vision"],
+      "eras": [
+        { "fromTi": 14, "name": "PARIVISION", "tag": "PARI" },
+        {
+          "fromTi": 15, "name": "TEAM VISION", "tag": "VISION",
+          "note": "TI15 在上海举行，Valve 赛事不允许博彩赞助商名称，改用 TEAM VISION 名义参赛。"
+        },
+        {
+          "fromTi": 16, "name": "PARIVISION", "tag": "PARI",
+          "note": "TEAM VISION 名称只用于 TI15，之后恢复 PARIVISION。"
+        }
+      ]
+    },
+    {
+      "id": "1win",
+      "teamIds": ["1win", "iron-wing"],
+      "eras": [
+        { "fromTi": 13, "name": "1win", "tag": "1w" },
+        {
+          "fromTi": 15, "name": "Iron Wing", "tag": "IW",
+          "note": "TI15 在上海举行，Valve 赛事不允许博彩赞助商名称，改用 Iron Wing 名义参赛。"
+        },
+        {
+          "fromTi": 16, "name": "1win", "tag": "1w",
+          "note": "Iron Wing 名称只用于 TI15，之后恢复 1win。"
+        }
+      ]
+    },
+    {
+      "id": "l1ga-team",
+      "teamIds": ["huligani"],
+      "eras": [
+        {
+          "fromTi": 15, "name": "HULIGANI", "tag": "HULI",
+          "note": "TI15 在上海举行，Valve 赛事不允许博彩赞助商名称，L1GA TEAM 改用 HULIGANI 名义参赛。"
+        },
+        {
+          "fromTi": 16, "name": "L1GA TEAM", "tag": "L1GA",
+          "note": "HULIGANI 名称只用于 TI15，之后恢复 L1GA TEAM。"
+        }
+      ]
+    }
+  ]
+}

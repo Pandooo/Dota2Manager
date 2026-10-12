@@ -1,8 +1,10 @@
 // 经济：工资、账目、费用、奖金压缩、出场费、起始资金【E4 / E1-economy】
-import type { FinanceEntry, GameState, Team } from './types';
+import type { FinanceEntry, GameState, SeedTeam, Team } from './types';
+import { TIERS } from './types';
 import { CONFIG, TI_YEAR } from './config';
 import { yearOf } from './util';
 import { teamRating } from './team';
+import { standardSalary } from './player';
 import { triggerUnpaidSalary } from './events';
 import { applyResultMerchBoosts, payTeamRevenue, roundRevenue } from './revenue';
 import { inSeatOf, isHumanTeam, isMultiplayer } from './seat';
@@ -204,50 +206,132 @@ function fundsRound(v: number): number {
   return Math.max(0, roundTo(v, CONFIG.economy.startingFunds.rounding));
 }
 
-/** 真实俱乐部起始资金：数据资金 × realClubScale（人类玩家接管时再 × team.realClubFundsMult[难度]） */
-export function realClubStartingFunds(seedFunds: number, difficulty?: string | null): number {
-  const base = Number.isFinite(seedFunds) ? Math.max(0, seedFunds) : 0;
-  const mult = difficulty ? CONFIG.team.realClubFundsMult[difficulty] ?? 1 : 1;
-  return fundsRound(base * CONFIG.economy.startingFunds.realClubScale * mult);
-}
-
-/** 新俱乐部起始资金：当前阵容每回合工资 × newClubWageRounds[难度] */
-export function newClubStartingFunds(state: GameState, teamId: string, difficulty: string): number {
-  const rounds = CONFIG.economy.startingFunds.newClubWageRounds[difficulty]
-    ?? CONFIG.economy.startingFunds.newClubWageRounds.normal ?? 7;
-  return fundsRound(roundWageBill(state, teamId) * rounds);
+/**
+ * 起始资金的年代系数 = econIndex(该届年份) / econIndex(TI1 年份)：锚定额按 TI1 给出，其他起始届按经济指数折算，
+ * 各年代起步的购买力（相对工资 / 签约费 / 转会费）相同（TI9 ×4、TI13 ×2.4）
+ */
+export function eraFundsFactor(ti: number): number {
+  const base = econIndex(yearOfTi(1));
+  const now = econIndex(yearOfTi(ti));
+  return base > 0 && Number.isFinite(now) ? now / base : 1;
 }
 
 /**
- * 新俱乐部起始资金预估（新游戏向导用，开局前尚无阵容）：按初始阵容等级构成（CONFIG.season.newClubSTierCount/ATierCount，
- * 其余 B 级）的标准工资 × 起始年代经济指数 × newClubWageRounds[难度]。实际值以开局后的真实工资为准（相差通常 < 10%）。
+ * TI 序号 → 年份（TI_YEAR；表外同 calendar.tiYear 的推演：TI1..9 = 2010 + ti，TI10 起 = 2011 + ti）。
+ * 非法序号（NaN / undefined）按 TI1 处理：econIndex(NaN) 会取最新年份，否则缺失的起始届会静默得到最高年代的资金
  */
+function yearOfTi(ti: number): number {
+  const t = Math.round(ti);
+  if (!Number.isFinite(t)) return TI_YEAR[1] ?? 2011;
+  return TI_YEAR[t] ?? (t < 10 ? 2010 + t : 2011 + t);
+}
+
+/**
+ * 新俱乐部起始资金（纯函数，【用户指定】锚定额）：newClubTi1Funds（TI1 普通难度 20 万）× 年代系数 × newClubDifficultyMult[难度]，
+ * 任何难度都不低于锚定额 × 年代系数。game.createNewClub、multi（各自组建 / 选择已有战队）与新游戏向导、多人房间预览共用
+ */
+export function newClubStartingFunds(startTi: number, difficulty: string): number {
+  const sf = CONFIG.economy.startingFunds;
+  const anchor = Math.max(0, sf.newClubTi1Funds) * eraFundsFactor(startTi);
+  const mult = Math.max(1, sf.newClubDifficultyMult[difficulty] ?? sf.newClubDifficultyMult.normal ?? 1);
+  return fundsRound(anchor * mult);
+}
+
+/** 真实俱乐部的相对财力：数据资金 / (realClubTopDataFunds × econIndex(该届年份))，夹在 [0, 1] */
+export function realClubWealth(seedFunds: number, ti: number): number {
+  const sf = CONFIG.economy.startingFunds;
+  const ref = Math.max(0, sf.realClubTopDataFunds) * econIndex(yearOfTi(ti));
+  if (!(ref > 0) || !Number.isFinite(seedFunds) || seedFunds <= 0) return 0;
+  return Math.min(1, seedFunds / ref);
+}
+
+/**
+ * 真实俱乐部起始资金：max(realClubTopTi1Funds × 年代系数 × min(1, 相对财力 / realClubFullWealth), 每回合工资 × realClubMinWageRounds)，
+ * 人类玩家接管时再 × team.realClubFundsMult[难度]（difficulty 为空 = AI 战队，不乘）。
+ * 即锚定额是封顶额：最强真实俱乐部（相对财力 1）TI1 普通难度 = 10 万（【用户指定】）；相对财力 ≥ realClubFullWealth（1/2）的同样拿满，
+ * 以下按比例（= 原口径「数据资金 × 0.2」，没有超过锚定额的俱乐部资金不变）。wagePerRound 缺省 / 非法时不设下限。
+ */
+export function realClubStartingFunds(seedFunds: number, difficulty: string | null | undefined, ti: number, wagePerRound?: number): number {
+  const sf = CONFIG.economy.startingFunds;
+  const wealth = realClubWealth(seedFunds, ti);
+  const full = Number.isFinite(sf.realClubFullWealth) && sf.realClubFullWealth > 0 ? Math.min(1, sf.realClubFullWealth) : 1;
+  const base = Math.max(0, sf.realClubTopTi1Funds) * eraFundsFactor(ti) * Math.min(1, wealth / full);
+  const wage = wagePerRound !== undefined && Number.isFinite(wagePerRound) ? Math.max(0, wagePerRound) : 0;
+  const floor = wage * Math.max(0, sf.realClubMinWageRounds);
+  const mult = difficulty ? CONFIG.team.realClubFundsMult[difficulty] ?? 1 : 1;
+  return fundsRound(Math.max(base, floor) * mult);
+}
+
+/**
+ * 阵容数据（SeedTeam）的每回合工资（纯函数）：首发 + 替补按标准工资（player.standardSalary，与 generation.playerFromSeed 同口径）
+ * + 主教练（coach.salaryByTier × 经济指数，与 generation.coachFromSeed 同口径），年代按该届年份。
+ * 开局前（新游戏向导）即可算出，与开局后 AI 战队的实际工资一致（同一选手在多支战队重复出现时以开局为准，属罕见数据问题）
+ */
+export function seedTeamWageBill(seed: SeedTeam, ti: number): number {
+  const econ = econIndex(yearOfTi(ti));
+  const lad = CONFIG.ladder;
+  const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  let total = 0;
+  const seen = new Set<string>();
+  for (const sp of seed?.players ?? []) {
+    if (!sp || seen.has(sp.id)) continue;
+    seen.add(sp.id);
+    const mmr = Math.round(Math.min(lad.maxMmr, Math.max(lad.minMmr, num(sp.mmr, lad.thresholds.A))));
+    const power = Math.max(1, num(sp.power, 60));
+    total += standardSalary(mmr, power, econ);
+  }
+  if (seed?.coach) {
+    const tier = TIERS.includes(seed.coach.tier) ? seed.coach.tier : 'A';
+    total += Math.max(CONFIG.economy.minSalary, Math.round((CONFIG.coach.salaryByTier[tier] ?? 0) * econ));
+  }
+  return Math.round(total);
+}
+
+/**
+ * 某支真实俱乐部（阵容数据）在起始届 ti 的开局资金：realClubStartingFunds(数据资金, 难度, ti, seedTeamWageBill)。
+ * game.createNewGame / multi.createMultiplayerGame 与新游戏向导的战队卡片共用（预览 = 实际）
+ */
+export function seedTeamStartingFunds(seed: SeedTeam, ti: number, difficulty: string | null | undefined): number {
+  return realClubStartingFunds(num0(seed?.funds), difficulty, ti, seedTeamWageBill(seed, ti));
+}
+
+function num0(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+/** 新俱乐部起始资金预估（兼容旧接口）：= newClubStartingFunds（锚定额与阵容无关，预估即实际） */
 export function estimateNewClubStartingFunds(startTi: number, difficulty: string): number {
   return estimateNewClubStart(startTi, difficulty).funds;
 }
 
-/** 新俱乐部初始阵容每回合工资的预估（标准工资 × 起始年代经济指数；开局前尚无阵容） */
+/**
+ * 新俱乐部初始 5 人每回合工资的预估（开局前尚无阵容，仅用于「约 N 回合工资」的说明）：各等级按该等级战力区间中点的标准工资
+ * （player.standardSalary 同口径：salaryByTier × 战力系数 × 起始年代经济指数）。实际阵容的战力随机，另有赛季初选秀的新秀，故只是约数
+ */
 function estimateNewClubWage(startTi: number, difficulty: string): number {
   const eco = CONFIG.economy;
   const sCount = CONFIG.season.newClubSTierCount[difficulty] ?? CONFIG.season.newClubSTierCount.normal ?? 1;
   const aCount = CONFIG.season.newClubATierCount[difficulty] ?? CONFIG.season.newClubATierCount.normal ?? 3;
   const bCount = Math.max(0, 5 - sCount - aCount);
-  return (sCount * eco.salaryByTier.S + aCount * eco.salaryByTier.A + bCount * eco.salaryByTier.B)
-    * econIndex(TI_YEAR[startTi] ?? NaN);
+  const econ = econIndex(yearOfTi(startTi));
+  const one = (tier: 'S' | 'A' | 'B'): number => {
+    const [lo, hi] = CONFIG.generation.powerByTier[tier] ?? [70, 70];
+    const powerFactor = Math.max(0, 1 + ((lo + hi) / 2 - 70) * eco.salaryPowerFactor);
+    return Math.max(eco.minSalary, Math.round(eco.salaryByTier[tier] * powerFactor * econ));
+  };
+  return sCount * one('S') + aCount * one('A') + bCount * one('B');
 }
 
 /**
- * 新游戏向导用的新俱乐部开局资金预估：起始资金（≈ 难度回合数 × 初始工资）+ 创立礼包（若干次单抽的资金），
- * 与 game.createNewClub 同口径（实际值以开局后的真实工资为准，相差通常 < 10%）。
+ * 新游戏向导 / 多人房间用的新俱乐部开局资金：funds = newClubStartingFunds（与 game.createNewClub 完全相同）+ 创立礼包（第八波起关闭，恒为 0）；
+ * wagePerRound = 初始 5 人每回合工资的预估（标准工资，实际以开局阵容为准），用于「约 N 回合工资」的说明。
  */
 export function estimateNewClubStart(
   startTi: number,
   difficulty: string,
 ): { funds: number; grantPulls: number; grantGold: number; total: number; wagePerRound: number } {
-  const eco = CONFIG.economy;
   const wage = estimateNewClubWage(startTi, difficulty);
-  const rounds = eco.startingFunds.newClubWageRounds[difficulty] ?? eco.startingFunds.newClubWageRounds.normal ?? 7;
-  const funds = fundsRound(wage * rounds);
+  const funds = newClubStartingFunds(startTi, difficulty);
   const grant = newClubGachaGrant(Math.max(0, CONFIG.team.maxRoster - 5), wage);
   return { funds, grantPulls: grant.pulls, grantGold: grant.gold, total: funds + grant.gold, wagePerRound: Math.round(wage) };
 }

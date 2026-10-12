@@ -5,6 +5,7 @@ import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, seededRng, hashSeed, type Rng } from './rng';
 import { clamp, formatGold, lerp, nextId, sigmoid } from './util';
 import { addNews } from './news';
+import { listingProgress } from './listingRules';
 import {
   computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex,
 } from './player';
@@ -16,6 +17,7 @@ import { generatePlayer } from './generation';
 import { adjustLoyalty } from './growth';
 import { addFinance, econ, roundWageBill } from './economy';
 import { luckAdjustedWeights } from './gacha';
+import { syncSynergies } from './synergy';
 // 循环引用（rookieDraft 也引用本模块的 departToFreeAgency）：两边都只在函数体内使用，模块初始化时不调用
 import { draftedRookieReleaseBlock, releaseDraftedRookie } from './rookieDraft';
 import {
@@ -106,6 +108,7 @@ function clearDepartureState(state: GameState, p: Player): void {
   );
   delete p.gachaSeason;
   delete p.transferListing;
+  delete p.listingStaleMemo;
 }
 
 /** 选手在原队的重要度：头号首发 importanceStar / 首发 importanceStarter / 替补 0 */
@@ -280,6 +283,7 @@ export function signFreeAgent(state: GameState, playerId: string): OpResult {
     `${team.name} 以 ${formatGold(fee)} 签字费签下自由选手 ${p.handle}（${tier} 级 · ${POSITION_LABEL[p.position]}），工资 ${formatGold(p.salary)}/回合，合同至 TI${p.contractUntil}。`,
     isHighProfile(p),
   );
+  syncSynergies(state); // 羁绊（第十波 #5）：阵容变化后立即同步
   return { ok: true, message: `成功签下 ${p.handle}，签字费 ${formatGold(fee)}` };
 }
 
@@ -388,6 +392,7 @@ export function bidForPlayer(state: GameState, playerId: string, fee: number): O
     `${team.name} 以 ${formatGold(offer)} 的转会费从 ${seller.name} 签下 ${p.handle}（${tier} 级 · ${POSITION_LABEL[p.position]}），合同至 TI${p.contractUntil}。`,
     isHighProfile(p),
   );
+  syncSynergies(state); // 羁绊（第十波 #5）
   return { ok: true, message: `转会成功！${p.handle} 正式加盟，转会费 ${formatGold(offer)}` };
 }
 
@@ -546,6 +551,10 @@ export function createTransferOffer(state: GameState, p: Player, buyer: Team, fe
     poach,
   };
   state.transferOffers.push(offer);
+  // 挂牌中的选手收到任何报价（挂牌报价、普通报价、挖角）即记为「收到过报价」：到期不自动解约（用户规则：只有等不到报价才解约）。
+  // 在创建时记录，而不是只在回合结算时看待处理报价：当回合就被拒绝的报价、或常规赛最后一回合被转会锁定作废的报价也算数。
+  const L = p.transferListing;
+  if (L && typeof L === 'object' && p.teamId && p.teamId === offer.toTeamId) L.hadBids = true;
   pruneOffers(state);
   return offer;
 }
@@ -661,6 +670,7 @@ export function respondToOffer(state: GameState, offerId: string, accept: boolea
     `${team.name} 接受报价，${p.handle} 以 ${formatGold(offer.fee)} 的转会费加盟 ${buyer.name}。`,
     isHighProfile(p),
   );
+  syncSynergies(state); // 羁绊（第十波 #5）
   const short = regularRoster(state, team.id).length < POSITIONS.length;
   return {
     ok: true,
@@ -758,6 +768,7 @@ export function releasePlayer(state: GameState, playerId: string): OpResult {
   if (p.contractUntil < ti) {
     departToFreeAgency(state, p.id);
     addNews(state, 'transfer', `【合同到期】${p.handle} 离开 ${team.name}`, `${p.handle} 合同到期未续，成为自由选手。`);
+    syncSynergies(state); // 羁绊（第十波 #5）
     return { ok: true, message: `${p.handle} 合同已到期，已放他离开（无需补偿）` };
   }
   const remaining = p.contractUntil - ti + 1;
@@ -772,6 +783,7 @@ export function releasePlayer(state: GameState, playerId: string): OpResult {
     `【解约】${team.name} 与 ${p.handle} 分道扬镳`,
     `${team.name} 宣布与 ${p.handle} 提前解约，支付补偿 ${formatGold(comp)}。${p.handle} 成为自由选手。`,
   );
+  syncSynergies(state); // 羁绊（第十波 #5）
   return { ok: true, message: `已与 ${p.handle} 解约，支付补偿 ${formatGold(comp)}` };
 }
 
@@ -932,6 +944,7 @@ export function hireTempSub(state: GameState, playerId: string, tournamentId: st
     `【野外替补】${p.handle} 临时驰援 ${team.name}`,
     `${p.handle}（${playerTier(p)} 级 · ${POSITION_LABEL[p.position]}）将代表 ${team.name} 出战「${t.name}」，费用 ${formatGold(cost)}。赛事结束后自动离队。`,
   );
+  syncSynergies(state); // 羁绊（第十波 #5）：临时替补同样获得全队羁绊加成
   return { ok: true, message: `已雇佣 ${p.handle} 出战「${t.name}」` };
 }
 
@@ -962,10 +975,16 @@ function contractDecisionText(state: GameState, p: Player, expiringTi: number): 
   const loyalty = Math.round(effectiveAttr(p, 'loyalty'));
   const ask = renewalAsk(state, p);
   const mood = SALARY_MOOD_LABEL[playerSalaryMood(state, p)];
+  // 挂牌期跨越 TI 结算：挂牌中的选手合同到期时提示挂牌状态（续约则挂牌继续，放他离开则挂牌随之结束）
+  const L = p.transferListing && typeof p.transferListing === 'object' ? p.transferListing : null;
+  const listingNote = L
+    ? `\n该选手挂牌中（标价 ${formatGold(L.askingPrice)}，挂牌期剩 ${Math.max(0, listingProgress(L).roundsLeft)} 个转会回合）：` +
+      '放他离开为合同到期自由离队、无需补偿；续约则挂牌继续。'
+    : '';
   const body =
     `${p.handle}（${playerTier(p)} 级 · ${POSITION_LABEL[p.position]}）的合同在 TI${expiringTi} 后到期。` +
     `他的续约要价为 ${formatGold(ask)}/回合（现 ${formatGold(p.salary)}；目前对薪资${mood}）。当前归属感 ${loyalty}` +
-    `${loyalty < CONFIG.market.renewRefuseLoyalty ? '，他可能会拒绝续约' : ''}。`;
+    `${loyalty < CONFIG.market.renewRefuseLoyalty ? '，他可能会拒绝续约' : ''}。${listingNote}`;
   return { body, ask };
 }
 

@@ -8,7 +8,7 @@ const fakeGame = (id: string) => ({ id }) as unknown as GameState;
 
 describe('DotaPedia 路由', () => {
   it('pedia 中心页的标签与默认标签', () => {
-    expect(HUB_TABS.pedia).toEqual(['pediaHome', 'pediaTeams', 'pediaPlayers', 'pediaTours', 'pediaHeroes']);
+    expect(HUB_TABS.pedia).toEqual(['pediaHome', 'pediaTeams', 'pediaPlayers', 'pediaTours', 'pediaHeroes', 'pediaSynergies']);
     expect(resolveView('pedia')).toEqual({ view: 'pedia', tab: 'pediaHome' });
     expect(resolveView('pediaPlayers')).toEqual({ view: 'pedia', tab: 'pediaPlayers' });
     expect(resolveView('pedia', null, { pedia: 'pediaHeroes' })).toEqual({ view: 'pedia', tab: 'pediaHeroes' });

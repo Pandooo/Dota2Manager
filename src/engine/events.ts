@@ -15,6 +15,7 @@ import {
 } from './market';
 import { rollFunEvents, resolveFunDecision } from './funEvents';
 import { inSeatOf, removePendingDecisionsEverywhere } from './seat';
+import { syncSynergies } from './synergy';
 import {
   onRookieContract, salaryGap, salaryMoodLevel, salaryMoodOf, unhappyStarPoachChance,
 } from './salary';
@@ -502,9 +503,12 @@ export function triggerUnpaidSalary(state: GameState): void {
     }
   }
   const leaveText = leavers.length ? `\n${leavers.map((p) => p.handle).join('、')} 因欠薪离队。` : '';
+  // 奖金分成已在下限（默认 50%）时不再建议下调
+  const share = typeof team.prizeShare === 'number' && Number.isFinite(team.prizeShare) ? team.prizeShare : CONFIG.prizeShare.initial;
+  const canCut = share > CONFIG.prizeShare.min + 1e-9;
   const body =
     `账上资金 ${formatGold(team.gold)}，工资无法足额发放，选手对欠薪表达不满。\n` +
-    `荣誉 ${ev.unpaidHonor}，全员归属感 ${CONFIG.loyalty.unpaidSalary}。${leaveText}\n建议尽快出售选手或解约高薪队员回笼资金。`;
+    `荣誉 ${ev.unpaidHonor}，全员归属感 ${CONFIG.loyalty.unpaidSalary}。${leaveText}\n建议尽快挂牌出售选手回笼资金，或${canCut ? '下调奖金分成、' : ''}削减开支（解约需支付补偿，短期内会加重负债）。`;
   addNews(state, 'finance', '【俱乐部欠薪】工资无法足额发放', body, true);
   const existing = state.pendingDecisions.find((d) => d.kind === 'unpaid_salary');
   if (existing) {
@@ -792,6 +796,8 @@ export function resolveDecision(state: GameState, decisionId: string, choiceId: 
     }
   }
   if (!out.keep) state.pendingDecisions = state.pendingDecisions.filter((d) => d.id !== decision.id);
+  // 羁绊（第十波 #5）：离队申请 / 合同到期 / 假赛禁赛等决策可能拆散羁绊，立即同步（幂等、不消耗随机数）
+  syncSynergies(state);
   return { ok: out.ok, message: out.message };
 }
 

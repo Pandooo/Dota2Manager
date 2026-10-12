@@ -6,6 +6,10 @@ dist/
 # 多人服务器的房间存档（本地运行数据）
 server-data/
 
+# 本地美术覆盖（用户自己的队标 / 冠军盾图片，属于商标 / 版权美术，不得提交）：只提交使用说明
+public/local/*
+!public/local/README.txt
+
 # 本地工具与系统文件
 .claude/
 .DS_Store

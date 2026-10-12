@@ -22,6 +22,7 @@ import {
   advanceTournamentUntilPlayer, finishTournament, isTeamEliminated, playerNextSeries, readySeries, simulateTournamentToEnd,
 } from './tournament';
 import { payRoundSalaries } from './economy';
+import { checkBankruptcy } from './bankruptcy';
 import { prizePoolLabel } from './revenue';
 import { ageOf, isAvailable, playerRating, playerTier, tickModifiers, tierIndex } from './player';
 import { adjustLoyalty, agePlayersAtSeasonEnd, processRetirements, roundLoyaltyUpdate, sessionTrainOptions, trainTeam } from './growth';
@@ -34,9 +35,13 @@ import { pendingExtraSessionCost, recordTraining, snapshotSquad } from './traini
 import { newsroomRoundEnd, newsroomRoundStart } from './newsroom';
 import { fireDueClubScandals, rollClubScandals } from './scandal';
 import { seasonCoachSupply } from './coaches';
+import { foundSeasonClubs, signFoundedClubRookies } from './clubs';
+import { missionContractRetention, missionSeasonEnd } from './missions';
 import { recordLegacySeasonAll } from './legacy';
 import { recordPediaSeasonEnd } from './stats';
+import { syncSynergies } from './synergy';
 import { ensurePrizeShares, prizeShareRoundUpdate } from './prizeShare';
+import { applySeasonBranding } from './branding';
 import {
   activeHumanIds, allPendingDecisions, forEachSeat, humanTeamIds, isHumanTeam, isMultiplayer, withSeat,
 } from './seat';
@@ -437,16 +442,22 @@ export function startSeason(state: GameState, ti: number): void {
   mapSeasonPatches(state);
 
   for (const id in state.teams) state.teams[id].points = 0;
+  // 品牌变迁（第十波 #4，branding.ts）：选秀 / 转会新闻之前按真实历史套用该届的名称 / 简称 / 配色（开局赛季只静默对齐）
+  applySeasonBranding(state);
 
   // 赛季自主成长（development.ts，第九波）：退役 / 年龄衰退已在 TI 结算中处理；选秀与转会潮之前，全体在役选手按天赋 / 真实轨迹自主训练
   // （新游戏的第一个赛季不执行）
   runSeasonDevelopment(state);
+  // 新俱乐部涌现（第十波 #2，clubs.ts）：现实中在本届首次出现的真实俱乐部（及偶尔的虚构新组织）在选秀与转会潮之前成立并签回当届真实选手
+  foundSeasonClubs(state);
   // 新秀选秀（退役/年龄/合同已在 TI 结算中处理；多人模式全局一次，弹窗按座位）→ 自由选手 → AI 转会 → 补齐阵容 → 赛程
   runRookieDraft(state);
   for (const [id, debut] of Object.entries(state.futureRookies)) if (debut < ti) delete state.futureRookies[id];
   // 教练供给（第九波 #3，coaches.ts）：随选秀向教练市场引入一批教练并保证可签约数量（在 AI 季前转会之前）
   seasonCoachSupply(state);
   refreshFreeAgents(state);
+  // 本赛季成立的真实俱乐部：签回本届登场、被 AI 选中或落选的真实新秀（第十波 #2）
+  signFoundedClubRookies(state);
   // 休赛期转会潮（shuffle.ts；新游戏第一个赛季不触发）：大规模换人在前，AI 季前窗口只做补员/还债/教练等收尾
   const shuffled = offseasonShuffle(state) !== null;
   // 多人模式：休赛期离队申请是座位私有的待决事件，offseasonShuffle 只为当前座位（中性状态下无）调用 → 其余座位各自调用
@@ -472,6 +483,8 @@ export function startSeason(state: GameState, ti: number): void {
   });
   seasonStartNews(state);
   rollRoundStart(state);
+  // 羁绊（第十波 #5，synergy.ts）：选秀 / 转会潮 / AI 季前窗口 / 赛季初事件之后全量同步（新解锁的届次从本赛季起可觉醒）
+  syncSynergies(state, { full: true });
   forEachSeat(state, () => {
     snapshotHistory(state);
     snapshotSquad(state); // 成长曲线的赛季起点（回合 0）：本赛季变化从赛季初算起，含第 1 回合的训练
@@ -552,6 +565,8 @@ export function enterRound(state: GameState, idx: number): void {
 
   rollRoundStart(state);
   if (state.gameOver) return;
+  // 羁绊（第十波 #5）：中期转会窗口 / 随机事件 / 离队申请之后、赛事开赛之前同步
+  syncSynergies(state, { full: true });
 
   if (round.phase === 'ti_qualifier') setupTiPhase(state);
   startRoundTournaments(state, idx);
@@ -614,6 +629,8 @@ export function endRound(state: GameState): void {
   expireOffers(state);
   // 挂牌转会：AI 出价 / 倒计时 / 到期自动解约（须在 expireOffers 之后；多人模式每个座位各自处理）
   forEachSeat(state, () => processTransferListings(state));
+  // 羁绊（第十波 #5）：回合末的挂牌出售 / 离队之后同步
+  syncSynergies(state, { full: true });
 
   // 上一回合及更早的已结束赛事：压缩 AI 对局记录（本回合的留到下回合，便于赛事中心查看）
   for (const id of state.seasonTournamentIds ?? []) {
@@ -624,6 +641,8 @@ export function endRound(state: GameState): void {
     snapshotHistory(state);
     snapshotSquad(state);
   });
+  // 破产检查（第十波 #1，bankruptcy.ts）：本回合全部收支之后；单机玩家破产 → gameOver，多人座位出局
+  checkBankruptcy(state);
   newsroomRoundEnd(state); // 新闻编辑部：赛事趋势/纪录、天梯变动、刀塔周报
 }
 
@@ -776,6 +795,8 @@ export function settleSeason(state: GameState): void {
   recordLegacySeasonAll(state);
   // DotaPedia（stats.ts）：全部战队的赛季末快照（荣誉 / 排名 / 阵容 / 教练）与选手巅峰，退役之前
   recordPediaSeasonEnd(state);
+  // 俱乐部使命（第十波 #3，missions.ts）：集齐巅峰阵容的俱乐部夺得 TI → 记录与新闻（退役之前）
+  missionSeasonEnd(state, tiT);
 
   // 2. 退役（先记下各玩家阵容，processRetirements 会把退役者移出战队；多人模式每个座位各自统计）
   const humans = mp ? activeHumanIds(state) : [state.settings.playerTeamId];
@@ -787,7 +808,11 @@ export function settleSeason(state: GameState): void {
 
   // 3. 年龄 → 4. 合同 → 5. 宿敌清理 → 6. 在队归属感
   agePlayersAtSeasonEnd(state);
+  missionContractRetention(state); // 俱乐部使命：AI 使命俱乐部大概率与到期的使命成员续约（第十波 #3）
   processContractExpiry(state);
+  // 羁绊（第十波 #5）：退役 / 合同到期拆散的羁绊立即收回加成（届次未变，此处只会失效、不会新觉醒），
+  // 避免下赛季初的自主成长与转会潮沿用已失效的加成
+  syncSynergies(state, { full: true });
   forEachSeat(state, () => {
     state.beefs = state.beefs.filter((b) => b.season > ti);
   });

@@ -7,6 +7,7 @@ import { useEffect, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import type { Position, Region, Tier, Player } from '../../engine/types';
 import { POSITION_LABEL, POSITION_SHORT, REGION_LABEL, formatGold } from '../../engine';
 import { useGameStore } from '../../store/gameStore';
+import { TeamEmblem } from './TeamEmblem';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -233,11 +234,14 @@ export function TeamLink({ teamId, name, className }: { teamId: string; name: st
   );
 }
 
-/** 战队色块 + 标签 */
-export function TeamTag({ color, tag }: { color: string; tag: string }) {
+/**
+ * 战队队徽 + 标签。队徽（第十波 #4，TeamEmblem.tsx）：按简称 + 品牌配色生成的原创风格化图案；
+ * 本地 public/local/logos/ 放了该战队的图片时显示图片（teamId 缺省时自动反查）。
+ */
+export function TeamTag({ color, tag, teamId }: { color: string; tag: string; teamId?: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
+      <TeamEmblem color={color} tag={tag} teamId={teamId} />
       <span className="font-semibold tracking-wide">{tag}</span>
     </span>
   );

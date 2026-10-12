@@ -2,13 +2,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import {
-  CONFIG, MAX_TI, POSITIONS, REGIONS, REGION_LABEL, estimateNewClubStart, formatGold, formatRank, realClubStartingFunds, tierOf,
+  CONFIG, MAX_TI, POSITIONS, REGIONS, REGION_LABEL, estimateNewClubStart, formatGold, formatRank, newClubStartingFunds, seedTeamStartingFunds, tierOf,
   tiYear, type NewGameOptions, type Region, type RosterFile, type SeedPlayer, type SeedTeam, type TiInfo,
 } from '../../engine';
 import { availableStartTis, getAllTiInfo, loadRoster } from '../../data/index';
 import {
   Badge, Button, Card, EmptyState, Hint, PosBadge, RegionBadge, TeamTag, TierBadge, cx,
 } from '../components/common';
+import { TeamEmblem } from '../components/TeamEmblem';
 import { DIFFICULTY_LABEL, MiniTitle, Spinner, prettySlug, safe, type Difficulty } from '../components/ShellKit';
 
 // ---------------------------------------------------------------------------
@@ -28,19 +29,16 @@ function eventLine(d: Difficulty): string {
   return '随机事件概率标准';
 }
 
-const DIFF_DESC: Record<Difficulty, { tone: string; lines: string[] }> = Object.fromEntries(
-  (['easy', 'normal', 'hard'] as Difficulty[]).map((d) => [
-    d,
-    {
-      tone: d === 'easy' ? 'text-good' : d === 'hard' ? 'text-bad' : 'text-info',
-      lines: [
-        `真实俱乐部资金 ×${CONFIG.team.realClubFundsMult[d] ?? 1}`,
-        `新俱乐部启动资金 ≈ ${CONFIG.economy.startingFunds.newClubWageRounds[d] ?? 7} 回合工资，初始 ${CONFIG.season.newClubSTierCount[d] ?? 1} 名 S 级 + ${CONFIG.season.newClubATierCount[d] ?? 3} 名 A 级选手`,
-        eventLine(d),
-      ],
-    },
-  ]),
-) as Record<Difficulty, { tone: string; lines: string[] }>;
+const DIFF_TONE: Record<Difficulty, string> = { easy: 'text-good', normal: 'text-info', hard: 'text-bad' };
+
+/** 难度说明（启动资金按所选起始届从引擎读取：economy.newClubStartingFunds，与开局同一函数） */
+function diffLines(d: Difficulty, startTi: number | null): string[] {
+  return [
+    `真实俱乐部资金 ×${CONFIG.team.realClubFundsMult[d] ?? 1}`,
+    `新俱乐部启动资金 ${formatGold(newClubStartingFunds(startTi || 1, d))}，初始 ${CONFIG.season.newClubSTierCount[d] ?? 1} 名 S 级 + ${CONFIG.season.newClubATierCount[d] ?? 3} 名 A 级选手`,
+    eventLine(d),
+  ];
+}
 
 function tiResultText(r?: string): { text: string; cls: string } {
   if (!r) return { text: '未进 TI', cls: 'text-faint' };
@@ -149,12 +147,15 @@ function TiCard({ info, available, selected, onSelect }: { info: TiInfo; availab
 
 function SeedTeamCard({
   team,
+  startTi,
   difficulty,
   rank,
   selected,
   onSelect,
 }: {
   team: SeedTeam;
+  /** 起始届（资金按该届年代计算：economy.seedTeamStartingFunds，与开局同一函数） */
+  startTi: number;
   difficulty: Difficulty;
   rank: number;
   selected: boolean;
@@ -176,7 +177,7 @@ function SeedTeamCard({
       <div className="flex items-start justify-between gap-2 border-b border-line/70 px-4 py-2.5 pl-5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <TeamTag color={color} tag={team.tag} />
+            <TeamTag color={color} tag={team.tag} teamId={team.id} />
             <RegionBadge region={team.region} />
             {team.atTI ? <Badge className="bg-gold/15 text-gold">TI 参赛</Badge> : <Badge>非 TI 队</Badge>}
             {selected && <Badge className="bg-gold font-bold text-black">✓ 已选</Badge>}
@@ -195,7 +196,7 @@ function SeedTeamCard({
         </div>
         <div>
           <div className="text-faint">资金</div>
-          <div className="font-semibold tabular text-gold">{formatGold(realClubStartingFunds(team.funds, difficulty))}</div>
+          <div className="font-semibold tabular text-gold">{formatGold(seedTeamStartingFunds(team, startTi, difficulty))}</div>
         </div>
         <div>
           <div className="text-faint">平均战力</div>
@@ -497,10 +498,10 @@ export default function NewGame() {
               >
                 <div className="flex items-center gap-2">
                   <span className={cx('h-3 w-3 rounded-full border-2', difficulty === d ? 'border-gold bg-gold' : 'border-faint')} />
-                  <span className={cx('text-sm font-semibold', DIFF_DESC[d].tone)}>{DIFFICULTY_LABEL[d]}</span>
+                  <span className={cx('text-sm font-semibold', DIFF_TONE[d])}>{DIFFICULTY_LABEL[d]}</span>
                 </div>
                 <ul className="mt-1 space-y-0.5 pl-5 text-[11px] text-mute">
-                  {DIFF_DESC[d].lines.map((l) => (
+                  {diffLines(d, startTi).map((l) => (
                     <li key={l}>· {l}</li>
                   ))}
                 </ul>
@@ -585,6 +586,7 @@ export default function NewGame() {
               <SeedTeamCard
                 key={t.id}
                 team={t}
+                startTi={startTi || 1}
                 difficulty={difficulty}
                 rank={powerRank.get(t.id) ?? 0}
                 selected={teamId === t.id}
@@ -597,7 +599,7 @@ export default function NewGame() {
     );
   };
 
-  // 与引擎 game.createNewClub 同口径的开局资金预估（economy.estimateNewClubStart；实际以开局后的真实工资为准）
+  // 与引擎 game.createNewClub 同一函数的开局资金（economy.estimateNewClubStart → newClubStartingFunds；预览 = 实际）
   const newClubStart = estimateNewClubStart(startTi || 1, difficulty);
   const newClubFunds = newClubStart.funds;
   const aCount = CONFIG.season.newClubATierCount[difficulty] ?? 3;
@@ -682,7 +684,8 @@ export default function NewGame() {
         <div className="rounded-lg border border-line bg-panel-2/40 p-3 text-xs leading-relaxed text-mute">
           <MiniTitle>开局配置</MiniTitle>
           <div>· 5 名程序化选手：{sCount > 0 ? `${sCount} 名 S 级、` : ''}{aCount} 名 A 级，其余 B 级</div>
-          <div>· 启动资金约 {formatGold(newClubFunds)}（≈ {CONFIG.economy.startingFunds.newClubWageRounds[difficulty] ?? 7} 回合工资），每回合另有赞助、直播与周边收入</div>
+          <div>· 启动资金 {formatGold(newClubFunds)}（约为初始阵容 {newClubStart.wagePerRound > 0 ? Math.round(newClubFunds / newClubStart.wagePerRound) : '—'} 回合的工资），每回合另有赞助、直播与周边收入</div>
+          <div>· 赛事奖金默认 {Math.round(CONFIG.prizeShare.initial * 100)}% 分给队员、其余归俱乐部（可在「俱乐部 › 财务」调整）；队员分到的奖金计入其收入，奖金越多越不容易对薪资不满</div>
           <div>· 每个赛季初（含第一个赛季）自动举行新秀选秀：排名越差，抽中前几顺位的概率越高</div>
           <div>· 荣誉从 {CONFIG.team.newClubHonor} 起步，前期多数赛事需要打预选</div>
           <div className="mt-1 text-faint">白手起家难度较高，但每一座奖杯都是你亲手打造的。</div>
@@ -723,9 +726,7 @@ export default function NewGame() {
       return (
         <div>
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-lg text-sm font-black text-white shadow" style={{ background: selectedTeam.color || '#8b96ab' }}>
-              {selectedTeam.tag.slice(0, 4)}
-            </div>
+            <TeamEmblem tag={selectedTeam.tag} color={selectedTeam.color || '#8b96ab'} teamId={selectedTeam.id} size={48} className="drop-shadow" />
             <div>
               <div className="text-lg font-bold">{selectedTeam.name}</div>
               <div className="flex items-center gap-2 text-xs text-mute">
@@ -740,7 +741,7 @@ export default function NewGame() {
             </div>
             <div className="rounded-md border border-line bg-panel-2/60 px-3 py-2">
               <div className="text-[10px] text-faint">资金</div>
-              <div className="font-semibold tabular text-gold">{formatGold(realClubStartingFunds(selectedTeam.funds, difficulty))}</div>
+              <div className="font-semibold tabular text-gold">{formatGold(seedTeamStartingFunds(selectedTeam, startTi || 1, difficulty))}</div>
             </div>
             <div className="rounded-md border border-line bg-panel-2/60 px-3 py-2">
               <div className="text-[10px] text-faint">平均战力</div>
@@ -831,7 +832,7 @@ export default function NewGame() {
           ))}
         </div>
         <ul className="mt-3 space-y-0.5 text-[11px] text-mute">
-          {DIFF_DESC[difficulty].lines.map((l) => (
+          {diffLines(difficulty, startTi).map((l) => (
             <li key={l}>· {l}</li>
           ))}
         </ul>

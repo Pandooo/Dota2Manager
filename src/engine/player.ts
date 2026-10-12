@@ -185,11 +185,19 @@ export function tickModifiers(state: GameState): void {
 
 /** 按等级/战力/年代计算每大回合工资（rookie 打折） */
 export function computeSalary(state: GameState, p: Player, rookie?: boolean): number {
+  return standardSalary(p.mmr, p.power, seasonEconIndex(state), rookie);
+}
+
+/**
+ * 标准工资（纯函数）：salaryByTier[天梯等级] × (1 + (战力 − 70) × salaryPowerFactor) × 年代经济指数（新秀 × rookieSalaryMult），不低于 minSalary。
+ * computeSalary 与 economy.seedTeamWageBill（开局前按阵容数据估算真实俱乐部工资）共用
+ */
+export function standardSalary(mmr: number, power: number, econIndex: number, rookie?: boolean): number {
   const eco = CONFIG.economy;
-  const tier = tierOf(p.mmr);
-  const power = Number.isFinite(p.power) ? p.power : 50;
-  const powerFactor = Math.max(0, 1 + (power - 70) * eco.salaryPowerFactor);
-  const raw = eco.salaryByTier[tier] * powerFactor * seasonEconIndex(state) * (rookie ? eco.rookieSalaryMult : 1);
+  const tier = tierOf(mmr);
+  const pw = Number.isFinite(power) ? power : 50;
+  const powerFactor = Math.max(0, 1 + (pw - 70) * eco.salaryPowerFactor);
+  const raw = eco.salaryByTier[tier] * powerFactor * econIndex * (rookie ? eco.rookieSalaryMult : 1);
   return Math.max(eco.minSalary, Math.round(raw));
 }
 

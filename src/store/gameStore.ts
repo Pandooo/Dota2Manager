@@ -34,8 +34,8 @@ export type TeamTab = 'squad' | 'training' | 'coach';
 export type TransferTab = 'market' | 'draft';
 export type EventsTab = 'tournament' | 'schedule' | 'rankings' | 'patches';
 export type ClubTab = 'finance' | 'honors';
-/** DotaPedia 百科：总览 | 战队 | 选手 | 赛事 | 英雄（键名带 pedia 前缀，避免与其他中心页的标签重名） */
-export type PediaTab = 'pediaHome' | 'pediaTeams' | 'pediaPlayers' | 'pediaTours' | 'pediaHeroes';
+/** DotaPedia 百科：总览 | 战队 | 选手 | 赛事 | 英雄 | 羁绊图鉴（键名带 pedia 前缀，避免与其他中心页的标签重名） */
+export type PediaTab = 'pediaHome' | 'pediaTeams' | 'pediaPlayers' | 'pediaTours' | 'pediaHeroes' | 'pediaSynergies';
 /** 中心页内的标签（store.tab 的取值；旧页面键即标签键，荣誉史为 'honors'） */
 export type HubTab = TeamTab | TransferTab | EventsTab | ClubTab | PediaTab;
 /**
@@ -50,7 +50,7 @@ export const HUB_TABS: Readonly<Partial<Record<HubKey, readonly HubTab[]>>> = {
   transfer: ['market', 'draft'],
   events: ['tournament', 'schedule', 'rankings', 'patches'],
   club: ['finance', 'honors'],
-  pedia: ['pediaHome', 'pediaTeams', 'pediaPlayers', 'pediaTours', 'pediaHeroes'],
+  pedia: ['pediaHome', 'pediaTeams', 'pediaPlayers', 'pediaTours', 'pediaHeroes', 'pediaSynergies'],
 };
 
 const TAB_HUB: Readonly<Record<HubTab, HubKey>> = {
@@ -58,7 +58,7 @@ const TAB_HUB: Readonly<Record<HubTab, HubKey>> = {
   market: 'transfer', draft: 'transfer',
   tournament: 'events', schedule: 'events', rankings: 'events', patches: 'events',
   finance: 'club', honors: 'club',
-  pediaHome: 'pedia', pediaTeams: 'pedia', pediaPlayers: 'pedia', pediaTours: 'pedia', pediaHeroes: 'pedia',
+  pediaHome: 'pedia', pediaTeams: 'pedia', pediaPlayers: 'pedia', pediaTours: 'pedia', pediaHeroes: 'pedia', pediaSynergies: 'pedia',
 };
 
 const HUB_KEYS: readonly HubKey[] = ['dashboard', 'team', 'transfer', 'events', 'club', 'inbox', 'match', 'pedia'];

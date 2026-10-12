@@ -5,7 +5,7 @@ import {
   CONFIG, POSITIONS, POSITION_LABEL, POSITION_SHORT, ageOf, currentPlayerTournament, effectiveAttr,
   getCoach, getPlayerTeam, marketValue, overallRating, playerRating, playerTier, rankTeamsByRating,
   rosterRoom, roundWageBill, teamInsight, teamRating, validateLineup, releaseCompensation,
-  isTransferWindowOpen, formatGold, activeListing, teamBuildingCost,
+  isTransferWindowOpen, formatGold, activeListing, listingDurationLabel, listingProgress, teamBuildingCost,
   teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood,
 } from '../../engine';
 import type { GameState, Player, Position, SalaryMood, Team, Tournament } from '../../engine';
@@ -13,6 +13,7 @@ import {
   Button, Card, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TierBadge, cx,
 } from '../components/common';
 import { ConfirmButton } from '../components/ConfirmPopover';
+import { SquadSynergyStrip } from '../components/SynergyKit';
 import { ScreenHeader } from '../layout/HubKit';
 import {
   Chip, Flag, PowerValue, SortTh, fmt1, loyaltyClass, modifierDuration, modifierPositive, modifierText, MOD_ATTR_LABEL,
@@ -243,6 +244,9 @@ export default function Squad() {
         }
       />
 
+      {/* 羁绊（第十波 #5）：本队激活的羁绊；没有时若已集齐某个已解锁羁绊的 4 人则提示差谁（都没有则不渲染） */}
+      <SquadSynergyStrip game={game} teamId={team.id} />
+
       {/* ---------------- 首发编辑 ---------------- */}
       <Card
         title="首发阵容"
@@ -375,7 +379,7 @@ export default function Squad() {
                       ? '转会窗口已锁定（TI 阶段），无法挂牌'
                       : listable.length === 0
                         ? '选中的选手均已在挂牌中'
-                        : `将选中的选手按身价挂牌出售（${CONFIG.squadOps.listingRounds} 个回合无人报价则自动解约，无补偿）`
+                        : `将选中的选手按身价挂牌出售（挂牌期为${safe(() => listingDurationLabel(), '一整个赛季')}，整个挂牌期没有收到任何报价则自动解约，无补偿）`
                   }
                   confirm={{
                     title: `批量挂牌（${listable.length} 人）`,
@@ -391,8 +395,8 @@ export default function Squad() {
                           )}
                         />
                         <span className="mt-1.5 block">
-                          标价 = 身价。等待 {CONFIG.squadOps.listingRounds} 个转会回合，期间报价在「转会市场 → 我的挂牌」处理；
-                          整个挂牌期无人报价则自动解约（无补偿、不扣荣誉）。自定义标价请在选手详情中单独挂牌。
+                          标价 = 身价。挂牌期为{safe(() => listingDurationLabel(), '一整个赛季')}，期间报价在「转会市场 → 我的挂牌」处理；
+                          整个挂牌期没有收到任何报价则自动解约（无补偿、不扣荣誉），收到过报价则期满后挂牌结束、选手留队。自定义标价请在选手详情中单独挂牌。
                         </span>
                       </>
                     ),
@@ -784,17 +788,21 @@ function StatusChips({ game, player: p, slot }: { game: GameState; player: Playe
     }
     const listing = safe(() => activeListing(game, p), null);
     if (listing) {
+      const left = safe(() => listingProgress(listing).roundsLeft, listing.roundsLeft);
       chips.push(
         <Chip
           key="list"
           tone="gold"
           title={
-            listing.roundsLeft > 0
-              ? `标价 ${formatGold(listing.askingPrice)}；剩余 ${listing.roundsLeft} 个转会回合，到期无人报价将自动解约（无补偿）`
-              : `标价 ${formatGold(listing.askingPrice)}；等待期已满，待处理报价被拒绝或过期后将自动解约（无补偿）`
+            left > 0
+              ? `标价 ${formatGold(listing.askingPrice)}；挂牌期剩余 ${left} 个转会回合（TI 锁定期间暂停），` +
+                (listing.hadBids
+                  ? '已收到过报价：挂牌期满后挂牌结束、选手留队'
+                  : '整个挂牌期没有收到任何报价将自动解约（无补偿）')
+              : `标价 ${formatGold(listing.askingPrice)}；挂牌期已满，待处理报价处理完后挂牌结束、选手留队（收到过报价不会自动解约）`
           }
         >
-          {listing.roundsLeft > 0 ? `挂牌中·剩${listing.roundsLeft}回合` : '挂牌中·已到期'}
+          {left > 0 ? `挂牌中·剩${left}回合` : '挂牌中·已到期'}
         </Chip>,
       );
     }

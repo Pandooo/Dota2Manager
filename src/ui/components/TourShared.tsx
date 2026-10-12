@@ -10,6 +10,7 @@ import type {
 import { TOURNAMENT_TIER_LABEL, addDays } from '../../engine';
 import { useGameStore } from '../../store/gameStore';
 import { Badge, Delta, TeamLink, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 
 // ---------------------------------------------------------------------------
 // 防御：引擎函数可能尚未实现或数据缺失时，渲染不崩溃
@@ -206,7 +207,11 @@ export function TeamName({
   const hl = info.isPlayer && !noHighlight;
   return (
     <span className={cx('inline-flex min-w-0 items-center gap-1.5', className)}>
-      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: info.color }} />
+      {info.exists ? (
+        <TeamEmblem tag={info.tag} color={info.color} teamId={info.id} />
+      ) : (
+        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: info.color }} />
+      )}
       {mode === 'both' && <span className={cx('shrink-0 font-semibold tracking-wide', hl ? 'text-gold' : 'text-ink')}>{info.tag}</span>}
       {info.exists ? (
         <TeamLink

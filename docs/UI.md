@@ -33,10 +33,24 @@
   - 气泡优先出现在按钮上方，「确定」按钮落在原按钮附近，减少鼠标移动；Enter 确定，Esc / 点击外部取消；危险操作（解约、弃权、踢人）用 `danger`。
   - 底栏「更多」菜单里的确认项用 `MenuConfirm`（确认后收起菜单）。
 - **TI 转场**（第八波，`src/ui/components/TiTransition.tsx` + 纯函数 `src/ui/tiTheme.ts`）：进入 TI 正赛回合播放全屏转场（不朽之盾升起 → 发光 → 消失，约 3.2 秒，点击 / 空格跳过，减少动态效果时只淡入淡出）；TI 预选回合为顶部横幅（回合开始即出现；回合通知是总览内的卡片，不再挡住它）；TI 正赛回合顶栏 / 底栏点缀该届主题色（`tis.json` 的 `theme`）。由 store 的 `syncTiIntro` 在任何状态变化后检查，每个存档 × 座位 × 届次只触发一次（「已看过」记在 localStorage `d2m:tiIntroSeen`）；页面在后台时等回到页面再播放。只读，不修改游戏状态，多人模式下每个座位的客户端各自触发。
+  - 冠军盾（第十波 #7）：`AegisSvg` 为重新绘制的**原创**矢量图（圆盾 · 24 瓣扇贝雕纹盾缘 · 铆钉与叶纹 · 四道棱脊与卷草纹 · 中央凸台 + 八角刻面主宝石），银灰金属底按该届主题着色；不得描摹或加入官方冠军盾图片。`AegisArt` = 本地覆盖图片优先（见下「本地美术覆盖」），否则 `AegisSvg`。
+  - 顶栏徽记 `TiAegisBadge`（TI 预选与 TI 正赛回合）：单机在顶栏绝对居中（≥ lg 显示），多人排在玩家条之前；主题色光晕；点击在下方展开小气泡（portal 到 body，点击外部 / Esc 收起）：「The International {年份}」、城市与主题、当前阶段、本队参赛情况。
+- **队徽**（第十波 #4，`src/ui/components/TeamEmblem.tsx` + 纯函数 `src/ui/emblem.ts`）：`TeamTag` 的色块换成按「简称 + 品牌配色」确定性生成的原创风格化队徽（外形 / 装饰纹由简称哈希决定，首字母取自简称，辅色取 `branding.json` 的 `color2` 或由主色推导；默认尺寸 1.3em 随文字缩放）。换品牌（简称 / 配色变化）后自然换成新队徽。战队名旁的色块同样换成 `TeamEmblem`（赛事对阵 / 赛程的 `TourShared.TeamName`（待定席位仍为灰色色块）、总览积分榜、转会市场三处战队单元格、BP 顺序、新秀选秀、世界动态战队标签、战队弹窗标题、DotaPedia 战队页标题 28px、新游戏确认页 48px、多人新建俱乐部预览 48px）；赛区 / 图表配色与新闻滚动条的小圆点不属于队徽，保持色块。新增展示战队的地方优先用 `TeamTag` / `TeamEmblem`，不要再写纯色块。真实队标属于商标，不得加入仓库。`TeamTag` 新增可选 `teamId`（用于本地队标）；未传时只有放了本地队标才按「简称 + 主色」在当前存档里反查 id（每个状态版本建一次索引）。DotaPedia 战队信息框的「品牌沿革」行 = `TeamBrandHistoryRow`（本局无品牌变化时不显示）。
+- **背景音乐**（第十波 #6，`src/ui/components/MusicControl.tsx` + 播放器 `src/ui/audio/bgm.ts`）：顶栏「荣誉」右侧的音符按钮（非游戏界面没有顶栏，固定在角落：主菜单与生涯总结在右上角；新游戏 / 大厅 / 房间的右上角有返回按钮或玩家名，改在右下角，面板向上展开），点击在按钮下方（放不下时上方）展开小面板（portal 到 body，点击外部 / Esc 收起）：开关、音量滑块、音源（内置原创氛围音乐 / 本地文件）、选择 / 更换 / 移除本地文件（移除用确认气泡）。设置按浏览器记在 localStorage `d2m:bgm`，本地文件存在 IndexedDB，不进存档、不经 `call()`。不得加入任何 Valve 音频。
+- **破产倒计时**（第十波 #1）：资金为负（或连续为负的计数尚未清零）时，总览「待处理」标题行常驻红色「资金为负：再持续 N 回合将破产」（不展开也可见），展开后第一行显示负债 / 上限，负债已超上限时另起一行警告；数据来自引擎只读查询 `bankruptcyStatus`。
+- **开局资金与奖金分成的展示**（2026-10-10）：新游戏向导（难度说明、新建俱乐部预览与「开局配置」）、多人房间「我的战队」的新建俱乐部预览都从引擎读取：启动资金 = `estimateNewClubStart(startTi, difficulty)`（内部即 `newClubStartingFunds`，与开局为同一函数，预览 = 实际；「约为初始阵容 N 回合的工资」按其 `wagePerRound` 计算：各等级取战力区间中点的标准工资，与实际初始 5 人工资的多种子均值相差约 1%，不含赛季初选秀的新秀）、难度说明里的新俱乐部启动资金 = `newClubStartingFunds(startTi, d)`、真实俱乐部资金（战队卡片与确认页）= `seedTeamStartingFunds(seedTeam, startTi, difficulty)`、多人「选择已有战队」的公平规则旁显示重置后的启动资金、默认分成 = `CONFIG.prizeShare.initial`；不要在界面写死金额、回合数或比例（2026-10-10 开局资金锚定后更新）。财务页「选手奖金分成」卡片的说明随中性点（`CONFIG.prizeShare.loyalty.norm`，等于下限时不再写「低于则下降」）与奖金折算窗口（`CONFIG.prizeShare.salary.windowRounds`）生成。
 - **待决策事件**（`game.pendingDecisions`）在消息中心置顶显示，阻塞推进的事件同时出现在底栏「待决事件」气泡里；选项按钮调用 `call('resolveDecision', id, choiceId)`。开启自动处理时不处理也能推进（按默认选项）。
-- **DotaPedia 百科**（侧栏「DotaPedia」，中心页键 `pedia`，标签 `pediaHome | pediaTeams | pediaPlayers | pediaTours | pediaHeroes`；`src/ui/screens/PediaLazy.tsx` 按需加载 `PediaHub` 及各标签页）：只读，数据全部来自 `engine/pedia.ts` 的纯查询（在渲染时调用，按 `version` 记忆）。
+- **DotaPedia 百科**（侧栏「DotaPedia」，中心页键 `pedia`，标签 `pediaHome | pediaTeams | pediaPlayers | pediaTours | pediaHeroes | pediaSynergies`（羁绊图鉴，第十波 #5：未解锁只显示提示，解锁后显示成员现状与激活战队；阵容页顶部的羁绊条与战队词条的「羁绊」章节用 `src/ui/components/SynergyKit.tsx`，「羁绊图鉴 ›」= `setView('pediaSynergies')`）；`src/ui/screens/PediaLazy.tsx` 按需加载 `PediaHub` 及各标签页）：只读，数据全部来自 `engine/pedia.ts` 的纯查询（在渲染时调用，按 `version` 记忆）。
   - 词条导航（`src/ui/components/PediaNav.ts`）：`openPedia(kind, id)` 打开战队 / 选手 / 赛事 / 英雄词条（id = null 为列表），会关闭选手 / 战队弹窗并记下来源，`pediaBack()` 逐级返回（可回到百科外的页面）；每个标签记住选中的词条，再次点击当前标签回到该类列表（`pediaTabReselect`，经 `HubShell onReselect`），换局（`game.id` 变化）自动清空。纯 UI 状态，不进存档。每个词条包在 `PediaEntryGuard`（词条级错误边界，带「返回列表」）里，出错的词条不会把整个标签卡死。
   - 百科内的战队名 / 选手 ID / 赛事 / 英雄一律用 `PediaKit` 的 `PTeam / PPlayer / PTour / PHero` 链接到词条；选手 / 战队弹窗底部有「DotaPedia ›」入口（`PediaEntryButton`，生涯总结界面不显示，多人模式本座位出局后同样不显示）。
   - 逐局个人 K / D / A 不存储（用户反馈 2026-10-10），系列赛详情（`TourSeriesModal`）每局只显示 BP、时长、比分与 MVP；个人数据只在百科的聚合（生涯 / 分赛季 / 英雄 / 单局纪录）中出现。
   - 历史地位的「单算本局 / 单算开局前（现实）」是各自单独计分，传奇值按合并后的成就重新计分，不是两者之和——展示分项时要这样标注，不要写成可相加的样子。
   - 词条页布局仿 Liquipedia：左侧章节（`PSection`）+ 右侧信息框（`Infobox / InfoRow / InfoHead`）与目录（`PediaToc`），≥1024px 双栏；小图表用 `PediaCharts`（按容器实际宽度绘制的内联 SVG，悬停有提示）。
+  - 战队词条「使命」章节（第十波 #3，`src/ui/screens/PediaTeamMission.tsx`，数据 `engine/missions.ts` 的 `clubMissionView`，只读）：只对真实俱乐部显示（虚构 / 程序化战队不出现该章节与目录项）——目标「重组 TI{n} 巅峰阵容」、状态（进行中 / 已集齐 / 使命完成 / 不适用）、k/5 进度条、五名成员的巅峰位置与现在在哪（已在队 / 其他战队 / 玩家战队 / 自由身 / 已退役 / 禁赛 / 尚未出道，战队可点击）、首次集齐与集齐后夺冠的赛季。
+    该届真实 TI 尚未到来时不显示现实成绩（不剧透）；玩家执教的真实俱乐部只展示巅峰阵容并注明不设 AI 使命。信息框「成立」一行（`TeamFoundedRow`，第十波 #2）显示本局中途成立的俱乐部的成立赛季。
+
+## 本地美术覆盖（`public/local/`，第十波 #4 / #7）
+真实队标与官方冠军盾图片属于商标 / 版权美术，**不得提交到仓库**；界面默认使用原创生成的队徽与矢量冠军盾。用户可在本机放入自己的图片覆盖显示（目录被 `.gitignore` 忽略，只提交 `public/local/README.txt` 使用说明）：
+- `public/local/logos/{战队 id}.png|svg|webp`：队标；`{战队 id}.{简称}`（简称去标点、小写，如 `lgd-gaming.psglgd.png`）可为某个品牌时期单独指定，优先于 `{战队 id}`。
+- `public/local/aegis.png|svg|webp`：冠军盾（TI 转场、预选横幅、顶栏徽记）。
+- 实现（`src/ui/localArt.ts`）：文件列表由 `import.meta.glob` 在开发服务器启动 / 构建时枚举（只取文件名，从不导入内容），运行时不做探测请求——没有文件就不发请求、控制台没有 404；放入或删除文件后重新运行 `npm run dev` / `npm run mp`。图片加载失败时记下地址并回退到生成图案，不再重复请求。

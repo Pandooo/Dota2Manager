@@ -12,6 +12,9 @@ import {
   PediaToc, TIER_ORDER, fmtKda, fmtMinutes, fmtPct, placeCellClass, placeClass, safe, wdl,
 } from '../components/PediaKit';
 import { PLineChart, PartBars, WdlBar, type ChartDatum } from '../components/PediaCharts';
+import { TeamSynergyList, hasTeamSynergies } from '../components/SynergyKit';
+import { TeamBrandHistoryRow, TeamEmblem } from '../components/TeamEmblem';
+import PediaTeamMission, { TeamFoundedRow, teamMissionOf } from './PediaTeamMission';
 
 const TIERS_SHOWN: TournamentTier[] = ['ti', 'major', 'premier', 'minor'];
 
@@ -36,9 +39,12 @@ export default function PediaTeamPage({ id }: { id: string }) {
     .map((s) => s.ti)
     .concat(page.placements.map((p) => p.season));
   const firstTi = played.length ? Math.min(...played) : null;
+  const mission = teamMissionOf(game, page.id); // 第十波 #3：俱乐部使命（真实俱乐部的现实巅峰阵容）
   const toc = [
     { id: 'pt-overview', label: '概述' },
+    ...(hasTeamSynergies(game, page.id) ? [{ id: 'pt-synergy', label: '羁绊' }] : []), // 第十波 #5：有激活的羁绊时显示
     { id: 'pt-legacy', label: '历史地位' },
+    ...(mission ? [{ id: 'pt-mission', label: '使命' }] : []),
     { id: 'pt-achievements', label: '成就' },
     { id: 'pt-ti', label: 'TI 成绩' },
     { id: 'pt-results', label: '赛事战绩' },
@@ -65,7 +71,7 @@ export default function PediaTeamPage({ id }: { id: string }) {
           ) : undefined
         }
       >
-        <span className="inline-block h-5 w-5 rounded" style={{ background: page.color }} />
+        <TeamEmblem tag={page.tag || page.name} color={page.color} teamId={page.id} size={28} />
         <span>{page.name}</span>
         {page.tag && <span className="text-base font-semibold text-mute">{page.tag}</span>}
         {page.human && <Chip tone={page.id === game.settings.playerTeamId ? 'gold' : 'info'}>{page.id === game.settings.playerTeamId ? '本方战队' : '玩家战队'}</Chip>}
@@ -77,9 +83,15 @@ export default function PediaTeamPage({ id }: { id: string }) {
             <PSection id="pt-overview" title="概述">
               <Overview page={page} firstTi={firstTi} />
             </PSection>
+            {hasTeamSynergies(game, page.id) && (
+              <PSection id="pt-synergy" title="羁绊" right={<span>五人同队集齐 · 全队加成</span>}>
+                <TeamSynergyList game={game} teamId={page.id} renderPlayer={(pid, handle) => <PPlayer id={pid} handle={handle} />} />
+              </PSection>
+            )}
             <PSection id="pt-legacy" title="历史地位" right={<span>实时评估，不必等生涯结束</span>}>
               {page.legacy ? <LegacyPanel lg={page.legacy} /> : <div className="text-sm text-faint">暂无数据</div>}
             </PSection>
+            <PediaTeamMission view={mission} />
             <PSection id="pt-achievements" title="成就">
               <Achievements page={page} />
             </PSection>
@@ -584,6 +596,8 @@ function TeamInfobox({ page, firstTi }: { page: TeamPage; firstTi: number | null
       }
     >
       <InfoRow label="简称">{page.tag || '—'}</InfoRow>
+      <TeamBrandHistoryRow teamId={page.id} />
+      <TeamFoundedRow teamId={page.id} />
       <InfoRow label="赛区">{page.region ? <span className="inline-flex items-center gap-1.5"><RegionBadge region={page.region} />{REGION_LABEL[page.region]}</span> : '—'}</InfoRow>
       <InfoRow label="状态">{page.statusLabel}</InfoRow>
       <InfoRow label="首次出战">{firstTi ? `TI${firstTi} 赛季（${tiYear(firstTi)}）` : '—'}</InfoRow>

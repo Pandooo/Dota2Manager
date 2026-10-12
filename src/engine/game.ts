@@ -15,7 +15,7 @@ import { aiEnsureRosters } from './ai';
 import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './generation';
 import { addPlayerToTeam, autoLineup, lineupPlayers, validateLineup } from './team';
 import {
-  addFinance, extraTrainingCost, newClubStartingFunds, realClubStartingFunds, scrimCost,
+  addFinance, extraTrainingCost, newClubStartingFunds, scrimCost, seedTeamStartingFunds,
 } from './economy';
 import { scrimInsightMult, scrimMultiplier, scrimTrainOptions, sessionTrainOptions, trainTeam } from './growth';
 import { generateTempSubCandidates, hireTempSub, isTransferWindowOpen, tempSubCost } from './market';
@@ -203,7 +203,9 @@ function createNewClub(
     region,
     color: (club.color ?? '').trim() || '#c23c2a',
     honor: CONFIG.team.newClubHonor,
-    gold: Math.round(CONFIG.team.newClubFunds[difficulty] ?? CONFIG.team.newClubFunds.normal),
+    // 起始资金 = 【用户指定】锚定额（TI1 普通难度 20 万）× 年代系数 × 难度倍数（economy.newClubStartingFunds，与新游戏向导 / 多人房间预览同一函数）。
+    // 第八波取消玩家抽卡：不再发放抽卡礼包，新俱乐部在赛季初的新秀选秀中获得新秀（rookieDraft.ts）
+    gold: newClubStartingFunds(state.season?.ti ?? state.settings.startTi, difficulty),
     isPlayer: true,
     playerIds: [],
     lineup: emptyLineup(),
@@ -223,10 +225,6 @@ function createNewClub(
     addPlayerToTeam(state, p.id, id, { contractSeasons: CONFIG.season.newClubContractSeasons });
   });
   autoLineup(state, id);
-
-  // 起始资金 = 初始阵容每回合工资 × 难度回合数（economy.newClubStartingFunds）。
-  // 第八波取消玩家抽卡：不再发放抽卡礼包，新俱乐部在赛季初的新秀选秀中获得新秀（rookieDraft.ts）
-  team.gold = newClubStartingFunds(state, id, difficulty);
   return team;
 }
 
@@ -246,8 +244,9 @@ function validateNewGameOptions(opts: NewGameOptions): string | null {
 }
 
 /**
- * 新游戏：loadRoster(startTi) → 战队/选手/教练/自由选手；接管真实战队（资金 = 数据资金 × economy.startingFunds.realClubScale
- * × 难度倍数；AI 战队同样缩放）或新建俱乐部（荣誉 100，资金 = 初始工资 × 难度回合数，
+ * 新游戏：loadRoster(startTi) → 战队/选手/教练/自由选手；接管真实战队（资金 = economy.seedTeamStartingFunds：数据资金 × 0.2 封顶于强队锚定额
+ * TI1 10 万 × 年代系数、不低于数据阵容 N 回合工资，再 × 难度倍数；AI 战队同一公式、不乘难度倍数）或新建俱乐部（荣誉 100，
+ * 资金 = economy.newClubStartingFunds：TI1 普通难度 20 万 × 年代系数 × 难度倍数，
  * 初始阵容 = 5 名 S/A/B 级程序化选手（各等级人数随难度）；第一个赛季同样举行新秀选秀，新俱乐部借此补充新秀）；
  * futureRookies：playerIndex 中 firstTi > startTi 且未在本 roster 出现的选手 → 登场 TI = firstTi；
  * 战队不足 CONFIG.team.minTeams 时生成 AI 战队；rngState = seed ?? 基于时间；
@@ -300,10 +299,10 @@ export async function createNewGame(opts: NewGameOptions): Promise<GameState> {
     const isPlayer = !opts.newClub && st.id === opts.teamId;
     const team = teamFromSeed(state, st, isPlayer);
     team.isPlayer = isPlayer;
-    // 起始资金 = 数据资金 × economy.startingFunds.realClubScale（玩家接管再 × 难度倍数）：豪门 ≈ 一个赛季工资
-    team.gold = realClubStartingFunds(Number.isFinite(st.funds) ? st.funds : team.gold, isPlayer ? opts.difficulty : null);
+    // 起始资金 = min(锚定额 × 年代系数, 数据资金 × 0.2)，不低于数据阵容工资 × N 回合（economy.seedTeamStartingFunds；玩家接管再 × 难度倍数）：
+    // 最强真实俱乐部 TI1 普通难度 10 万（【用户指定】），与新游戏向导的战队卡片同一函数
+    team.gold = seedTeamStartingFunds(st, startTi, isPlayer ? opts.difficulty : null);
   }
-  const seededTeamIds = new Set(Object.keys(state.teams));
   // 自由选手 / 自由教练
   for (const fa of roster.freeAgents ?? []) if (fa?.id && !state.players[fa.id]) playerFromSeed(state, fa, null);
   for (const c of roster.freeCoaches ?? []) if (c?.id && !state.coaches[c.id]) coachFromSeed(state, c, null);
@@ -322,11 +321,8 @@ export async function createNewGame(opts: NewGameOptions): Promise<GameState> {
     if (e.firstTi > startTi && e.firstTi <= MAX_TI) state.futureRookies[e.id] = e.firstTi;
   }
 
+  // 开局补足的程序化 AI 战队：资金在 generation.generateAiTeam 中按真实俱乐部同一公式折算（下限按实际阵容工资）
   aiEnsureRosters(state);
-  // 开局补足的程序化 AI 战队：资金与真实俱乐部同口径缩放
-  for (const t of Object.values(state.teams)) {
-    if (!seededTeamIds.has(t.id) && !t.isPlayer && t.id !== playerTeamId) t.gold = realClubStartingFunds(t.gold, null);
-  }
   // 初始「上赛季排名」：按荣誉
   Object.values(state.teams)
     .filter((t) => !t.disbanded)
@@ -374,7 +370,8 @@ export function getAdvanceBlockers(state: GameState): AdvanceBlocker[] {
     return [{
       code: 'game_over',
       message: state.gameOver.reason === 'disbanded' ? '俱乐部已解散，游戏结束'
-        : state.gameOver.reason === 'banned' ? '俱乐部因全员假赛被永久除名，游戏结束' : '执教生涯已结束',
+        : state.gameOver.reason === 'banned' ? '俱乐部因全员假赛被永久除名，游戏结束'
+          : state.gameOver.reason === 'bankrupt' ? '俱乐部已破产，游戏结束' : '执教生涯已结束',
     }];
   }
   if (isMultiplayer(state)) {
@@ -383,7 +380,8 @@ export function getAdvanceBlockers(state: GameState): AdvanceBlocker[] {
     if (seat?.eliminated || state.teams[me0]?.disbanded) {
       return [{
         code: 'game_over',
-        message: state.teams[me0]?.banned ? '俱乐部因全员假赛被永久除名，当前为观战模式' : '战队已解散，当前为观战模式',
+        message: state.teams[me0]?.banned ? '俱乐部因全员假赛被永久除名，当前为观战模式'
+          : state.teams[me0]?.bankrupt ? '俱乐部已破产，当前为观战模式' : '战队已解散，当前为观战模式',
       }];
     }
   }

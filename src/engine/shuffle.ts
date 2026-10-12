@@ -10,6 +10,8 @@
 //   6. 玩家战队：只收到更频繁的 AI 报价（transferOffers）与离队申请（leave_request），不会被直接搬走选手
 //   7. 新闻：【传闻】（真假参半，日期在休赛期）→ 每笔知名转会一条 → 【转会窗口】汇总
 // 只动 AI 战队（team.isPlayer 一律跳过），多人模式下所有玩家战队同样只会收到报价。
+// 第十波 #3 俱乐部使命（missions.ts）：使命俱乐部在明星去向之前优先引进缺失的使命成员（溢价求购 / 顶掉同位置的非使命首发，pursueMissions），
+// 使命成员更难被换下、挂牌、挖走与裁掉；玩家战队里的使命成员只会收到报价（玩家可拒绝）。
 import type { GameState, NewsItem, Player, Position, Team } from './types';
 import { POSITIONS } from './types';
 import { CONFIG, POSITION_LABEL } from './config';
@@ -27,6 +29,12 @@ import {
 import { addFinance, econ, roundWageBill } from './economy';
 import { colorFromId, generateTeamName } from './generation';
 import { honorLuck } from './honor';
+import {
+  isMissionPlayerOf, missionAwareTrim, missionBidFee, missionCanAfford, missionInEffect, missionSellChance, missionTargets,
+  missionWillingness, missionsEnabled,
+} from './missions';
+import { orgTeam, peakOrgsOfPlayer } from './clubs';
+import { lineupPriorityLocks } from './lineupPriority';
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -34,7 +42,9 @@ import { honorLuck } from './honor';
 
 export type ShuffleMoveKind = 'transfer' | 'signing' | 'release';
 export type ShuffleReason =
-  | 'upgrade' | 'need' | 'ambition' | 'challenge' | 'loyalty' | 'veteran' | 'surplus' | 'distress' | 'poach' | 'disband';
+  | 'upgrade' | 'need' | 'ambition' | 'challenge' | 'loyalty' | 'veteran' | 'surplus' | 'distress' | 'poach' | 'disband'
+  /** 俱乐部使命：引进现实巅峰阵容的成员（第十波 #3） */
+  | 'mission';
 
 export interface ShuffleMove {
   playerId: string;
@@ -161,6 +171,11 @@ function contractSeasons(rng: Rng): number {
 /** 付完费用后，余额仍能覆盖（现有工资 + 新增工资）× budgetRounds 回合 */
 function canAfford(state: GameState, team: Team, fee: number, salary: number): boolean {
   return team.gold - fee >= (roundWageBill(state, team.id) + salary) * S().budgetRounds;
+}
+
+/** 选手是 team 的使命成员（留人加成；missions.ts） */
+function isOwnMission(w: World, p: Player, teamId: string): boolean {
+  return isMissionPlayerOf(w.state, p.id, teamId);
 }
 
 function isNotable(w: World, p: Player): boolean {
@@ -311,7 +326,8 @@ function replaceOrder(w: World, team: Team): string[] {
     const loyalty = effectiveAttr(p, 'loyalty');
     const tenure = Math.max(0, ti - (p.joinedSeason ?? ti));
     const sticky = Math.min(c.tenureMax, tenure * c.tenureStep * (rel >= c.coreRatio ? 1 : 0.5))
-      + (loyalty >= c.highLoyalty ? c.highLoyaltySticky : 0);
+      + (loyalty >= c.highLoyalty ? c.highLoyaltySticky : 0)
+      + (isOwnMission(w, p, team.id) ? CONFIG.missions.replaceSticky : 0);
     const score = c.weakness * (1 - rel)
       + c.ageStep * Math.max(0, age - c.ageFrom + 1)
       + c.lowLoyalty * Math.max(0, (50 - loyalty) / 50)
@@ -397,8 +413,10 @@ function buildListings(w: World): void {
     }
     for (const p of roster) {
       const loyalty = effectiveAttr(p, 'loyalty');
+      // 使命成员：各类挂牌概率 × missions.listMult（留人）
+      const keepMult = isOwnMission(w, p, team.id) ? CONFIG.missions.listMult : 1;
       if (loyalty < CONFIG.loyalty.leaveThreshold) {
-        if (rng.chance(c.lowLoyaltyLeaveChance)) addListing(w, p, team.id, 'loyalty', c.feeLoyalty, true);
+        if (rng.chance(c.lowLoyaltyLeaveChance * keepMult)) addListing(w, p, team.id, 'loyalty', c.feeLoyalty, true);
         continue;
       }
       const pos = starterPos(team, p.id);
@@ -414,7 +432,8 @@ function buildListings(w: World): void {
           * Math.min(1, c.ambitionFloor + (gap - c.ambitionMinGap) / Math.max(0.01, c.ambitionGapSpan))
           * (1 + c.ambitionUnhappyBoost * Math.max(0, -ctx.sat))
           * loyalF
-          * (1 - coreSticky);
+          * (1 - coreSticky)
+          * keepMult;
         if (rng.chance(chance)) {
           addListing(w, p, team.id, 'ambition', c.feeAmbition, true, { max: Math.max(1, ctx.rank - c.ambitionMinRankGain) });
           continue;
@@ -423,7 +442,7 @@ function buildListings(w: World): void {
       // 强队（战力前 challengeTopRank）的明星：去同档的争冠队也算「新挑战」，否则只去更强的队
       const top = ctx.rank <= c.challengeTopRank;
       const starBuyers = { max: Math.max(1, ctx.rank - 1, top ? c.challengeBuyerRank : 0) };
-      if (ctx.unhappy && pPct <= c.unhappyStarShare && rng.chance(c.unhappyStarChance * (1 - coreSticky))) {
+      if (ctx.unhappy && pPct <= c.unhappyStarShare && rng.chance(c.unhappyStarChance * (1 - coreSticky) * keepMult)) {
         addListing(w, p, team.id, top ? 'challenge' : 'ambition', c.feeAmbition, true, starBuyers);
         continue;
       }
@@ -434,7 +453,8 @@ function buildListings(w: World): void {
           + (p.contractUntil <= w.ti ? c.challengeContractBonus : 0)
           + Math.min(c.challengeTenureMax, c.challengeTenureStep * Math.max(0, tenure - c.challengeTenureFrom)))
           * (loyalty >= c.highLoyalty ? c.challengeLoyalMult : 1)
-          * (ctx.champion ? c.challengeChampionMult : 1);
+          * (ctx.champion ? c.challengeChampionMult : 1)
+          * keepMult;
         if (rng.chance(chance)) {
           addListing(w, p, team.id, 'challenge', c.feeAmbition, true, starBuyers);
           continue;
@@ -442,7 +462,7 @@ function buildListings(w: World): void {
       }
       // 老将下放：只去战力更弱的队（二线队）
       if (ageOf(state, p) >= c.veteranAge && ctx.rank <= c.veteranTopRank && p.id !== bestId
-        && rng.chance(c.veteranStepDownChance)) {
+        && rng.chance(c.veteranStepDownChance * keepMult)) {
         addListing(w, p, team.id, 'veteran', c.feeVeteran, false, { min: ctx.rank + 1 });
       }
     }
@@ -450,7 +470,7 @@ function buildListings(w: World): void {
     if (team.gold < 0 && rng.chance(c.distressSellChance)) {
       let pick: Player | null = null;
       for (const p of roster) {
-        if (!starterPos(team, p.id) || w.listings.has(p.id)) continue;
+        if (!starterPos(team, p.id) || w.listings.has(p.id) || isOwnMission(w, p, team.id)) continue;
         if (!pick || p.salary > pick.salary) pick = p;
       }
       if (pick) addListing(w, pick, team.id, 'distress', c.feeDistress, false);
@@ -599,6 +619,7 @@ function maybeDisband(w: World, report: ShuffleReport): void {
     coachId: null,
     points: 0,
     lastSeasonRank: old.lastSeasonRank,
+    founded: { ti: w.ti, kind: 'fictional' }, // 第十波 #2：DotaPedia 信息框显示成立赛季
   };
   state.teams[id] = team;
 
@@ -747,6 +768,7 @@ function findCandidate(
     const accept = c.poachAccept
       + (seller.unhappy ? c.poachAcceptUnhappy : 0)
       - (sellerBest ? c.poachStarPenalty : 0)
+      - (isOwnMission(w, p, seller.team.id) ? CONFIG.missions.poachPenalty : 0)
       + ((50 - effectiveAttr(p, 'loyalty')) / 100) * c.poachLoyaltyFactor;
     if (rng.chance(clamp(accept, 0, 1))) return { p, source: 'poach', fee, reason: 'poach', will };
   }
@@ -758,15 +780,25 @@ function findCandidate(
  * AI 阵容满员时腾位：放走最弱的非首发（优先已挂牌的冗余选手）。本窗口刚引进的选手不放（避免刚签下就解约）；
  * 无人可放时返回 false（放弃这笔引援）。
  */
-function makeRoom(w: World, team: Team): boolean {
+function makeRoom(w: World, team: Team, forMission = false): boolean {
   const { state } = w;
-  const roster = regular(state, team.id);
-  if (roster.length < CONFIG.ai.maxRoster) return true;
-  const bench = roster.filter((p) => !starterPos(team, p.id) && !w.movedIds.has(p.id));
-  if (!bench.length) return false;
-  bench.sort((a, b) => (w.listings.has(b.id) ? 1 : 0) - (w.listings.has(a.id) ? 1 : 0)
-    || overallRating(a) - overallRating(b) || (a.id < b.id ? -1 : 1));
-  releasePlayer(w, team, bench[0], 'surplus');
+  // 俱乐部使命：使命成员最后才放；为引进使命成员腾位时也可以放走非使命首发（位置调整），阵容超员时连续腾位
+  for (let guard = 0; guard < CONFIG.ai.maxRoster + 6; guard++) {
+    const roster = regular(state, team.id);
+    if (roster.length < CONFIG.ai.maxRoster) return true;
+    const all = roster.filter((p) => !starterPos(team, p.id) && !w.movedIds.has(p.id));
+    const nonMission = all.filter((p) => !isOwnMission(w, p, team.id));
+    let bench = nonMission.length ? nonMission : all;
+    if (forMission && !nonMission.length) {
+      const starters = roster.filter((p) => !!starterPos(team, p.id) && !w.movedIds.has(p.id) && !isOwnMission(w, p, team.id));
+      if (starters.length) bench = starters;
+    }
+    if (!bench.length) return false;
+    bench.sort((a, b) => (w.listings.has(b.id) ? 1 : 0) - (w.listings.has(a.id) ? 1 : 0)
+      || overallRating(a) - overallRating(b) || (a.id < b.id ? -1 : 1));
+    releasePlayer(w, team, bench[0], 'surplus');
+    if (!forMission) return regular(state, team.id).length < CONFIG.ai.maxRoster;
+  }
   return regular(state, team.id).length < CONFIG.ai.maxRoster;
 }
 
@@ -786,7 +818,7 @@ function acquire(w: World, ctx: TeamCtx, cand: Candidate, replaced: Player | nul
   const { state, rng } = w;
   const team = ctx.team;
   const p = cand.p;
-  if (!makeRoom(w, team)) return false;
+  if (!makeRoom(w, team, cand.reason === 'mission')) return false;
   const fromId = p.teamId;
   let move: ShuffleMove;
   if (cand.source === 'listing' || cand.source === 'poach') {
@@ -849,6 +881,7 @@ function processTeam(w: World, ctx: TeamCtx, lastPass: boolean): boolean {
     const cur = starterAt(state, team, pos);
     if (!cur || cur.position !== pos) continue; // 已在步骤 1 处理
     if (w.movedIds.has(cur.id)) continue; // 本窗口已引进新援补上（不再替换刚签下的选手）
+    if (lineupPriorityLocks(state, team.id, cur, pos)) continue; // 首发优先级锁定（顶上的是使命 / 巅峰选手）：引进的人只会坐替补
     const cand = findCandidate(w, ctx, pos, playerRating(cur, pos), S().minGainNormal, false, true);
     if (cand && acquire(w, ctx, cand, cur)) {
       acted = true;
@@ -864,6 +897,7 @@ function processTeam(w: World, ctx: TeamCtx, lastPass: boolean): boolean {
     if (!p || p.teamId !== team.id) continue;
     const pos = starterPos(team, p.id);
     if (!pos) continue;
+    if (lineupPriorityLocks(state, team.id, p, pos)) continue; // 使命 / 巅峰选手打本位置：autoLineup 仍会让他首发，不换
     attempts++;
     const cand = findCandidate(w, ctx, pos, playerRating(p, pos), ctx.minGain, false, true);
     if (!cand || !acquire(w, ctx, cand, p)) continue;
@@ -871,6 +905,52 @@ function processTeam(w: World, ctx: TeamCtx, lastPass: boolean): boolean {
     acted = true;
   }
   return acted;
+}
+
+/**
+ * 俱乐部使命（第十波 #3，missions.ts）：明星去向之前，AI 使命俱乐部按战力排名先后引进缺失的使命成员（每队至多 missions.maxBuys.shuffle 名）。
+ * 自由身 → 签下；其他 AI 战队 → 溢价求购（已挂牌的直接按挂牌成交，否则卖家按 missionSellChance 放人）；人类玩家战队的成员不在此处理（见 humanInterest 的报价）。
+ * 同位置的非使命首发被顶下后挂牌（位置调整），卖家的空缺进入连锁补位。不受主动换人预算限制。
+ */
+function pursueMissions(w: World): void {
+  if (!missionsEnabled()) return;
+  const { state, rng } = w;
+  const limit = Math.max(0, Math.floor(CONFIG.missions.maxBuys.shuffle ?? 0));
+  if (limit <= 0) return;
+  const minWill = CONFIG.ai.minWillingness;
+  const order = [...w.ctxs.values()].sort((a, b) => a.rank - b.rank || (a.team.id < b.team.id ? -1 : 1));
+  for (const ctx of order) {
+    const team = ctx.team;
+    if (team.disbanded || !missionInEffect(state, team.id)) continue;
+    let bought = 0;
+    for (const p of missionTargets(state, team.id)) {
+      if (bought >= limit) break;
+      if (p.teamId && w.movedIds.has(p.id)) continue; // 本窗口刚转会的选手不再搬动
+      const listing = p.teamId ? w.listings.get(p.id) : undefined;
+      const will = missionWillingness(state, p, team.id) + (listing?.wantsOut ? S().wantsOutWillingnessBonus : 0);
+      if (will < minWill) continue;
+      const salary = computeSalary(state, p);
+      let cand: Candidate;
+      if (!p.teamId) {
+        const fee = signingFee(state, p);
+        if (!missionCanAfford(state, team, fee, salary)) continue;
+        cand = { p, source: 'fa', fee, reason: 'mission', will: clamp(will, 0, 1) };
+      } else {
+        const seller = w.ctxs.get(p.teamId);
+        if (!seller || seller.team.disbanded) continue;
+        const fee = listing ? Math.max(listing.fee, roundFee(marketValue(state, p))) : missionBidFee(state, p, rng);
+        if (!missionCanAfford(state, team, fee, salary)) continue;
+        if (!listing && !rng.chance(missionSellChance(state, p, seller.team.id))) continue;
+        cand = { p, source: listing ? 'listing' : 'poach', fee, reason: 'mission', will: clamp(will, 0, 1) };
+      }
+      const cur = starterAt(state, team, p.position);
+      const replaced = cur && cur.position === p.position && !isOwnMission(w, cur, team.id) ? cur : null;
+      const before = w.moves.length;
+      if (!acquire(w, ctx, cand, replaced)) continue;
+      for (let i = before; i < w.moves.length; i++) if (w.moves[i].reason === 'mission') w.moves[i].notable = true;
+      bought++;
+    }
+  }
 }
 
 /**
@@ -897,13 +977,16 @@ function placeStars(w: World): void {
       if (ctx.team.id === l.sellerId || ctx.team.disbanded || ctx.starSigned || !buyerRankOk(l, ctx.rank)) continue;
       const cur = starterAt(state, ctx.team, p.position);
       if (cur && w.movedIds.has(cur.id)) continue;
+      if (lineupPriorityLocks(state, ctx.team.id, cur, p.position, p)) continue; // 该位置被首发优先级锁定，明星来了也只能坐替补
       const base = cur ? playerRating(cur, p.position) : 0;
       if (!(r > base * (1 + Math.max(c.starMinGain, ctx.minGain)))) continue;
       if (!canAfford(state, ctx.team, l.fee, salary)) continue;
       const will = playerWillingness(state, p.id, ctx.team.id) + c.wantsOutWillingnessBonus;
       if (will < minWill) continue;
       const gain = base > 0 ? r / base - 1 : 1;
-      opts.push({ ctx, cur, will, wt: (gain + 0.05) / Math.sqrt(Math.max(1, ctx.rank)) });
+      // 使命成员：本俱乐部更积极（权重 × missions.starWeightMult）
+      const missionMult = isMissionPlayerOf(state, p.id, ctx.team.id) ? CONFIG.missions.starWeightMult : 1;
+      opts.push({ ctx, cur, will, wt: ((gain + 0.05) / Math.sqrt(Math.max(1, ctx.rank))) * missionMult });
     }
     if (!opts.length) continue;
     const pick = rng.weighted(opts, opts.map((o) => o.wt));
@@ -957,10 +1040,11 @@ function cleanup(w: World): void {
     for (const l of [...w.listings.values()]) {
       if (l.sellerId !== team.id || (l.reason !== 'surplus' && l.reason !== 'veteran')) continue;
       const p = state.players[l.playerId];
-      if (!p || p.teamId !== team.id || starterPos(team, p.id)) continue;
+      if (!p || p.teamId !== team.id || starterPos(team, p.id) || isOwnMission(w, p, team.id)) continue;
       if (regular(state, team.id).length > c.keepRoster) releasePlayer(w, team, p, l.reason);
     }
-    for (const p of trimRoster(state, team.id, CONFIG.ai.maxRoster)) {
+    // 超员：先放走非使命替补（missions.missionAwareTrim），再按原规则裁剪
+    for (const p of [...missionAwareTrim(state, team.id, CONFIG.ai.maxRoster), ...trimRoster(state, team.id, CONFIG.ai.maxRoster)]) {
       if (p.status === 'active' && !p.teamId) w.fa.push(p);
       w.moves.push({ playerId: p.id, handle: p.handle, kind: 'release', fromTeamId: team.id, toTeamId: null, fee: 0, reason: 'surplus', notable: isNotable(w, p) });
     }
@@ -974,7 +1058,7 @@ function cleanup(w: World): void {
         const counts = new Map<Position, number>();
         for (const p of roster) counts.set(p.position, (counts.get(p.position) ?? 0) + 1);
         const dup = roster
-          .filter((p) => (counts.get(p.position) ?? 0) > 1 && !starterPos(team, p.id))
+          .filter((p) => (counts.get(p.position) ?? 0) > 1 && !starterPos(team, p.id) && !isOwnMission(w, p, team.id))
           .sort((a, b) => (w.movedIds.has(a.id) ? 1 : 0) - (w.movedIds.has(b.id) ? 1 : 0)
             || overallRating(a) - overallRating(b) || (a.id < b.id ? -1 : 1))[0];
         if (!dup) break;
@@ -1020,7 +1104,8 @@ function humanInterest(w: World, report: ShuffleReport): void {
       const salary = computeSalary(state, p);
       const fits = buyers.filter((b) => {
         const s = starterAt(state, b.team, p.position);
-        return (!s || playerRating(s, p.position) < r * c.humanOfferFit) && canAfford(state, b.team, fee, salary);
+        return (!s || playerRating(s, p.position) < r * c.humanOfferFit) && canAfford(state, b.team, fee, salary)
+          && !lineupPriorityLocks(state, b.team.id, s, p.position, p); // 首发优先级锁定的位置不求购（买来也只能坐替补）
       });
       if (!fits.length) continue;
       const buyer = rng.weighted(fits, fits.map((b) => 1 / b.rank)).team;
@@ -1039,8 +1124,50 @@ function humanInterest(w: World, report: ShuffleReport): void {
       );
     }
   }
+  missionOffersToHumans(w, report);
   // 离队申请：只给当前座位（pendingDecisions 是座位私有字段；多人模式下其余座位在各自上下文中调用 offseasonLeaveRequests）
   report.humanLeaveRequests += offseasonLeaveRequests(state);
+}
+
+/**
+ * 俱乐部使命（第十波 #3）：玩家战队里的使命成员只会收到报价（溢价，玩家在转会市场 → 报价中决定，可拒绝），从不强制带走。
+ * 每支玩家战队每个休赛期至多 1 份使命报价，按 missions.humanOfferChance 出手。
+ */
+function missionOffersToHumans(w: World, report: ShuffleReport): void {
+  if (!missionsEnabled()) return;
+  const mc = CONFIG.missions;
+  const { state, rng } = w;
+  const pending = new Set((state.transferOffers ?? []).filter((o) => o.status === 'pending').map((o) => o.playerId));
+  for (const team of activeTeams(state)) {
+    if (!team.isPlayer || team.disbanded) continue;
+    let sent = false;
+    for (const p of regular(state, team.id)) {
+      if (sent) break;
+      if (p.transferListing || pending.has(p.id)) continue;
+      for (const org of peakOrgsOfPlayer(p.id)) {
+        const buyer = orgTeam(state, org);
+        if (!buyer || buyer.id === team.id || !w.ctxs.has(buyer.id) || !missionInEffect(state, buyer.id)) continue;
+        if (!rng.chance(mc.humanOfferChance)) continue;
+        const [a, b] = mc.humanOfferFee;
+        const value = marketValue(state, p);
+        const fee = roundFee(value * rng.range(Math.min(a, b), Math.max(a, b)));
+        if (fee <= 0 || !missionCanAfford(state, buyer, fee, computeSalary(state, p))) continue;
+        const offer = createTransferOffer(state, p, buyer, fee, false);
+        pending.add(p.id);
+        report.humanOffers++;
+        postNews(
+          state,
+          `【报价】${buyer.name} 求购 ${p.handle}`,
+          `${buyer.name} 希望重组 TI${org.peak?.ti ?? ''} 巅峰阵容，开出 ${formatGold(offer.fee)} 求购 ${team.name} 的 ${p.handle}（身价约 ${formatGold(value)}），`
+            + `并承诺工资 ${formatGold(offer.salary)}/回合。是否放人由你决定：请在 转会市场 → 报价 中回应（${CONFIG.market.offerExpireRounds} 回合内有效）。`,
+          true,
+          [team.id, buyer.id], [p.id], ['transfer', 'mission'],
+        );
+        sent = true;
+        break;
+      }
+    }
+  }
 }
 
 /** 联盟首发评分百分位（0 = 最强；全部未解散战队的首发） */
@@ -1127,6 +1254,7 @@ const REASON_NOTE: Partial<Record<ShuffleReason, (h: string, from: string) => st
   distress: (_h, from) => `${from} 因资金紧张出售选手。`,
   poach: (_h, from) => `买家开出高于身价的转会费，${from} 最终放人。`,
   disband: (h, from) => `${from} 解散后，${h} 随核心班底加盟新组织。`,
+  mission: (h) => `${h} 是新东家现实巅峰阵容的成员，引进他是俱乐部使命的一部分。`,
 };
 
 function moveNews(w: World, m: ShuffleMove): void {
@@ -1262,6 +1390,7 @@ export function offseasonShuffle(state: GameState): ShuffleReport | null {
   buildListings(w);
   report.rumors = postRumors(w);
   maybeDisband(w, report);
+  pursueMissions(w);
   placeStars(w);
   runMarket(w);
   cleanup(w);
@@ -1286,5 +1415,7 @@ export function offseasonShuffle(state: GameState): ShuffleReport | null {
   const keep = new Set(notable);
   for (const m of w.moves) if (keep.has(m)) moveNews(w, m);
   if (w.moves.length) summaryNews(w, report);
+  // 俱乐部使命的进度在紧随其后的 AI 季前窗口（ai.aiTransferWindow）结束时统一刷新（missions.refreshMissions）：
+  // 转会潮与季前窗口是同一个休赛期窗口，只在窗口结束时判定「集齐」，避免成员在两段之间离队又被买回时误发「再次集齐」新闻
   return report;
 }

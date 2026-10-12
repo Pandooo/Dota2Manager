@@ -1408,6 +1408,7 @@ export function pediaRecords(state: GameState): PediaRecordRow[] {
 function teamStatus(team: Team | undefined): { status: PediaTeamPage['status']; label: string } {
   if (!team) return { status: 'unknown', label: '已不在联赛' };
   if (team.banned) return { status: 'banned', label: `因全员假赛被除名（TI${team.banned.season}）` };
+  if (team.bankrupt) return { status: 'disbanded', label: `已破产（TI${team.bankrupt.season}）` }; // 第十波 #1（bankruptcy.ts）
   if (team.disbanded) return { status: 'disbanded', label: '已解散' };
   return { status: 'active', label: '现役' };
 }

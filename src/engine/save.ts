@@ -4,6 +4,7 @@ import type { GameState } from './types';
 import { POSITIONS } from './types';
 import { SAVE_VERSION } from './config';
 import { stripLegacyGameBoxes } from './stats';
+import { migrateTransferListings } from './squadOps';
 
 export interface SaveMeta {
   slot: string;               // 'auto' | '1' | '2' | '3' ...
@@ -259,6 +260,8 @@ export function importSave(json: string): GameState {
   const state = normalizeState(data as unknown as GameState);
   // 旧存档（DotaPedia 统计格式 v1）的逐局个人 K/D/A（GameRecord.box）不再存储：读档即清除
   stripLegacyGameBoxes(state);
+  // 旧存档的「3 个转会回合」挂牌：按已经过的回合迁移到整赛季挂牌期（squadOps.migrateListing，幂等）
+  migrateTransferListings(state);
   // 未来的存档迁移在这里按 version 逐级处理
   state.version = SAVE_VERSION;
   return state;

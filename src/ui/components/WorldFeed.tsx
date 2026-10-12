@@ -6,6 +6,7 @@ import { useCallSilent, useGame, useGameStore } from '../../store/gameStore';
 import type { GameState, NewsItem } from '../../engine/types';
 import { worldHeadlines } from '../../engine/newsroom';
 import { Badge, Card, EmptyState, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { NEWS_CATEGORY_LABEL, NEWS_CATEGORY_STYLE, roundLabel } from './ShellKit';
 
 // ---------------------------------------------------------------------------
@@ -44,7 +45,7 @@ export function NewsChips({
             t.disbanded && 'line-through opacity-60',
           )}
         >
-          <span className="inline-block h-2 w-2 rounded-sm" style={{ background: t.color || '#888' }} />
+          <TeamEmblem tag={t.tag || t.name} color={t.color || '#888888'} teamId={t.id} />
           <span className="font-semibold tracking-wide">{t.tag || t.name}</span>
         </button>
       ))}

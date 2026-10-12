@@ -557,7 +557,8 @@ async function runOnce(seed: number): Promise<{ result: RunResult; state: GameSt
   if (PER_SEASON) {
     console.log('== 结束');
     if (state.gameOver) {
-      console.log(`结局：${state.gameOver.reason === 'completed' ? '执教期满' : state.gameOver.reason === 'banned' ? '全员假赛除名' : '俱乐部解散'}`);
+      console.log(`结局：${state.gameOver.reason === 'completed' ? '执教期满' : state.gameOver.reason === 'banned' ? '全员假赛除名'
+        : state.gameOver.reason === 'bankrupt' ? '俱乐部破产' : '俱乐部解散'}`);
       console.log(state.gameOver.summary);
     } else {
       console.log(`未结束（步数 ${steps}，阶段 ${state.phase}，回合 ${state.roundIndex}）`);
@@ -579,7 +580,7 @@ async function runOnce(seed: number): Promise<{ result: RunResult; state: GameSt
 // 汇总
 // ---------------------------------------------------------------------------
 const ENDING_LABEL: Record<RunResult['ending'], string> = {
-  completed: '期满', disbanded: '解散', banned: '全员禁赛', stuck: '卡住', unfinished: '未完',
+  completed: '期满', disbanded: '解散', banned: '全员禁赛', bankrupt: '破产', stuck: '卡住', unfinished: '未完',
 };
 
 function runLine(r: RunResult): string {
@@ -651,6 +652,7 @@ function aggregate(results: RunResult[]) {
     runs: n,
     completed: count('completed'),
     disbanded: count('disbanded'),
+    bankrupt: count('bankrupt'),
     stuck: count('stuck'),
     unfinished: count('unfinished'),
     disbandRate: n ? count('disbanded') / n : 0,
@@ -675,7 +677,7 @@ function printAggregate(agg: ReturnType<typeof aggregate>): void {
     `== 汇总：${agg.runs} 局 · TI${START_TI} 起 ${SEASONS} 季 · ${teamLabel} · 难度 ${DIFFICULTY} · 种子 ${SEED}..${SEED + agg.runs - 1}`,
   );
   console.log(
-    `结局 期满 ${agg.completed} · 解散 ${agg.disbanded}（解散率 ${pct(agg.disbandRate)}）`
+    `结局 期满 ${agg.completed} · 解散 ${agg.disbanded}（解散率 ${pct(agg.disbandRate)}）· 破产 ${agg.bankrupt}`
       + (agg.stuck ? ` · 卡住 ${agg.stuck}` : '') + (agg.unfinished ? ` · 未完 ${agg.unfinished}` : '')
       + ` · 平均完成 ${agg.avgSeasonsCompleted.toFixed(2)} 季`,
   );

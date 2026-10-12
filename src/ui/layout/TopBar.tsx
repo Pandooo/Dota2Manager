@@ -8,7 +8,8 @@ import { Button, Modal, TeamTag, cx } from '../components/common';
 import SaveMenu, { useSaveStatus } from './SaveMenu';
 import MpPlayersStrip from '../components/MpPlayersStrip';
 import MpChat from '../components/MpChat';
-import { TiTopAccent } from '../components/TiTransition';
+import { TiAegisBadge, TiTopAccent } from '../components/TiTransition';
+import MusicControl from '../components/MusicControl';
 
 const PHASE_ROUND_LABEL: Record<string, string> = {
   ti_qualifier: 'TI 预选赛',
@@ -34,7 +35,7 @@ export default function TopBar() {
       <button className="flex cursor-pointer items-center gap-2 pr-1 text-left" onClick={() => setView('dashboard')} title="回到总览">
         <div className="grid h-8 w-8 place-items-center rounded-md bg-dota text-sm font-black text-white">D2</div>
         <div className="text-sm font-semibold leading-tight">
-          <TeamTag color={team.color} tag={team.tag} /> <span className="ml-1 text-mute">{team.name}</span>
+          <TeamTag color={team.color} tag={team.tag} teamId={team.id} /> <span className="ml-1 text-mute">{team.name}</span>
         </div>
       </button>
 
@@ -44,6 +45,8 @@ export default function TopBar() {
         <span className="text-mute">{roundText}</span>
       </div>
 
+      {/* TI 预选 / 正赛回合：冠军盾徽记（单机绝对居中；多人排在玩家条之前） */}
+      <TiAegisBadge />
       {multi && <MpPlayersStrip className="flex-1" />}
 
       <div className={cx('flex items-center gap-4', multi ? 'shrink-0' : 'ml-auto')}>
@@ -55,6 +58,8 @@ export default function TopBar() {
           <div className="text-[11px] text-faint">荣誉</div>
           <div className={cx('text-sm font-bold tabular', team.honor < 50 ? 'text-bad' : 'text-ink')}>{Math.round(team.honor)}</div>
         </button>
+        {/* 背景音乐（第十波 #6）：开关 / 音量 / 音源 */}
+        <MusicControl />
         {multi ? (
           <MpTopActions />
         ) : (

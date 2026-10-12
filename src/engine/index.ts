@@ -30,6 +30,7 @@ export { econIndex, econ, roundWageBill, extraTrainingCost, scrimCost } from './
 export {
   awardedPrizePool, awardedPrize, payoutShare, tournamentAppearanceFee, qualifierAppearanceFee,
   realClubStartingFunds, newClubStartingFunds, estimateNewClubStartingFunds, estimateNewClubStart, newClubGachaGrant,
+  eraFundsFactor, realClubWealth, seedTeamWageBill, seedTeamStartingFunds,
 } from './economy';
 export {
   roundRevenue, sponsorContract, sponsorQuote, streamingIncome, activeMerchBoosts, seasonProjection, remainingPaidRounds,
@@ -52,8 +53,10 @@ export {
   squadRoundKey, raiseSalary, raiseSalaryPreview, talkToPlayer, talkSuccessChance, talkedThisRound, teamBuilding,
   teamBuildingCost, teamBuildingDoneThisRound, activeListing, listedPlayers, listingPriceRange, listingOffers,
   listPlayerForTransfer, listPlayersForTransfer, unlistPlayer, listingBidOutlook, processTransferListings,
+  LISTING_RULE_VERSION, listingRoundsPerSeason, listingDurationRounds, listingDurationLabel, listingProgress, migrateListing,
+  migrateTransferListings, listingStaleFactor, listingRoundStatus, listingClock, listingListedAtLabel,
 } from './squadOps';
-export type { RaisePreview, ListingBidOutlook } from './squadOps';
+export type { RaisePreview, ListingBidOutlook, ListingProgress, ListingRoundStatus } from './squadOps';
 // 薪资情绪（只导出定性信息；隐藏的预期薪资数值不在界面展示）
 export {
   SALARY_MOOD_LABEL, OVERALL_MOOD_LABEL, playerSalaryMood, playerMoodSummary, renewalAsk, salaryMoodOf,
@@ -105,3 +108,19 @@ export type {
   PediaTournamentPage, PediaHeroRow, PediaSearchHit,
 } from './pedia';
 export { pediaOf, pediaEnabled, PEDIA_VERSION, stripLegacyGameBoxes } from './stats';
+// 俱乐部品牌变迁（第十波 #4；只读查询：品牌沿革、队徽辅色、同一组织的战队 id。套用由 season.startSeason 自动完成）
+export { brandOrgs, brandOrgOf, brandEraAt, brandColor2For, brandHistoryOf, sameOrgTeamIds } from './branding';
+export type { BrandEra, BrandOrg } from './branding';
+// 羁绊（第十波 #5；只读查询：羁绊图鉴、战队页 / 阵容页的激活羁绊。同步由引擎在阵容变化与每回合自动完成，无玩家操作）
+export {
+  allSynergies, synergyCatalog, synergyProgress, teamSynergies, synergyBonusText, synergyLockedHint, synergiesOfPlayer,
+  SYNERGY_ATTR_LABEL, SYNERGY_KIND_LABEL, SYNERGY_SOURCE_PREFIX,
+} from './synergy';
+export type { SynergyCatalogEntry, SynergyMemberView, TeamSynergyView } from './synergy';
+// 破产（第十波 #1；只读查询，总览「待处理」倒计时 / 结算页使用）
+export { bankruptcyStatus, bankruptcyCountdownText, bankruptcyReasonText, bankruptcyRules, debtLimitOf } from './bankruptcy';
+export type { BankruptcyStatus } from './bankruptcy';
+// 新俱乐部涌现 / 俱乐部使命（第十波 #2 #3；只读查询：DotaPedia 战队页「使命」、成立记录。成立与使命引进由引擎在赛季初 / 转会窗口自动完成，无玩家操作）
+export { foundingOf, leagueSize, leagueSizeRange } from './clubs';
+export { clubMissionView, MISSION_STATUS_LABEL } from './missions';
+export type { ClubMissionView, ClubMissionMember, MissionMemberStatus } from './missions';

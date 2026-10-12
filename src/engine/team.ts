@@ -2,6 +2,7 @@
 import { CONFIG, POSITION_LABEL } from './config';
 import { computeSalary, effectiveAttr, isAvailable, overallRating, playerRating } from './player';
 import { rngOf } from './rng';
+import { aiLineupPriority } from './lineupPriority';
 import type { Coach, GameState, InMatchEvent, Player, Position, Team } from './types';
 import { POSITIONS } from './types';
 
@@ -63,7 +64,9 @@ function canPlayFor(p: Player, tournamentId?: string | null): boolean {
 /**
  * 自动排首发：优先本位置评分最高者，其次用跨位置评分填补空位。
  * tournamentId 给出时排除无法参加该赛事的选手。
- * 实现：在候选（≤10 人）上对 5 个位置做带剪枝的全排列搜索，使首发 playerRating 之和最大。
+ * AI 战队先按首发优先级（lineupPriority.aiLineupPriority：使命选手 → 巅峰选手）把优先选手排在各自的本位置
+ * （同一位置先比优先级、再比综合评分，落选者回到候选中按评分竞争其余位置），其余位置再按评分排；人类玩家战队只按评分。
+ * 实现：在候选（≤10 人）上对剩余位置做带剪枝的全排列搜索，使首发 playerRating 之和最大（有可出场的选手时不留空位）。
  */
 export function autoLineup(state: GameState, teamId: string, tournamentId?: string | null): void {
   const team = state.teams[teamId];
@@ -74,10 +77,23 @@ export function autoLineup(state: GameState, teamId: string, tournamentId?: stri
   // 稳定排序：综合评分降序，同分按 id，保证结果确定
   cands.sort((a, b) => overallRating(b) - overallRating(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
+  // AI 首发优先级：优先选手（已按评分降序）按优先级稳定排序后依次占据本位置
+  const fixed = new Map<Position, Player>();
+  const prio = aiLineupPriority(state, teamId);
+  if (prio) {
+    const ranked = cands.filter((p) => prio.has(p.id)).sort((a, b) => prio.get(a.id)! - prio.get(b.id)!);
+    for (const p of ranked) if (POSITIONS.includes(p.position) && !fixed.has(p.position)) fixed.set(p.position, p);
+    if (fixed.size) {
+      const taken = new Set([...fixed.values()].map((p) => p.id));
+      cands = cands.filter((p) => !taken.has(p.id));
+    }
+  }
+  const open = fixed.size ? POSITIONS.filter((pos) => !fixed.has(pos)) : POSITIONS;
+
   if (cands.length > AUTO_LINEUP_MAX_CANDIDATES) {
-    // 剪枝：每个位置评分前 2 + 综合前若干
+    // 剪枝：每个（待排）位置评分前 2 + 综合前若干
     const keep = new Set<Player>();
-    for (const pos of POSITIONS) {
+    for (const pos of open) {
       cands
         .slice()
         .sort((a, b) => playerRating(b, pos) - playerRating(a, pos))
@@ -92,9 +108,9 @@ export function autoLineup(state: GameState, teamId: string, tournamentId?: stri
   }
 
   const n = cands.length;
-  const slots = POSITIONS.length;
-  // r[s][i]：候选 i 打位置 s 的评分
-  const r: number[][] = POSITIONS.map((pos) => cands.map((p) => playerRating(p, pos)));
+  const slots = open.length;
+  // r[s][i]：候选 i 打待排位置 s 的评分
+  const r: number[][] = open.map((pos) => cands.map((p) => playerRating(p, pos)));
   const slotMax = r.map((row) => (row.length ? Math.max(...row) : 0));
   // suffixMax[s] = Σ_{s' ≥ s} slotMax[s']（上界剪枝）
   const suffixMax = new Array<number>(slots + 1).fill(0);
@@ -129,7 +145,8 @@ export function autoLineup(state: GameState, teamId: string, tournamentId?: stri
   };
   dfs(0, 0, 0);
 
-  POSITIONS.forEach((pos, s) => {
+  for (const [pos, p] of fixed) team.lineup[pos] = p.id;
+  open.forEach((pos, s) => {
     const i = bestAssign[s];
     team.lineup[pos] = i >= 0 && i < n ? cands[i].id : null;
   });

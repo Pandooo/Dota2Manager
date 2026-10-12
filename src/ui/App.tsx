@@ -24,6 +24,8 @@ import Room from './screens/Room';
 import MpToastHost from './components/MpToasts';
 import MpOverlay from './components/MpOverlay';
 import TiTransition from './components/TiTransition';
+import MusicControl from './components/MusicControl';
+import { initBgm } from './audio/bgm';
 
 /** 侧栏 6 个中心页 + 独立的比赛页（中心页内的标签由各 Hub 根据 store.tab 渲染） */
 const VIEWS: Record<HubKey, () => React.JSX.Element> = {
@@ -58,6 +60,7 @@ function GameScreen() {
     return (
       <>
         <GameOver onSpectate={!gameOver && seatOut ? () => setSpectating(true) : undefined} />
+        <MusicControl floating />
         <PlayerModal />
         <TeamModal />
         {/* 结束时直接进入生涯总结：不再逐条弹出积压的回合通知（用户反馈：要点几十下才能清空） */}
@@ -103,6 +106,10 @@ export default function App() {
   useEffect(() => {
     useGameStore.getState().mpResumeIfNeeded();
   }, []);
+  // 背景音乐（第十波 #6）：首次用户交互后开始播放（自动播放策略）
+  useEffect(() => {
+    initBgm();
+  }, []);
   return (
     <div className="app-bg h-full">
       {screen === 'menu' && <MainMenu />}
@@ -110,6 +117,8 @@ export default function App() {
       {screen === 'lobby' && <Lobby />}
       {screen === 'room' && <Room />}
       {screen === 'game' && <GameScreen />}
+      {/* 非游戏界面没有顶栏：背景音乐控制固定在角落（主菜单右上角空着；新游戏 / 大厅 / 房间的右上角有返回按钮或玩家名 → 右下角） */}
+      {screen !== 'game' && <MusicControl floating={screen === 'menu' ? 'top' : 'bottom'} />}
       {/* 多人：提示宿主额外显示其他玩家的实时快讯；断线时显示重连遮罩 */}
       {multi ? <MpToastHost /> : <ToastHost />}
       {multi && <MpOverlay />}

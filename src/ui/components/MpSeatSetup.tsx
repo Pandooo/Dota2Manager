@@ -5,10 +5,11 @@
 // 已准备时锁定，取消准备后可修改。
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CONFIG, REGIONS, REGION_LABEL, tierOf, type Region, type RosterFile, type SeedTeam } from '../../engine';
+import { CONFIG, REGIONS, REGION_LABEL, estimateNewClubStart, formatGold, tierOf, type Region, type RosterFile, type SeedTeam } from '../../engine';
 import type { MpMode, NewClubSpec, RoomInfo, RoomSeat } from '../../shared/protocol';
 import { useGameStore } from '../../store/gameStore';
 import { Badge, Button, Card, EmptyState, Hint, PosBadge, RegionBadge, TeamTag, TierBadge, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { Spinner } from './ShellKit';
 import { MP_MODE_RULE, MP_SWATCHES, MpField, mpInputBase, mpInputCls } from './MpKit';
 
@@ -73,6 +74,7 @@ function ClubForm({ room, seat, seatIndex, locked, realTeams }: { room: RoomInfo
   const others = room.seats.filter((s) => s.seatKey !== seat.seatKey);
   const errs = clubErrors(draft, others, realTeams);
   const valid = !errs.name && !errs.tag;
+  const newClubStart = estimateNewClubStart(room.settings.startTi, room.settings.difficulty);
 
   // 服务器上的设置变化（重连、被重置）时同步到表单
   useEffect(() => {
@@ -156,12 +158,18 @@ function ClubForm({ room, seat, seatIndex, locked, realTeams }: { room: RoomInfo
         <div className="overflow-hidden rounded-xl border border-line bg-panel-2/60">
           <div className="h-14" style={{ background: `linear-gradient(120deg, ${draft.color}, transparent 85%)` }} />
           <div className="-mt-6 px-4 pb-4">
-            <div className="grid h-12 w-12 place-items-center rounded-xl border-2 border-panel text-base font-black tracking-wide text-white shadow-lg" style={{ background: draft.color }}>
-              <span className="drop-shadow">{(draft.tag || '??').slice(0, 3)}</span>
-            </div>
+            {/* 队徽预览（第十波 #4：与游戏内按简称 + 主色生成的队徽一致） */}
+            <TeamEmblem tag={draft.tag || '??'} color={draft.color} teamId={null} size={48} className="drop-shadow-lg" />
             <div className="mt-2 truncate text-base font-bold">{draft.name.trim() || '未命名俱乐部'}</div>
             <div className="text-xs text-mute">
               {draft.tag || 'TAG'} · {REGION_LABEL[draft.region]} · 初始荣誉 {CONFIG.team.newClubHonor}
+            </div>
+            {/* 与单机新建俱乐部同一函数的启动资金（economy.estimateNewClubStart → newClubStartingFunds；预览 = 实际） */}
+            <div className="mt-0.5 text-xs text-mute">
+              启动资金 <span className="tabular text-gold">{formatGold(newClubStart.funds)}</span>
+              {newClubStart.wagePerRound > 0 && (
+                <span className="text-faint">（约为初始阵容 {Math.round(newClubStart.funds / newClubStart.wagePerRound)} 回合的工资）</span>
+              )}
             </div>
           </div>
         </div>
@@ -194,6 +202,8 @@ function TeamPicker({ room, seat, locked, roster }: { room: RoomInfo; seat: Room
       <div className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2 text-xs leading-relaxed text-mute">
         <span className="font-semibold text-gold">公平规则：</span>
         {MP_MODE_RULE.existing}
+        {/* 重置后的资金 = 新俱乐部启动资金（economy.newClubStartingFunds，与开局同一函数） */}
+        本局启动资金 <span className="tabular text-gold">{formatGold(estimateNewClubStart(room.settings.startTi, room.settings.difficulty).funds)}</span>。
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <input className={cx(mpInputBase, 'w-56 max-w-full py-1.5 text-xs')} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索战队 / 简称 / 选手" />

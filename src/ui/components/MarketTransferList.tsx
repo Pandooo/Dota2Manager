@@ -7,6 +7,7 @@ import {
   type Player, type Position, type Region, type Team, type Tier,
 } from '../../engine';
 import { Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { AttrNum, Field, Pager, Select, SortTh, TableWrap, TextInput, cmp, num, safe, usePaged, useSort } from './MarketKit';
 import MarketBidModal from './MarketBidModal';
 
@@ -172,7 +173,7 @@ export default function MarketTransferList({ windowOpen }: { windowOpen: boolean
                       </td>
                       <td>
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: r.team.color }} />
+                          <TeamEmblem tag={r.team.tag} color={r.team.color} teamId={r.team.id} />
                           <TeamLink teamId={r.team.id} name={r.team.tag} className="font-semibold" />
                           <span className="text-[10px] text-faint">{r.team.region}</span>
                         </span>

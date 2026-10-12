@@ -402,6 +402,8 @@ describe('autoRound · 多人座位自动准备', () => {
     const ai = Object.values(g.teams).filter((x) => !x.isPlayer && !x.disbanded && x.playerIds.length >= 5).slice(0, 2).map((x) => x.id);
     // 两支 AI 战队实力极弱：A 晋级决赛后要等 B 的半决赛结果（决赛对手未定）
     for (const id of ai) for (const pid of g.teams[id].playerIds) Object.assign(g.players[pid], { power: 1, mmr: 1000, insight: 1 });
+    // A 必须赢下半决赛：BP 胜率有下限（单局仍有约 20% 爆冷），把 A 的阵容拉满，使用例不依赖种子与联赛中其他比赛的随机序列
+    for (const pid of g.teams[A].playerIds) Object.assign(g.players[pid], { power: 100, mmr: 15000, insight: 100 });
     const t = makeTournament(g, 'test-auto-wait', [A, B, ...ai]);
     const ra = M.setSeatReady(g, A, true, { auto: true });
     expect(ra.ok).toBe(true);

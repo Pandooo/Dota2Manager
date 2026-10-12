@@ -612,6 +612,7 @@ export function recordLegacyPartial(state: GameState, teamId: string, ending: Ga
 export function legacyEndingOf(state: GameState, teamId: string): GameOverReason {
   const team = state.teams[teamId];
   if (team?.banned) return 'banned';
+  if (team?.bankrupt) return 'bankrupt'; // 第十波 #1（bankruptcy.ts）
   const log = state.legacyLog?.[teamId];
   const frozen = Array.isArray(log) ? log.find((r) => r?.ending)?.ending : undefined;
   if (frozen) return frozen;
@@ -816,6 +817,18 @@ function epilogueOf(
         ? `${recs.length} 个赛季里赢下的 ${trophies} 座冠军奖杯${stats.tiTitles.length ? `（含 ${stats.tiTitles.length} 座不朽盾）` : ''}，从此蒙上无法洗去的污点。`
         : `${recs.length} 个赛季的努力就此付诸东流。`,
       `传奇值按 ${Math.round(mult * 100)}% 折算。`,
+    ];
+  }
+  if (ending === 'bankrupt') {
+    // 第十波 #1（bankruptcy.ts）：资金持续为负 / 负债过高
+    const b = team?.bankrupt;
+    return [
+      b
+        ? `TI${b.season} 赛季第 ${b.round} 回合（${b.date}），${name} ${b.rule === 'debt'
+          ? `负债 ${formatGold(Math.abs(b.gold))} 超过 ${CONFIG.bankruptcy.debtWageRounds} 个回合的工资`
+          : `资金连续 ${b.negativeRounds} 个回合为负`}，无力偿还债务，宣告破产。`
+        : `资金链断裂，${name} 在 TI${lastTi} 赛季宣告破产。`,
+      trophies ? `留下的 ${trophies} 座冠军奖杯，是这支队伍存在过的证明。` : '没有奖杯，资金链断裂后俱乐部无以为继。',
     ];
   }
   if (ending === 'disbanded') {

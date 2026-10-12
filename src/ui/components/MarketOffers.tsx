@@ -5,6 +5,7 @@ import {
   type GameState, type Player, type TransferOffer,
 } from '../../engine';
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { ConfirmButton } from './ConfirmPopover';
 import { TableWrap, num, safe } from './MarketKit';
 
@@ -20,7 +21,7 @@ function TeamCell({ g, id }: { g: GameState; id: string }) {
   if (!t) return <span className="text-faint">未知战队</span>;
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: t.color }} />
+      <TeamEmblem tag={t.tag} color={t.color} teamId={t.id} />
       <TeamLink teamId={t.id} name={t.name} className="font-medium" />
     </span>
   );

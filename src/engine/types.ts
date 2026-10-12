@@ -261,6 +261,12 @@ export interface Player {
   /** 挂牌转会状态（仅玩家战队选手；squadOps.listPlayerForTransfer） */
   transferListing?: TransferListing;
   /**
+   * 撤牌记忆（squadOps.unlistPlayer 写入）：撤牌时的挂牌时钟（listingRules.listingClock）与已经历的出价机会次数；
+   * 在 CONFIG.squadOps.relistStaleMemorySeasons 个赛季的转会回合内重新挂牌时沿用（挂牌过久的衰减不因撤牌 / 重挂而重置）。
+   * 重新挂牌、离队、退役时清除。
+   */
+  listingStaleMemo?: { clock: number; rolls: number };
+  /**
    * 隐藏的跨赛季趋势（-1..1，form.ts 每赛季初更新；缺失 = 0）：负值 → 衰退期延续、成长放缓；
    * 正值 → 成长加快（年轻选手的爆发赛季）。不在界面直接展示。
    */
@@ -319,15 +325,21 @@ export interface SalaryTrack {
   /** 最近一次离队申请被挽留（加薪 / 谈话成功）的回合键：之后一段时间内不再提出离队申请 */
   retainKey?: number;
   /**
-   * 近期分到的赛事奖金（金币，第九波奖金分成；按赛季衰减，记录赛季 prizeTi 与所在战队 prizeTeamId）：
-   * 部分计入薪资满意度（salary.prizeSalaryCredit），换队后不再计入
+   * 近期分到的赛事奖金余额（金币，第九波奖金分成；2026-10-10 起按回合衰减：结算时的回合键 prizeRound = 赛季 × 100 + 回合，
+   * 旧存档只有赛季 prizeTi，按该赛季第 0 回合计；所在战队 prizeTeamId）：
+   * 按「余额 / 窗口回合数」全额计入薪资满意度（salary.prizeSalaryCredit），换队后不再计入
    */
   prizeEarned?: number;
   prizeTi?: number;
+  prizeRound?: number;
   prizeTeamId?: string;
 }
 
-/** 挂牌转会：等待 AI 俱乐部出价；roundsLeft 只在转会窗口开放的回合递减，归零且无待处理报价时自动解约（无补偿） */
+/**
+ * 挂牌转会：等待 AI 俱乐部出价，挂牌期一整个赛季（squadOps.listingDurationRounds）。
+ * roundsLeft 在每个常规赛回合结束时递减（赛季初没有回合结算；TI 预选 / 正赛转会锁定期间暂停），
+ * 归零且无待处理报价时：整个挂牌期无人报价 → 自动解约（无补偿）；收到过报价 → 挂牌结束、选手留队。
+ */
 export interface TransferListing {
   season: number;             // 挂牌时的赛季（TI 序号）
   listedRound: number;        // 挂牌时的回合
@@ -335,6 +347,12 @@ export interface TransferListing {
   askingPrice: number;        // 标价
   /** 挂牌期间是否收到过报价（收到过报价但未成交 → 挂牌结束、选手留队，不自动解约） */
   hadBids?: boolean;
+  /** 挂牌规则版本（squadOps.LISTING_RULE_VERSION）；缺失 = 旧存档的「3 个转会回合」挂牌，读档 / 回合结算时按已经过的回合迁移 */
+  v?: number;
+  /** 挂牌期总回合数（挂牌时按 CONFIG 计算并固定） */
+  totalRounds?: number;
+  /** 已经历的出价机会次数（超过 CONFIG.squadOps.listingFreshRolls 后，标价高于身价时报价意愿逐次衰减） */
+  bidRolls?: number;
 }
 
 export interface Coach {
@@ -361,12 +379,24 @@ export interface Lineup {
   HS: string | null;
 }
 
+/** 一次俱乐部品牌变化（第十波 #4，branding.ts；Team.brandHistory） */
+export interface TeamBrandChange {
+  /** 生效的赛季（TI 序号） */
+  season: number;
+  from: { name: string; tag: string; color: string };
+  to: { name: string; tag: string; color: string };
+  /** 事实说明（branding.json 的 note，中文） */
+  note?: string;
+}
+
 export interface Team {
   id: string;
   name: string;
   tag: string;
   region: Region;
   color: string;
+  /** 本局中的品牌沿革（第十波 #4，branding.ts：赛季开始时按真实历史更名 / 换配色；按时间升序，旧存档缺失） */
+  brandHistory?: TeamBrandChange[];
   honor: number;
   gold: number;
   isPlayer: boolean;
@@ -394,6 +424,10 @@ export interface Team {
   banned?: { season: number; round: number; date: string };
   /** 因全员假赛除名的俱乐部的补位新组织：被替换的战队 id（scandal.ts） */
   replacesTeamId?: string;
+  /** 开局之后才成立的俱乐部（第十波 #2，clubs.ts）：真实组织在现实首次出现的赛季加入联赛 / 偶尔成立的虚构新组织 */
+  founded?: TeamFounding;
+  /** 俱乐部使命进度（第十波 #3，missions.ts；AI 真实俱乐部组建现实巅峰阵容；旧存档缺失时首次刷新补齐） */
+  mission?: TeamMissionState;
   /**
    * 选手奖金分成比例 ∈ [0.5, 1]（第九波，prizeShare.ts）：赛事奖金的该比例分给队员，俱乐部拿剩余部分
    * （出场费与经常性收入全归俱乐部）。旧存档缺失时按默认值补齐（prizeShare.ensurePrizeShares）
@@ -407,6 +441,32 @@ export interface Team {
   prizeShareCutFrom?: number;
   /** 最近的奖金分成调整（最新在后，保留 CONFIG.prizeShare.logMax 条） */
   prizeShareLog?: PrizeShareChange[];
+  /**
+   * 资金连续为负的回合数（第十波 #1，bankruptcy.ts；只记人类战队）：回合结算后资金 < 0 时 +1，≥ 0 时清除。
+   * 达到 CONFIG.bankruptcy.rounds 即破产
+   */
+  negativeFundsRounds?: number;
+  /**
+   * 本轮连续为负期间（各回合结算时）的最高每回合工资（第十波 #1，bankruptcy.ts）：负债上限按「当前工资」与它的较高者计算，
+   * 避免负债期间裁员 / 解约降低工资后上限随之下降、反而立即触发破产；资金回正时与 negativeFundsRounds 一起清除
+   */
+  negativeFundsWageBill?: number;
+  /** 俱乐部破产（第十波 #1，bankruptcy.ts；同时 disbanded = true） */
+  bankrupt?: BankruptcyRecord;
+}
+
+/** 破产记录（Team.bankrupt） */
+export interface BankruptcyRecord {
+  season: number;             // TI 序号
+  round: number;
+  date: string;
+  /** 触发规则：rounds 资金连续为负达到上限 / debt 负债超过若干回合工资 */
+  rule: 'rounds' | 'debt';
+  /** 破产时的资金（负数）与每回合工资（选手 + 教练） */
+  gold: number;
+  wageBill: number;
+  /** 破产时资金已连续为负的回合数 */
+  negativeRounds: number;
 }
 
 /** 本回合的训练赛预约（Team.scrimBookings） */
@@ -972,8 +1032,11 @@ export interface ActiveMatch {
   games?: GameRecord[];
 }
 
-/** completed 生涯期满 / disbanded 荣誉跌破 0 解散 / banned 俱乐部全员假赛被永久禁赛（scandal.ts） */
-export type GameOverReason = 'completed' | 'disbanded' | 'banned';
+/**
+ * completed 生涯期满 / disbanded 荣誉跌破 0 解散 / banned 俱乐部全员假赛被永久禁赛（scandal.ts）/
+ * bankrupt 资金持续为负或负债过高而破产（bankruptcy.ts，第十波 #1）
+ */
+export type GameOverReason = 'completed' | 'disbanded' | 'banned' | 'bankrupt';
 
 // ---- 俱乐部全员假赛（scandal.ts；全局世界状态，非座位私有）----
 
@@ -1003,6 +1066,39 @@ export interface ClubBanRecord {
 export interface ClubScandalState {
   plans: ClubScandalPlan[];
   history: ClubBanRecord[];
+}
+
+// ---- 新俱乐部涌现 / 俱乐部使命（第十波 #2 #3：clubs.ts / missions.ts；全局世界状态，非座位私有）----
+
+/** 俱乐部成立记录（Team.founded） */
+export interface TeamFounding {
+  /** 成立的赛季（TI 序号） */
+  ti: number;
+  /** real = 真实组织（src/data/clubIndex.json）；fictional = 虚构新组织 */
+  kind: 'real' | 'fictional';
+  /** 真实组织 id（clubIndex.json 的 orgs[].id） */
+  orgId?: string;
+}
+
+/** 俱乐部使命进度（Team.mission）：使命目标（现实巅峰阵容）是静态数据，这里只记进度与里程碑 */
+export interface TeamMissionState {
+  /** 最近一次刷新时已在队的使命成员数（0..5） */
+  have: number;
+  /** 首次 / 最近一次集齐的赛季（TI 序号） */
+  firstCompletedTi?: number;
+  completedTi?: number;
+  /** 集齐状态下夺得的 TI（TI 序号，升序） */
+  tiTitles?: number[];
+}
+
+/** 新俱乐部涌现记录（GameState.clubFounding） */
+export interface ClubFoundingState {
+  /** 最近一次处理的赛季（TI 序号；同一赛季只处理一次） */
+  ti: number;
+  /** 历次成立（按时间） */
+  founded: { ti: number; teamId: string; kind: 'real' | 'fictional' }[];
+  /** 为给新俱乐部腾出联赛席位而解散的 AI 俱乐部（按时间） */
+  retired: { ti: number; teamId: string }[];
 }
 
 // ---- 生涯总结（legacy.ts；按战队记录的公开生涯档案，全局世界状态）----
@@ -1234,13 +1330,79 @@ export interface GameState {
   clubScandals?: ClubScandalState;
   /** 最近一次赛季教练供给记录（第九波 #3，coaches.ts；全局；旧存档可能缺失） */
   coachSupply?: CoachSupplyRecord;
+  /** 新俱乐部涌现（第十波 #2，clubs.ts；全局世界状态，非座位私有；旧存档缺失时按需创建） */
+  clubFounding?: ClubFoundingState;
   /** 生涯档案：人类战队 id → 各赛季记录（legacy.ts；全局公开数据，多人模式各座位视图都可读；旧存档可能缺失） */
   legacyLog?: Record<string, LegacySeasonRecord[]>;
   /** DotaPedia 统计（stats.ts 记录、pedia.ts 查询；全局公开数据，多人模式各座位视图共享；旧存档缺失时从下一局开始记录） */
   pedia?: PediaState;
+  /** 羁绊（第十波 #5，synergy.ts）：解锁记录 + 当前激活；全局公开数据（多人模式各座位共享，不进座位交换列表）；旧存档缺失时按需创建 */
+  synergies?: SynergyState;
 
   /** 多人对局（局域网，src/engine/multi.ts）；单机为空 */
   multiplayer?: MultiplayerInfo;
+}
+
+// ---------------------------------------------------------------------------
+// 羁绊（第十波 #5，src/engine/synergy.ts；定义数据 src/data/synergies.json 由 scripts/build-synergies.ts 生成）
+// ---------------------------------------------------------------------------
+
+/** 羁绊加成的属性（五种之一） */
+export type SynergyAttr = 'insight' | 'resilience' | 'talent' | 'power' | 'mmr';
+
+/** 一条羁绊定义（全局静态数据） */
+export interface SynergyDef {
+  /** 如 "ti6-wings-gaming" */
+  id: string;
+  /** champion = 历届 TI 冠军阵容；iconic = 少数标志性阵容 */
+  kind: 'champion' | 'iconic';
+  /** 届次（同一五人组多次夺冠时取最早一届） */
+  ti: number;
+  /** 该五人组夺冠（champion）/ 入选（iconic）的全部届次，升序 */
+  tis: number[];
+  /** 当届真实名次（iconic 用于展示，如 "2"、"4"） */
+  result?: string;
+  /** 当届 roster 中的战队 id、全名、简称、主色 */
+  clubId: string;
+  club: string;
+  short: string;
+  color: string;
+  /** 「TI6 · Wings 五人组」（修正器来源为「羁绊：{name}」） */
+  name: string;
+  attr: SynergyAttr;
+  /** 五名成员（当届 roster 的首发五人，位置各不相同） */
+  members: { id: string; handle: string; position: Position }[];
+  /** 属性选择理由（设计备注，不在界面显示） */
+  note: string;
+}
+
+/** 羁绊首次觉醒记录 */
+export interface SynergyUnlock {
+  ti: number;
+  round: number;
+  date: string;
+  teamId: string;
+  teamName: string;
+  /** 累计觉醒（激活）次数 */
+  count: number;
+}
+
+/** 当前激活的羁绊 */
+export interface SynergyActive {
+  teamId: string;
+  /** 本次激活的赛季 / 回合 */
+  ti: number;
+  round: number;
+  /** 已发放加成修正器的选手（同属性羁绊不叠加时为空） */
+  playerIds: string[];
+}
+
+/** 羁绊状态（GameState.synergies） */
+export interface SynergyState {
+  /** 已解锁（至少觉醒过一次）的羁绊：羁绊 id → 首次觉醒记录 */
+  unlocked: Record<string, SynergyUnlock>;
+  /** 当前激活：羁绊 id → 激活战队 */
+  active: Record<string, SynergyActive>;
 }
 
 /** 赛季教练供给记录（第九波 #3，coaches.seasonCoachSupply 在赛季初、新秀选秀之后生成） */

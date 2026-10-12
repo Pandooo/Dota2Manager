@@ -5,7 +5,7 @@ import {
   CONFIG, POSITIONS, POSITION_LABEL, ageOf, effectiveAttr, effectivePower, formatGold, heroById, heroName,
   isTransferWindowOpen, ladderMult, marketValue, overallRating, playerRating, playerTier, playerWillingness,
   rosterSigningBlock, rosterSigningNote, suggestedFee,
-  activeListing, listingBidOutlook, listingOffers, raiseSalaryPreview,
+  activeListing, listingBidOutlook, listingDurationLabel, listingListedAtLabel, listingOffers, listingProgress, listingRoundStatus, raiseSalaryPreview,
   talkSuccessChance, talkedThisRound,
   SALARY_MOOD_LABEL, playerMoodSummary, renewalAsk, draftedRookieReleaseBlock,
   developmentOutlook, GROWTH_OUTLOOK_HINT,
@@ -714,22 +714,25 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
   const price = roundFee(value * mult);
   const outlook = safe(() => listingBidOutlook(game, p.id, listing ? undefined : price), null);
   const offers = safe(() => listingOffers(game, p.id), []);
-  const nextPhase = game.season.rounds?.[game.roundIndex + 1]?.phase;
-  const paused =
-    game.phase === 'preseason' ? '赛季初不计时，开赛后开始倒计时'
-      : !windowOpen ? '转会窗口锁定中，倒计时暂停'
-        : nextPhase !== 'regular' && nextPhase !== 'preseason' ? '下回合转会窗口锁定，本回合不计时'
-          : '';
+  // 本回合结束时：是否计时 / 是否可能收到新报价（与引擎 processTransferListings 同一判定）
+  const status = safe(() => listingRoundStatus(game), { counts: windowOpen, bids: windowOpen, note: '' });
+  const durationLabel = safe(() => listingDurationLabel(), '一整个赛季');
   const rule = (
     <div className="mt-2 text-[11px] leading-relaxed text-faint">
-      挂牌后等待 {S.listingRounds} 个转会回合（每回合结束时计一次；赛季初、TI 阶段转会锁定期间不计时），其他俱乐部可能在回合结束时报价：标价越低、选手越抢手，越容易收到报价。
-      报价出现在「转会市场 → 我的挂牌 / 收到的报价」。
-      <span className="text-gold">若整个挂牌期都无人报价，到期自动解约成为自由选手（不支付解约补偿、不扣荣誉）；收到过报价但未成交，则挂牌结束、选手留队。</span>
+      挂牌期为{durationLabel}：每个常规赛回合结束时计一次（赛季初与 TI 阶段转会锁定期间不计时），在下赛季的同一时间点到期。
+      其他俱乐部可能在回合结束时报价：标价越低、选手越抢手，越容易收到报价；前 {S.listingFreshRolls} 次报价机会之后，标价高于身价的挂牌挂得越久，报价意愿越低（撤牌后不久重新挂牌，次数继续累计）。
+      报价出现在「转会市场 → 我的挂牌 / 收到的报价」；常规赛最后一回合结束后转会窗口锁定，未处理的报价作废。
+      <span className="text-gold">若整个挂牌期都没有收到任何报价，到期自动解约成为自由选手（不支付解约补偿、不扣荣誉）；收到过报价（含普通求购报价）但未成交，则挂牌期满后挂牌结束、选手留队。</span>
     </div>
   );
 
   if (listing) {
     const ratio = value > 0 ? listing.askingPrice / value : NaN;
+    const prog = safe(() => listingProgress(listing), { roundsLeft: listing.roundsLeft, totalRounds: listing.roundsLeft, bidRolls: 0 });
+    const left = prog.roundsLeft;
+    const noBidThisRound = !status.bids;
+    // 收到过报价：到期不会自动解约（挂牌结束、选手留队）
+    const safeAtExpiry = !!listing.hadBids;
     return (
       <Panel title={<span className="flex items-center gap-2">挂牌转会 <Chip tone="gold">挂牌中</Chip></span>}>
         <div className="grid grid-cols-3 gap-2 text-sm">
@@ -737,24 +740,45 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
             <Gold value={listing.askingPrice} />
             {Number.isFinite(ratio) && <span className="ml-1 text-[11px] text-faint">{Math.round(ratio * 100)}%</span>}
           </Info>
-          <Info label="剩余等待">
-            {listing.roundsLeft > 0 ? (
-              <span className={cx('font-semibold tabular', listing.roundsLeft <= 1 ? 'text-bad' : 'text-ink')}>
-                {listing.roundsLeft} 回合
+          <Info label="剩余挂牌期">
+            {left > 0 ? (
+              <span
+                className={cx('font-semibold tabular', left <= 1 && !safeAtExpiry ? 'text-bad' : 'text-ink')}
+                title={
+                  `挂牌期 ${prog.totalRounds} 个转会回合（TI 锁定期间暂停）` +
+                  (safeAtExpiry ? '。已收到过报价：挂牌期满后挂牌结束、选手留队' : '。整个挂牌期没有收到任何报价将自动解约（无补偿）')
+                }
+              >
+                {left} / {prog.totalRounds} 回合
               </span>
             ) : (
-              <span className="font-semibold text-bad" title="等待期已满：处理完待定报价后挂牌结束（收到过报价则选手留队）">
+              <span className="font-semibold text-bad" title="挂牌期已满：处理完待定报价后挂牌结束、选手留队">
                 已到期
               </span>
             )}
           </Info>
           <Info label="每回合报价概率">
-            <span className="tabular">{listing.roundsLeft > 0 && outlook ? pct(outlook.chance) : '—'}</span>
+            <span
+              className="tabular"
+              title={
+                noBidThisRound
+                  ? status.note || '本回合结束时不会收到新报价'
+                  : outlook && outlook.stale < 1
+                    ? `挂牌较久且标价高于身价，俱乐部报价意愿下降（× ${outlook.stale.toFixed(2)}）`
+                    : undefined
+              }
+            >
+              {left > 0 && outlook && !noBidThisRound ? pct(outlook.chance) : '—'}
+            </span>
+            {left > 0 && outlook && outlook.stale < 1 && outlook.interested > 0 && !noBidThisRound && (
+              <span className="ml-1 text-[10px] text-gold">挂牌较久</span>
+            )}
           </Info>
         </div>
         <div className="mt-1 text-[11px] text-faint">
-          TI{listing.season} 第 {listing.listedRound} 回合挂牌
-          {paused && <span className="ml-1 text-info">· {paused}</span>}
+          {safe(() => listingListedAtLabel(listing), `TI${listing.season} 挂牌`)}
+          {safeAtExpiry && left > 0 && <span className="ml-1 text-good">· 已收到过报价·到期不解约</span>}
+          {status.note && <span className="ml-1 text-info">· {status.note}</span>}
         </div>
 
         <div className="mt-3 space-y-1.5">
@@ -843,13 +867,21 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
       <div className="mt-2 text-xs text-mute">
         预计每回合收到报价概率 <span className="font-semibold text-ink tabular">{outlook ? pct(outlook.chance) : '—'}</span>
         <span className="text-faint">（有意向且负担得起的俱乐部 {outlook?.interested ?? 0} 家）</span>
+        {outlook && outlook.stale < 1 && outlook.interested > 0 && (
+          <span
+            className="ml-1 text-[10px] text-gold"
+            title={`近期撤过牌：此前挂牌已经历的报价机会继续累计，标价高于身价时报价意愿下降（× ${outlook.stale.toFixed(2)}）`}
+          >
+            挂牌较久
+          </span>
+        )}
       </div>
       <div className="mt-2">
         <Button
           size="sm"
           variant="gold"
           disabled={!!reason}
-          title={reason || `以 ${formatGold(price)} 挂牌，等待 ${S.listingRounds} 个转会回合`}
+          title={reason || `以 ${formatGold(price)} 挂牌，挂牌期为${durationLabel}`}
           onClick={() => void call('listPlayerForTransfer', p.id, price)}
         >
           挂牌出售

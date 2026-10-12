@@ -10,6 +10,7 @@ import {
   type GameState, type Player, type RookieDraftPick, type RookieDraftRecord, type Tier,
 } from '../../engine';
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from '../components/common';
+import { TeamEmblem } from '../components/TeamEmblem';
 import { ConfirmButton } from '../components/ConfirmPopover';
 import { ScreenHeader } from '../layout/HubKit';
 import { AttrNum, Banner, Meter, TableWrap, num, safe } from '../components/MarketKit';
@@ -32,7 +33,7 @@ function teamLabel(g: GameState, id: string) {
   if (!t) return <span className="text-mute">{id}</span>;
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: t.color }} />
+      <TeamEmblem tag={t.tag} color={t.color} teamId={id} />
       <TeamLink teamId={id} name={t.name} className="truncate" />
     </span>
   );

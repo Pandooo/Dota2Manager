@@ -1,11 +1,12 @@
-// 转会市场 · 我的挂牌：挂牌中的选手、标价、剩余等待回合、收到的报价（接受/拒绝）、撤销挂牌
+// 转会市场 · 我的挂牌：挂牌中的选手、标价、剩余等待回合（挂牌期一整个赛季）、收到的报价（接受/拒绝）、撤销挂牌
 import { useCall, useGame, useGameStore } from '../../store/gameStore';
 import {
-  CONFIG, activeListing, formatGold, listedPlayers, listingBidOutlook, listingOffers, marketValue, overallRating,
-  playerTier,
+  CONFIG, activeListing, formatGold, listedPlayers, listingBidOutlook, listingDurationLabel, listingListedAtLabel, listingOffers,
+  listingProgress, listingRoundStatus, marketValue, overallRating, playerTier,
   type Player, type TransferOffer,
 } from '../../engine';
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { ConfirmButton } from './ConfirmPopover';
 import { Banner, TableWrap, num, safe } from './MarketKit';
 
@@ -20,12 +21,10 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
   const listed = safe(() => listedPlayers(g), [] as Player[]);
   const starters = new Set(Object.values(myTeam?.lineup ?? {}).filter(Boolean) as string[]);
 
-  const nextPhase = g.season.rounds?.[g.roundIndex + 1]?.phase;
-  const paused =
-    g.phase === 'preseason' ? '赛季初不计时，开赛后开始倒计时'
-      : !windowOpen ? '转会窗口锁定中，倒计时暂停'
-        : nextPhase !== 'regular' && nextPhase !== 'preseason' ? '下回合转会窗口锁定，本回合不计时'
-          : '';
+  // 本回合结束时：是否计时 / 是否可能收到新报价（与引擎 processTransferListings 同一判定）
+  const status = safe(() => listingRoundStatus(g), { counts: windowOpen, bids: windowOpen, note: '' });
+  const paused = status.counts ? '' : status.note;
+  const durationLabel = safe(() => listingDurationLabel(), '一整个赛季');
 
   const respond = (id: string, accept: boolean) => {
     void call('respondToOffer', id, accept);
@@ -52,10 +51,12 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
 
   return (
     <div className="space-y-4">
-      <Banner tone="gold" title={`挂牌规则：等待 ${S.listingRounds} 个转会回合，无人报价则自动解约`}>
+      <Banner tone="gold" title={`挂牌规则：挂牌期为${durationLabel}，整个挂牌期无人报价则自动解约`}>
         挂牌后选手进入转会名单，其他俱乐部每回合结束时可能报价：标价越低（相对身价）、选手等级越高、越符合对方需求，越容易收到报价。
-        每回合结束时计一次（赛季初、TI 阶段转会锁定期间不计时）。若整个挂牌期都无人报价，到期自动解约成为自由选手——不支付解约补偿、不扣俱乐部荣誉；收到过报价但未成交，则挂牌结束、选手留队。
-        {paused && <span className="ml-1 font-semibold">当前：{paused}。</span>}
+        每个常规赛回合结束时计一次（赛季初与 TI 阶段转会锁定期间不计时），挂牌在下赛季的同一时间点到期；常规赛最后一回合结束后转会窗口锁定，那一回合不会再收到新报价，未处理的报价作废。
+        前 {S.listingFreshRolls} 次报价机会之后，标价高于身价的挂牌挂得越久，俱乐部的报价意愿越低（标价不高于身价不受影响；撤牌后不久重新挂牌，次数继续累计）。
+        若整个挂牌期都没有收到任何报价，到期自动解约成为自由选手——不支付解约补偿、不扣俱乐部荣誉；收到过报价（含普通求购报价）但未成交，则挂牌期满后挂牌结束、选手留队。
+        {status.note && <span className="ml-1 font-semibold">当前：{status.note}。</span>}
       </Banner>
 
       <Card
@@ -88,6 +89,11 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
                 {listed.map((p) => {
                   const L = activeListing(g, p);
                   if (!L) return null;
+                  const prog = safe(() => listingProgress(L), { roundsLeft: L.roundsLeft, totalRounds: L.roundsLeft, bidRolls: 0 });
+                  const left = prog.roundsLeft;
+                  // 收到过报价：到期不会自动解约（挂牌结束、选手留队），倒计时不再标红 / 标金
+                  const safeAtExpiry = !!L.hadBids;
+                  const listedAt = safe(() => listingListedAtLabel(L), `TI${L.season} 挂牌`);
                   const value = safe(() => marketValue(g, p), 0);
                   const ratio = value > 0 ? L.askingPrice / value : null;
                   const outlook = safe(() => listingBidOutlook(g, p.id), null);
@@ -111,19 +117,39 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
                         )}
                       </td>
                       <td
-                        className={cx('num text-xs', L.roundsLeft <= 1 ? 'text-bad font-semibold' : 'text-mute')}
+                        className={cx(
+                          'num text-xs',
+                          safeAtExpiry ? 'text-mute' : left <= 1 ? 'text-bad font-semibold' : left <= S.listingReminderRounds ? 'text-gold' : 'text-mute',
+                        )}
                         title={
-                          L.roundsLeft <= 0
-                            ? '等待期已满：待处理报价处理后挂牌结束（收到过报价则选手留队）'
-                            : paused || `第 ${g.roundIndex} 回合挂牌倒计时进行中`
+                          left <= 0
+                            ? '挂牌期已满：待处理报价处理后挂牌结束、选手留队'
+                            : `${listedAt}，挂牌期 ${prog.totalRounds} 个转会回合，剩余 ${left} 个` +
+                              `${status.note ? `（${status.note}）` : ''}` +
+                              (safeAtExpiry ? '。已收到过报价：挂牌期满后挂牌结束、选手留队' : '。整个挂牌期没有收到任何报价将自动解约（无补偿）')
                         }
                       >
-                        {L.roundsLeft <= 0 ? '已到期' : `${L.roundsLeft} 回合${paused ? '（暂停）' : ''}`}
+                        {left <= 0 ? '已到期' : `${left} / ${prog.totalRounds} 回合${paused ? '（暂停）' : ''}`}
+                        {safeAtExpiry && left > 0 && (
+                          <span className="ml-1 block text-[10px] text-good">已收到过报价·到期不解约</span>
+                        )}
                       </td>
-                      <td className="num text-xs">
-                        {outlook && L.roundsLeft > 0 ? `${Math.round(outlook.chance * 100)}%` : '—'}
-                        {outlook && L.roundsLeft > 0 && (
+                      <td
+                        className="num text-xs"
+                        title={
+                          !status.bids
+                            ? status.note || '本回合结束时不会收到新报价'
+                            : outlook && outlook.stale < 1
+                              ? `挂牌较久且标价高于身价，俱乐部报价意愿下降（× ${outlook.stale.toFixed(2)}）`
+                              : undefined
+                        }
+                      >
+                        {outlook && left > 0 && status.bids ? `${Math.round(outlook.chance * 100)}%` : '—'}
+                        {outlook && left > 0 && (
                           <span className="ml-1 text-[10px] text-faint" title="有意向且负担得起的俱乐部">{outlook.interested} 家</span>
+                        )}
+                        {outlook && left > 0 && outlook.stale < 1 && outlook.interested > 0 && status.bids && (
+                          <span className="ml-1 text-[10px] text-gold">挂牌较久</span>
                         )}
                       </td>
                       <td>
@@ -137,7 +163,7 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
                                 <div key={o.id} className="flex items-center gap-1.5 text-xs">
                                   {buyer ? (
                                     <span className="inline-flex items-center gap-1">
-                                      <span className="inline-block h-2 w-2 rounded-sm" style={{ background: buyer.color }} />
+                                      <TeamEmblem tag={buyer.tag} color={buyer.color} teamId={buyer.id} />
                                       <TeamLink teamId={buyer.id} name={buyer.name} />
                                     </span>
                                   ) : (

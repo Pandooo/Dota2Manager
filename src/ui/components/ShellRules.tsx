@@ -169,6 +169,12 @@ export default function ShellRules() {
             收入：奖金、出场费、出售选手、赞助等。支出：<B>每回合发放工资</B>、签约费、转会费、训练、临时替补。
             资金不足发不出工资会触发「欠薪」，荣誉和归属感双双下跌。
           </p>
+          <p>
+            <span className="text-bad">
+              破产：资金连续 {CONFIG.bankruptcy.rounds} 个回合结算后仍为负，或负债超过 {CONFIG.bankruptcy.debtWageRounds} 个回合的工资，俱乐部破产，执教生涯提前结束
+            </span>
+            （多人模式下该玩家出局观战）。资金为负时总览「待处理」与新闻会给出倒计时。
+          </p>
         </Section>
 
         <Section icon="⇄" title="转会与新秀选秀" accent="bg-gold/20 text-gold">

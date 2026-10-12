@@ -3,27 +3,27 @@
 //
 // - 每支战队有奖金分成比例 Team.prizeShare ∈ [0.50, 1.00]：赛事奖金的该比例分给队员，俱乐部只拿剩余部分
 //   （出场费与每回合的赞助 / 直播 / 周边收入全归俱乐部）。人机共用。
-// - 初始比例：真实俱乐部按战队 id 哈希各不相同（约 55%–85%，豪门略高）；新俱乐部（玩家新建）与多人模式的全部玩家战队 70%。
-//   startSeason / endRound 补齐缺失值（新组织、旧存档）。
+// - 初始比例：全部战队 50%（用户决策 2026-10-10「比赛奖金默认调整为 50% 给队员，剩下 50% 给俱乐部」；原为真实俱乐部按 id 哈希
+//   55%–85%、新俱乐部 70%）。startSeason / endRound 补齐缺失值（新组织、旧存档；已有比例的旧存档保持原值）。
 // - 玩家调整：setPrizeShare（步长 5%，每回合最多一次，多人模式为白名单 RPC）。即时影响正式队员归属感：
 //   上调小幅提升、下调明显下降（损失厌恶，上下限同比例），按幅度与在队时长速度倍数（salary.tenureSpeedMult）缩放；
 //   下调后约一个赛季内把比例调回下调前的水平不带来即时加成（只有超出原水平的部分算上调）。调整发公开新闻。
-// - 持续影响：每回合环境项（salary.prizeShareLoyaltyDelta，高于 70% 加分、低于扣分，小幅）；
-//   发奖金时每名分到奖金的正式队员按「分得金额 / 每回合工资」提升归属感，并记入近期奖金收入（部分计入薪资满意度，
+// - 持续影响：每回合环境项（salary.prizeShareLoyaltyDelta，高于默认的 50% 小幅加分）；
+//   发奖金时每名分到奖金的正式队员按「分得金额 / 每回合工资」提升归属感，并记入近期奖金收入（按每回合折算全额计入薪资满意度，
 //   salary.prizeSalaryCredit；预期薪资仍不显示）。
-// - AI 战队偶尔调整：资金紧张时下调，队员不满或资金充裕时上调。
-// 确定性：初始值用战队 id 哈希（不消耗 state.rng）；AI 调整用 rngOf(state)。
+// - AI 战队偶尔调整：队员不满或资金充裕时上调，资金紧张时再下调（不低于下限 50%）。
+// 确定性：初始值为常数（不消耗 state.rng）；AI 调整用 rngOf(state)。
 // ============================================================================
 import type { GameState, OpResult, Player, PrizeShareChange, Team } from './types';
 import { POSITIONS } from './types';
 import { CONFIG } from './config';
-import { hashSeed, rngOf, seededRng } from './rng';
+import { rngOf } from './rng';
 import { clamp, formatGold, round1, round2 } from './util';
 import { addNews } from './news';
 import { addFinance } from './economy';
 import { adjustLoyalty } from './growth';
 import { prizeShareLoyaltyDelta, recordPrizeIncome, tenureSeasons, tenureSpeedMult } from './salary';
-import { isHumanTeam, isMultiplayer } from './seat';
+import { isHumanTeam } from './seat';
 
 export { prizeShareLoyaltyDelta } from './salary';
 
@@ -56,50 +56,34 @@ export function formatPrizeShare(share: number): string {
   return `${Math.round(num(share) * 100)}%`;
 }
 
-/** 夹在 [min, max] 并取整到步长（非法值按新俱乐部默认值） */
+/** 夹在 [min, max] 并取整到步长（非法值按默认值） */
 export function normalizePrizeShare(v: unknown): number {
   const c = C();
   const step = stepOf();
-  const x = typeof v === 'number' && Number.isFinite(v) ? v : num(c.newClub, 0.7);
+  const x = typeof v === 'number' && Number.isFinite(v) ? v : num(c.initial, 0.5);
   const snapped = Math.round(x / step) * step;
   return round2(clamp(snapped, num(c.min, 0.5), num(c.max, 1)));
 }
 
-/** 新俱乐部：玩家新建的俱乐部（id 以 club- 开头），以及多人模式的全部玩家战队（保证公平） */
-function isNewClub(state: GameState, team: Team): boolean {
-  if (isMultiplayer(state) && (team.isPlayer || isHumanTeam(state, team.id))) return true;
-  return typeof team.id === 'string' && team.id.startsWith('club-');
-}
-
 /**
- * 战队的初始（默认）分成比例：新俱乐部 → CONFIG.prizeShare.newClub；
- * 其余（真实俱乐部 / AI 战队）按战队 id 哈希在 initRange 内取三角分布，荣誉 ≥ eliteHonor 再 + eliteBonus，取整到步长。
- * 同一俱乐部在任何存档中相同（不消耗 state.rng）。
+ * 战队的初始（默认）分成比例：全部战队一律 CONFIG.prizeShare.initial（50%，用户决策 2026-10-10），
+ * 新俱乐部 / 真实俱乐部 / AI 战队 / 多人模式玩家战队相同（参数保留以兼容调用方）。
  */
-export function defaultPrizeShare(state: GameState, team: Team): number {
-  const c = C();
-  if (!team) return normalizePrizeShare(c.newClub);
-  if (isNewClub(state, team)) return normalizePrizeShare(c.newClub);
-  const rng = seededRng(hashSeed(`prizeShare|${team.id}`));
-  const lo = num(c.initRange?.[0], 0.55);
-  const hi = Math.max(lo, num(c.initRange?.[1], 0.8));
-  const u = (rng.next() + rng.next()) / 2;
-  let v = lo + (hi - lo) * u;
-  if (num(team.honor) >= num(c.eliteHonor, Infinity)) v += Math.max(0, num(c.eliteBonus));
-  return normalizePrizeShare(v);
+export function defaultPrizeShare(_state: GameState, _team?: Team | null): number {
+  return normalizePrizeShare(C().initial);
 }
 
 /** 战队当前的分成比例（缺失时按默认值，不写入状态） */
 export function prizeShareOf(state: GameState, teamOrId: Team | string | null | undefined): number {
   const team = typeof teamOrId === 'string' ? state.teams?.[teamOrId] : teamOrId;
-  if (!team) return normalizePrizeShare(C().newClub);
+  if (!team) return defaultPrizeShare(state, null);
   if (typeof team.prizeShare === 'number' && Number.isFinite(team.prizeShare)) return normalizePrizeShare(team.prizeShare);
   return defaultPrizeShare(state, team);
 }
 
 /** 补齐（并规范化）一支战队的分成比例，返回当前值 */
 export function ensurePrizeShare(state: GameState, team: Team): number {
-  if (!team) return normalizePrizeShare(C().newClub);
+  if (!team) return defaultPrizeShare(state, null);
   const v = prizeShareOf(state, team);
   if (team.prizeShare !== v) team.prizeShare = v;
   return v;
@@ -387,7 +371,7 @@ function parseShare(v: unknown): number | null {
 /** 调整预览（本队，UI 用）：是否允许、各队员的即时影响、调整前后的每回合环境项 */
 export function prizeSharePreview(state: GameState, share: number): PrizeSharePreview {
   const team = state.teams?.[state.settings?.playerTeamId];
-  const cur = team ? prizeShareOf(state, team) : normalizePrizeShare(C().newClub);
+  const cur = team ? prizeShareOf(state, team) : defaultPrizeShare(state, null);
   const base: PrizeSharePreview = {
     from: cur, to: cur, allowed: false, reason: '', members: [], avgDelta: 0,
     roundDeltaBefore: prizeShareLoyaltyDelta(cur), roundDeltaAfter: prizeShareLoyaltyDelta(cur), raiseSuppressed: false,
@@ -464,7 +448,7 @@ export function prizeShareStatus(state: GameState, teamId?: string | null): Priz
   const c = C();
   const id = teamId ?? state.settings?.playerTeamId ?? '';
   const team = state.teams?.[id];
-  const share = team ? prizeShareOf(state, team) : normalizePrizeShare(c.newClub);
+  const share = team ? prizeShareOf(state, team) : defaultPrizeShare(state, null);
   let reason = '';
   if (!team || team.disbanded || state.gameOver) reason = '战队不存在或游戏已结束';
   else if (team.prizeShareRoundKey === roundKeyOf(state)) reason = '本回合已调整过奖金分成（每回合最多一次）';

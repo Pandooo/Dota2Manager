@@ -8,6 +8,7 @@ import { POSITIONS } from '../../engine/types';
 import { DRAFT_SEQUENCE, POSITION_SHORT, lineupPlayers } from '../../engine';
 import type { DraftSuggestion } from '../../engine';
 import { Badge, Button, Card, EmptyState, Hint, PosBadge, StatBar, TeamTag, cx } from './common';
+import { TeamEmblem } from './TeamEmblem';
 import { ATTR_DOT, ATTR_LABEL, HeroAvatar, MetaTag, heroCn, heroInfo, heroTooltip } from './MatchHero';
 import { FACTION_LABEL, FACTION_TEXT, FactionBadge, MineBadge, factionOf, safe, type Side } from './MatchShared';
 
@@ -158,7 +159,7 @@ export default function MatchDraft({
                       )}
                     >
                       <span className="w-4 text-right tabular text-faint">{s.idx + 1}</span>
-                      <span className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: t.color }} />
+                      <TeamEmblem tag={t.tag} color={t.color} teamId={t.id} />
                       <span className="w-10 truncate font-semibold">{t.tag}</span>
                       <span className={cx('w-6', s.step.type === 'ban' ? 'text-bad' : 'text-good')}>{s.step.type === 'ban' ? '禁' : '选'}</span>
                       {s.action ? (

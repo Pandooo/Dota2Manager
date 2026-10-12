@@ -5,6 +5,7 @@ import { clampPlayerAttrs, computeSalary, playerTier, regionOfNationality, seaso
 import type { Rng } from './rng';
 import { hashSeed, rngOf } from './rng';
 import { addPlayerToTeam, autoLineup } from './team';
+import { realClubStartingFunds, roundWageBill } from './economy';
 import type {
   Coach, GameState, Player, PlayerIndexEntry, PlayerStats, Position, Region, SeedCoach, SeedPlayer, SeedTeam, Team, Tier,
 } from './types';
@@ -592,7 +593,11 @@ function uniqueTeamId(state: GameState, base: string): string {
   return `${base}-${n}`;
 }
 
-/** 生成 AI 战队（5 名首发 + 可能 1 替补 + 可能教练），注册到 state.teams/players/coaches */
+/**
+ * 生成 AI 战队（5 名首发 + 可能 1 替补 + 可能教练），注册到 state.teams/players/coaches。
+ * 资金：generation.aiTeam.funds[强度档] × 经济指数视为该队的「数据资金」，按真实俱乐部同一公式（economy.realClubStartingFunds，
+ * 下限按实际阵容工资）折算——开局补足、赛季初补足联赛规模（ai.aiEnsureRosters）与假赛除名补位（scandal.ts）都经过这里
+ */
 export function generateAiTeam(state: GameState, region: Region, strength: Strength): Team {
   const rng = rngOf(state);
   const cfg = CONFIG.generation.aiTeam;
@@ -635,6 +640,7 @@ export function generateAiTeam(state: GameState, region: Region, strength: Stren
     team.coachId = coach.id;
   }
   autoLineup(state, id);
+  team.gold = realClubStartingFunds(team.gold, null, state.season?.ti ?? state.settings?.startTi ?? 1, roundWageBill(state, id));
   return team;
 }
 
