@@ -28,6 +28,8 @@ import { ageOf, isAvailable, playerRating, playerTier, tickModifiers, tierIndex 
 import { adjustLoyalty, agePlayersAtSeasonEnd, processRetirements, roundLoyaltyUpdate, sessionTrainOptions, trainTeam } from './growth';
 import { rollSeasonForm } from './form';
 import { runSeasonDevelopment } from './development';
+import { syncSeasonRoles } from './roleSync';
+import { playsNaturally } from './roles';
 import { expectedRank } from './honor';
 import { addNews, pushPopup } from './news';
 import { formatGold, formatRank, nextId, placementPercentile } from './util';
@@ -106,14 +108,14 @@ export function fillEmptyLineupSlots(state: GameState, teamId: string, tournamen
     (p) => p.teamId === teamId && isAvailable(p, tournamentId)
       && (!p.tempSubUntilTournament || p.tempSubUntilTournament === tournamentId),
   );
-  // 两轮：先用本位置替补补位，再用跨位置评分最高者补剩余空位
+  // 两轮：先用本职（本位置 / 副位置）替补补位，再用跨位置评分最高者补剩余空位（评分已含位置系数：四五号位互换优于其他非本位置）
   for (const naturalOnly of [true, false]) {
     for (const pos of empty) {
       if (team.lineup[pos]) continue;
       let best: Player | null = null;
       let bestR = -Infinity;
       for (const p of bench) {
-        if (used.has(p.id) || (naturalOnly && p.position !== pos)) continue;
+        if (used.has(p.id) || (naturalOnly && !playsNaturally(p, pos))) continue;
         const r = playerRating(p, pos);
         if (r > bestR) {
           bestR = r;
@@ -448,6 +450,9 @@ export function startSeason(state: GameState, ti: number): void {
   // 赛季自主成长（development.ts，第九波）：退役 / 年龄衰退已在 TI 结算中处理；选秀与转会潮之前，全体在役选手按天赋 / 真实轨迹自主训练
   // （新游戏的第一个赛季不执行）
   runSeasonDevelopment(state);
+  // 真实生涯位置（第十三波，roleSync.ts）：当届有真实阵容数据的真实选手切换到当届真实位置、刷新副位置（AI 战队重新排阵）；
+  // 放在新俱乐部 / 选秀 / 转会潮之前，AI 的位置需求按新位置计算
+  syncSeasonRoles(state);
   // 新俱乐部涌现（第十波 #2，clubs.ts）：现实中在本届首次出现的真实俱乐部（及偶尔的虚构新组织）在选秀与转会潮之前成立并签回当届真实选手
   foundSeasonClubs(state);
   // 新秀选秀（退役/年龄/合同已在 TI 结算中处理；多人模式全局一次，弹窗按座位）→ 自由选手 → AI 转会 → 补齐阵容 → 赛程

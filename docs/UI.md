@@ -11,6 +11,12 @@
   - **禁止在组件里直接修改 game 对象**，一切修改必须经 `call()` 调用引擎函数（`src/engine/index.ts` 导出）。
 - 派生数据在渲染时现算即可（数据量不大）；大列表（>200 行）用分页或筛选。
 - 全中文界面；数字用 `tabular` 类对齐；金额用 `<Gold value={...}/>` 或 `formatGold`。
+- **位置**（第十三波）：显示选手位置时用 `<PosBadge pos={p.position} alt={p.altPositions} />`（有副位置时附「可5」小字，`full` 时为「4号位 游走辅助（可打5号位）」，
+  副位置较多时在徽章内换行；放进单行截断的单元格时给单元格去掉截断，如 PlayerModal 的 `Info wrap`）；与「5号位 保姆辅助」并排的副位置文字用 `altPositionsText`（阿拉伯数字，
+  不要和「四号位」混用；新闻正文沿用中文数字「转型为五号位」）。选手打某个首发位置的适配一律用引擎的 `roleFit / roleFitFactor / ROLE_FIT_LABEL`（本位置 / 副位置 / 四五号位互换 /
+  非本位置），颜色与小标签用 `SquadShared` 的 `ROLE_FIT_TONE / ROLE_FIT_TEXT / RoleFitChip / roleFitTitle`——不要再写 `p.position !== slot` 或直接引用 `offRoleFactor`。
+  按位置筛选选手时用 `playsNaturally`（含副位置），同时显示的评分用打该位置的 `playerRating(p, pos)`（如转会求购）。
+  真实生涯位置调整 / 旧存档修正对人类玩家战队除了新闻还会在总览「通知」放一条 `message` 提示（引擎负责，界面无需额外处理）。
 - 每个页面顶部用 `<PageHeader title subtitle actions/>`，内容用 `<Card>` 分区，网格布局 `grid gap-4 lg:grid-cols-…`。
 - 交互反馈：按钮 disabled 时给出 `title` 说明原因（如"转会窗口已锁定"、"金币不足"）。
 - 视觉：暗色、Dota 风格（暗红 dota + 金色 gold 点缀），信息密度高但层次清晰，参考 Football Manager 的数据面板感。

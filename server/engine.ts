@@ -34,6 +34,8 @@ export interface MpEngine {
   startTis(): number[];
   /** 某届 TI 的真实战队（无数据时返回 []） */
   realTeams(ti: number): Promise<RealTeamInfo[]>;
+  /** 载入旧房间时的存档迁移（幂等；返回是否有改动）。可选：测试替身可不实现 */
+  migrate?(state: GameState): boolean;
 }
 
 /** 读取 state.multiplayer（单机/损坏时为 null） */
@@ -61,6 +63,7 @@ export const defaultEngine: MpEngine = {
   advance: (state) => multi.advanceMultiplayer(state),
   autopilot: (state, teamId) => multi.autopilotSeat(state, teamId),
   info: (state) => mpInfoOf(state),
+  migrate: (state) => multi.migrateRoomState(state),
   startTis: () => availableStartTis(),
   realTeams: async (ti) => {
     const hit = teamCache.get(ti);

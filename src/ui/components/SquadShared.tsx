@@ -2,10 +2,13 @@
 // 阵容/训练/教练/选手详情 页面共用的小组件与工具（仅供 Squad / PlayerModal / Training / Coach 使用）
 // ============================================================================
 import { useState, type ReactNode } from 'react';
-import type { GameState, ModAttr, Modifier, Player, Tier, Tournament } from '../../engine/types';
+import type { GameState, ModAttr, Modifier, Player, Position, Tier, Tournament } from '../../engine/types';
 import { TIERS } from '../../engine/types';
-import { CONFIG, effectivePower, formLabel, roundKindForPlayer, seasonFormModifier, tierOf } from '../../engine';
-import type { FormLabel } from '../../engine';
+import {
+  CONFIG, POSITION_LABEL, POSITION_SHORT, ROLE_FIT_LABEL, effectivePower, formLabel, roleFit, roleFitFactor, roundKindForPlayer,
+  seasonFormModifier, tierOf,
+} from '../../engine';
+import type { FormLabel, RoleFit } from '../../engine';
 import { Button, cx } from './common';
 
 // ---------------------------------------------------------------------------
@@ -225,6 +228,32 @@ export function Chip({ tone = 'mute', children, title }: { tone?: ChipTone; chil
     <span title={title} className={cx('inline-flex items-center rounded border px-1.5 py-px text-[11px] leading-4', CHIP_TONE[tone])}>
       {children}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 位置适配（第十三波：本位置 / 副位置 / 四五号位互换 / 非本位置）
+// ---------------------------------------------------------------------------
+export const ROLE_FIT_TONE: Record<RoleFit, ChipTone> = { main: 'gold', alt: 'info', swap: 'info', off: 'bad' };
+export const ROLE_FIT_TEXT: Record<RoleFit, string> = { main: 'text-gold', alt: 'text-info', swap: 'text-info', off: 'text-bad' };
+
+/** 选手打某位置的说明（悬停提示）：本位置 / 副位置，以及该位置的评分系数 */
+export function roleFitTitle(p: Player, slot: Position): string {
+  const fit = roleFit(p, slot);
+  const alt = (p.altPositions ?? []).filter((q) => q !== p.position);
+  const main = `${p.handle} 的本位置是 ${POSITION_LABEL[p.position]}${alt.length ? `，副位置 ${alt.map((q) => `${POSITION_SHORT[q]}号位`).join('、')}` : ''}`;
+  if (fit === 'main') return `${main}（本位置评分 ×1）`;
+  return `${main}；打 ${POSITION_LABEL[slot]}：${ROLE_FIT_LABEL[fit]}，评分 ×${roleFitFactor(fit)}`;
+}
+
+/** 位置适配小标签（本位置不显示） */
+export function RoleFitChip({ player, slot }: { player: Player; slot: Position }) {
+  const fit = roleFit(player, slot);
+  if (fit === 'main') return null;
+  return (
+    <Chip tone={ROLE_FIT_TONE[fit]} title={roleFitTitle(player, slot)}>
+      {ROLE_FIT_LABEL[fit]} ×{roleFitFactor(fit)}
+    </Chip>
   );
 }
 

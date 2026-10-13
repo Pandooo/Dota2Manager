@@ -19,6 +19,7 @@ import { allPendingDecisions } from './seat';
 import { aiCoachCandidates, aiCoachPickWeight } from './coaches';
 import { aiPursueMission, isRetainedMissionPlayer, missionAwareTrim, refreshMissions } from './missions';
 import { aiLineupPriority, lineupPriorityLocks } from './lineupPriority';
+import { playsNaturally, uncoveredPositions } from './roles';
 
 const FOCI: TrainingFocus[] = ['power', 'mmr', 'insight', 'balanced'];
 
@@ -162,7 +163,9 @@ function tryPoach(
   for (let i = 0; i < poachPool.length; i++) {
     const p = poachPool[i];
     if (overallRating(p) <= minRating) return false; // 降序：后面只会更弱
-    if (p.position !== pos || !p.teamId || p.teamId === team.id || p.status !== 'active') continue;
+    // 本职选手（本位置 / 副位置；副位置按打折后的位置评分比较）
+    if (!playsNaturally(p, pos) || !p.teamId || p.teamId === team.id || p.status !== 'active') continue;
+    if (p.position !== pos && playerRating(p, pos) <= minRating) continue;
     // 俱乐部使命（第十波 #3）：使命俱乐部不放走自己的使命成员（留人）
     if (isRetainedMissionPlayer(state, p)) continue;
     const seller = state.teams[p.teamId];
@@ -240,9 +243,11 @@ function handleDebt(state: GameState, team: Team, rng: Rng): void {
     if (roster(state, team.id).length <= CONFIG.ai.minRoster) break;
     const allBench = benchPlayers(state, team.id).filter((p) => !p.tempSubUntilTournament);
     if (!allBench.length) break;
-    // 只出售位置有人顶替的替补：阵中唯一的本职选手（被客串者挤到替补席）不卖，避免出现缺本职位置的阵容（卖无可卖 → 降薪）
+    // 只出售位置有人顶替的替补：卖掉后不会多出「无本职选手」的位置（本位置 / 副位置的二分匹配，roles.uncoveredPositions）；
+    // 阵中唯一的本职选手（被客串者挤到替补席）不卖，避免出现缺本职位置的阵容（卖无可卖 → 降薪）
     const regulars = roster(state, team.id);
-    const sellable = allBench.filter((p) => regulars.some((q) => q.id !== p.id && q.position === p.position));
+    const holes = uncoveredPositions(regulars).length;
+    const sellable = allBench.filter((p) => uncoveredPositions(regulars.filter((q) => q.id !== p.id)).length <= holes);
     // 俱乐部使命：先卖非使命成员
     const nonMission = sellable.filter((p) => !isRetainedMissionPlayer(state, p));
     const bench = nonMission.length ? nonMission : sellable;

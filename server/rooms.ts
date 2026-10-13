@@ -1597,6 +1597,14 @@ export class RoomManager {
         for (const s of info.seats) delete s.gameTeamId;
       }
       if (info.status === 'lobby') state = null;
+      // 旧房间的存档迁移（如第十三波真实生涯位置；幂等）。迁移失败不影响载入（回合推进 / RPC 前引擎还会兜底）
+      if (state && this.engine.migrate) {
+        try {
+          if (this.engine.migrate(state)) this.log(`房间 ${info.id}：已迁移旧存档数据`);
+        } catch (err) {
+          this.log(`房间 ${info.id}：存档迁移失败（${(err as Error).message}）`);
+        }
+      }
       if (!info.seats.some((s) => s.sessionId === info.hostSessionId)) info.hostSessionId = info.seats[0].sessionId;
       // 无人在线的时长只计服务器运行时间：从存档时的累计值接着计时（服务器关闭期间不算）
       const idleMs = Math.max(0, Math.min(Number(f.idleMs) || 0, 10 * 365 * 24 * 3600_000));

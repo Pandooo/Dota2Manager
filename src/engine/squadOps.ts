@@ -7,6 +7,7 @@ import { rngOf, type Rng } from './rng';
 import { clamp, formatGold, lerp, round1, round2 } from './util';
 import { addNews } from './news';
 import { computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex } from './player';
+import { naturalPositions } from './roles';
 import { activeTeams, teamPlayers } from './team';
 import { honorLuck } from './honor';
 import { adjustLoyalty } from './growth';
@@ -503,12 +504,18 @@ function listingBuyers(state: GameState, p: Player, askingPrice: number): { team
     if (!Number.isFinite(t.gold)) continue;
     // 资金：付完最低出价后仍能覆盖（现有工资 + 新增工资）× signBudgetRounds
     if (t.gold - minFee < (roundWageBill(state, t.id) + salary) * CONFIG.ai.signBudgetRounds) continue;
-    const starterId = t.lineup?.[p.position];
-    const starter = starterId ? state.players[starterId] : undefined;
+    // 本职位置（本位置 / 副位置，第十三波）中任一位置空缺或能明显提升首发即有兴趣（副位置按打折后的位置评分）
     let interest = 0;
-    if (!starter || starter.status !== 'active' || starter.teamId !== t.id) interest = 1;
-    else if (rating >= playerRating(starter, p.position) * S.bidUpgradeRatio) interest = 1;
-    else if (regularMembers(state, t.id).length < CONFIG.ai.maxRoster) interest = S.bidBargainInterest * depthFade(ratio);
+    for (const pos of naturalPositions(p)) {
+      const starterId = t.lineup?.[pos];
+      const starter = starterId ? state.players[starterId] : undefined;
+      const r = pos === p.position ? rating : playerRating(p, pos);
+      if (!starter || starter.status !== 'active' || starter.teamId !== t.id || r >= playerRating(starter, pos) * S.bidUpgradeRatio) {
+        interest = 1;
+        break;
+      }
+    }
+    if (!interest && regularMembers(state, t.id).length < CONFIG.ai.maxRoster) interest = S.bidBargainInterest * depthFade(ratio);
     if (interest > 0) out.push({ team: t, interest });
   }
   return out;

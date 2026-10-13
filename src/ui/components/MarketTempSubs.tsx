@@ -4,7 +4,7 @@ import { useCall, useCallSilent, useGame, useGameStore } from '../../store/gameS
 import {
   CONFIG, POSITIONS, ageOf, currentPlayerTournament, effectiveAttr, effectivePower, formatGold,
   isAvailable, lineupPlayers, playerTier, teamPlayers, tempSubCost, validateLineup, POSITION_LABEL,
-  REGION_LABEL, TOURNAMENT_TIER_LABEL,
+  REGION_LABEL, TOURNAMENT_TIER_LABEL, naturalPositions,
   type GameState, type Player, type Position, type Tournament,
 } from '../../engine';
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TierBadge, cx } from './common';
@@ -144,7 +144,7 @@ export default function MarketTempSubs() {
                   <span className="text-mute">无法参加本赛事：</span>
                   {unavailable.map((p) => (
                     <span key={p.id} className="inline-flex items-center gap-1 rounded border border-gold/30 bg-gold/5 px-1.5 py-0.5">
-                      <PosBadge pos={p.position} /> <PlayerLink player={p} />
+                      <PosBadge pos={p.position} alt={p.altPositions} /> <PlayerLink player={p} />
                       <span className="text-faint">{p.status !== 'active' ? '禁赛' : '签证/伤病'}</span>
                     </span>
                   ))}
@@ -236,8 +236,8 @@ export default function MarketTempSubs() {
                           </div>
                         </td>
                         <td>
-                          <PosBadge pos={p.position} />
-                          {missing.includes(p.position) && <span className="ml-1 text-[10px] text-gold">补缺</span>}
+                          <PosBadge pos={p.position} alt={p.altPositions} />
+                          {naturalPositions(p).some((q) => missing.includes(q)) && <span className="ml-1 text-[10px] text-gold">补缺</span>}
                         </td>
                         <td className="num">{ageOf(g, p)}</td>
                         <td><TierBadge tier={playerTier(p)} /></td>
@@ -281,7 +281,7 @@ export default function MarketTempSubs() {
                     <TierBadge tier={playerTier(p)} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 text-sm">
-                        <PlayerLink player={p} /> <PosBadge pos={p.position} />
+                        <PlayerLink player={p} /> <PosBadge pos={p.position} alt={p.altPositions} />
                       </div>
                       <div className="truncate text-[11px] text-faint">效力：{t?.name ?? '指定赛事'} · 赛后自动离队</div>
                     </div>

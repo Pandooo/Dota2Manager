@@ -61,9 +61,11 @@ describe('development: 真实生涯轨迹数据', () => {
     ]);
     expect(Object.keys(traj)).toEqual(['a', 'b']);
     expect(Object.keys(traj.a)).toEqual(['1', '3']);
-    expect(traj.a[1]).toEqual({ power: 72, mmr: 8100, tier: 'S' });
+    // pos（第十三波真实生涯位置）游程压缩：首届写入，位置不变的届次省略
+    expect(traj.a[1]).toEqual({ power: 72, mmr: 8100, tier: 'S', pos: 'C' });
     expect(traj.a[3]).toEqual({ power: 85, mmr: 11200, tier: 'SS' });
     expect(traj.b[3].tier).toBe('C');
+    expect(traj.b[3].pos).toBe('C');
   });
 
   it('trajectories.json 与全部 roster 文件一致（Ceb：TI2 S 级 → TI8 SS 级）', () => {

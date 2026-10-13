@@ -20,6 +20,7 @@ import {
 import { scrimInsightMult, scrimMultiplier, scrimTrainOptions, sessionTrainOptions, trainTeam } from './growth';
 import { generateTempSubCandidates, hireTempSub, isTransferWindowOpen, tempSubCost } from './market';
 import { isAvailable, overallRating, tierIndex } from './player';
+import { ROLE_DATA_VERSION } from './roles';
 import { heroName } from './heroes';
 import { hashSeed, rngOf } from './rng';
 import {
@@ -175,6 +176,8 @@ function blankState(opts: {
     history: { tournaments: [], seasons: [], honor: [], gold: [], playerSettlements: [] },
     popups: [],
     gameOver: null,
+    // 真实生涯位置（第十三波）：新游戏的真实选手在创建时即按当届真实位置 / 副位置生成，无需迁移
+    roleDataVersion: ROLE_DATA_VERSION,
   };
 }
 

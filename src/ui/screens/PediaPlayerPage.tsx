@@ -2,9 +2,9 @@
 // 右侧信息框（ID、本名、国籍、出生年份 / 年龄、位置、当前战队、等级与巅峰、状态、奖金）。只读。
 import { useMemo, type ReactNode } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
-import { POSITION_LABEL, TOURNAMENT_TIER_LABEL, pediaPlayerPage, tiYear } from '../../engine';
+import { POSITION_LABEL, POSITION_SHORT, TOURNAMENT_TIER_LABEL, pediaPlayerPage, tiYear } from '../../engine';
 import type { PediaPlayerPage as PlayerPage, TournamentTier } from '../../engine';
-import { Card, EmptyState, Gold, PosBadge, TierBadge, cx } from '../components/common';
+import { Card, EmptyState, Gold, PosBadge, TierBadge, altPositionsText, cx } from '../components/common';
 import { Chip, Flag, countryName } from '../components/SquadShared';
 import { TourTierBadge } from '../components/TourShared';
 import {
@@ -459,6 +459,25 @@ function Heroes({ page }: { page: PlayerPage }) {
 // ---------------------------------------------------------------------------
 // 信息框
 // ---------------------------------------------------------------------------
+/**
+ * 真实生涯位置（截至本局当届）：同一位置的各段（中间缺席的届次断开）用「、」连接，换位置用「→」，
+ * 如「TI1–5、TI8 5号位」「TI6 4号位 → TI7–14 5号位」（与「位置」一行同用阿拉伯数字）。
+ */
+function realRolesText(spans: PlayerPage['realRoles']): string {
+  const out: string[] = [];
+  let i = 0;
+  while (i < spans.length) {
+    const pos = spans[i].pos;
+    const parts: string[] = [];
+    for (; i < spans.length && spans[i].pos === pos; i++) {
+      const r = spans[i];
+      parts.push(r.from === r.to ? `TI${r.from}` : `TI${r.from}–${r.to}`);
+    }
+    out.push(`${parts.join('、')} ${POSITION_SHORT[pos]}号位`);
+  }
+  return out.join(' → ');
+}
+
 function PlayerInfobox({ page }: { page: PlayerPage }) {
   const game = useGame();
   const sp = game.players[page.id];
@@ -472,7 +491,7 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
           <div className="text-5xl leading-none">{page.nationality ? <Flag cc={page.nationality} /> : '◇'}</div>
           <div className="flex items-center gap-2">
             {page.tier && <TierBadge tier={page.tier} size="lg" />}
-            {page.position && <PosBadge pos={page.position} full />}
+            {page.position && <PosBadge pos={page.position} alt={page.altPositions} full />}
           </div>
           {page.standing && (
             <div className="text-xs text-mute">
@@ -499,7 +518,17 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
         {sp?.birthYear ? `${sp.birthYear} 年` : '—'}
         {page.age !== null && <span className="ml-1 text-xs text-mute">（{page.age} 岁）</span>}
       </InfoRow>
-      <InfoRow label="位置">{page.position ? POSITION_LABEL[page.position] : '—'}</InfoRow>
+      <InfoRow label="位置">
+        {page.position ? POSITION_LABEL[page.position] : '—'}
+        {page.altPositions.length > 0 && (
+          <span className="ml-1 text-xs text-mute">（{altPositionsText(page.altPositions)}）</span>
+        )}
+      </InfoRow>
+      {new Set(page.realRoles.map((r) => r.pos)).size > 1 && (
+        <InfoRow label="真实生涯位置">
+          <span className="text-xs">{realRolesText(page.realRoles)}</span>
+        </InfoRow>
+      )}
       <InfoRow label="当前战队">{page.teamId ? <PTeam id={page.teamId} name={page.teamName ?? undefined} /> : <span className="text-mute">—</span>}</InfoRow>
       <InfoRow label="状态">{page.statusLabel}</InfoRow>
       <InfoHead>实力</InfoHead>

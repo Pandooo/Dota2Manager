@@ -139,6 +139,11 @@ export interface TrajectoryPoint {
   power: number;
   mmr: number;
   tier: Tier;
+  /**
+   * 该届阵容数据中的位置（第十三波「真实生涯位置」，roles.ts）。游程压缩：只写在首届与位置变化的届次上，
+   * 缺省 = 沿用之前最近一届的 pos（engine/roles.realRoleHistory 展开为逐届位置）。
+   */
+  pos?: Position;
 }
 
 /** 真实生涯轨迹：TI 序号（JSON 中为字符串键）→ 当届水平；只含该选手出现过的届次 */
@@ -225,6 +230,7 @@ export interface Player {
   nationality: string;
   region: Region;
   birthYear: number;
+  /** 本位置：真实选手随真实生涯同步为当届真实位置（roleSync.syncSeasonRoles，数据缺失的届次沿用上一个位置），程序生成选手固定 */
   position: Position;
   mmr: number;
   power: number;
@@ -275,6 +281,12 @@ export interface Player {
   salaryTrack?: SalaryTrack;
   /** 隐藏的赛季自主成长记录（development.ts，第九波；潜力上限不在界面显示数值，旧存档缺失 = 首次自主成长时评估） */
   development?: PlayerDevelopment;
+  /**
+   * 副位置（第十三波，roles.ts）：真实选手在真实阵容数据中担任过的其他位置（按最近担任的届次排序，不含本位置），
+   * 评分 × CONFIG.team.altRoleFactor（本位置 1，其他非本位置 offRoleFactor；4/5 号位互换另有 supportSwapFactor）。
+   * 程序生成选手没有副位置（缺省）。position 本身随真实生涯同步（roleSync.syncSeasonRoles），副位置随之更新。
+   */
+  altPositions?: Position[];
 }
 
 /**
@@ -1338,6 +1350,12 @@ export interface GameState {
   pedia?: PediaState;
   /** 羁绊（第十波 #5，synergy.ts）：解锁记录 + 当前激活；全局公开数据（多人模式各座位共享，不进座位交换列表）；旧存档缺失时按需创建 */
   synergies?: SynergyState;
+  /**
+   * 真实生涯位置数据版本（第十三波，roles.ROLE_DATA_VERSION）：新游戏创建时写入；旧存档缺失 / 低于当前版本时，
+   * 读档（save.importSave / upgradeLoadedState，含「继续游戏」）/ 多人房间载入（multi.migrateRoomState）时一次性把真实选手的位置同步到当届真实位置并补齐副位置（roleSync.migrateRealRoles）。
+   * 全局标记（非座位私有）。
+   */
+  roleDataVersion?: number;
 
   /** 多人对局（局域网，src/engine/multi.ts）；单机为空 */
   multiplayer?: MultiplayerInfo;

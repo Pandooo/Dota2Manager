@@ -9,6 +9,12 @@ export {
   tierOf, tierIndex, ladderMult, ageOf, effectiveAttr, effectivePower, playerTier, playerRating, overallRating,
   marketValue, isAvailable,
 } from './player';
+// 位置（第十三波：副位置 / 四五号位互换 / 真实生涯位置；只读查询，位置同步由引擎在赛季初与读档时自动完成）
+export {
+  ROLE_FIT_LABEL, roleFit, roleFactor, roleFitFactor, roleFitText, positionText, naturalPositions, playsNaturally,
+  realRoleSpans, uncoveredPositions,
+} from './roles';
+export type { RoleFit } from './roles';
 export {
   getPlayerTeam, teamPlayers, lineupPlayers, benchPlayers, autoLineup, validateLineup, setLineupSlot,
   teamRating, teamInsight, rosterRoom, rosterSize, rosterHardRoom, rosterSigningBlock, rosterOverflowNotice, rosterSigningNote,

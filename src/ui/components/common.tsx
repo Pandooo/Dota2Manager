@@ -5,7 +5,7 @@
 // ============================================================================
 import { useEffect, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import type { Position, Region, Tier, Player } from '../../engine/types';
-import { POSITION_LABEL, POSITION_SHORT, REGION_LABEL, formatGold } from '../../engine';
+import { CONFIG, POSITION_LABEL, POSITION_SHORT, REGION_LABEL, formatGold } from '../../engine';
 import { useGameStore } from '../../store/gameStore';
 import { TeamEmblem } from './TeamEmblem';
 
@@ -161,10 +161,36 @@ const POS_COLOR: Record<Position, string> = {
   HS: 'bg-[#7a4fb5]/25 text-[#c39cff] border-[#7a4fb5]/50',
 };
 
-export function PosBadge({ pos, full }: { pos: Position; full?: boolean }) {
+/** 副位置文字（与「5号位 保姆辅助」同用阿拉伯数字）：「可打4号位」「可打3、5、2号位」 */
+export function altPositionsText(alts: readonly Position[]): string {
+  return alts.length ? `可打${alts.map((q) => POSITION_SHORT[q]).join('、')}号位` : '';
+}
+
+/**
+ * 位置徽章。alt = 副位置（Player.altPositions，第十三波）：徽章后附「可5」等小字，悬停说明副位置评分系数；
+ * full 时显示「4号位 游走辅助（可打5号位）」，副位置较多时在徽章内换行（不撑破窄单元格）。
+ */
+export function PosBadge({ pos, full, alt }: { pos: Position; full?: boolean; alt?: readonly Position[] | null }) {
+  const alts = (alt ?? []).filter((q) => q !== pos);
+  const title = alts.length
+    ? `${POSITION_LABEL[pos]}；副位置：${alts.map((q) => `${POSITION_SHORT[q]}号位`).join('、')}（评分 ×${CONFIG.team.altRoleFactor}）`
+    : POSITION_LABEL[pos];
   return (
-    <span title={POSITION_LABEL[pos]} className={cx('inline-flex items-center rounded border px-1.5 text-[11px] font-semibold leading-5', POS_COLOR[pos])}>
-      {full ? POSITION_LABEL[pos] : `${POSITION_SHORT[pos]}号位`}
+    <span
+      title={title}
+      className={cx(
+        'inline-flex max-w-full items-center rounded border px-1.5 text-[11px] font-semibold leading-5',
+        full && alts.length > 0 ? 'flex-wrap' : 'whitespace-nowrap',
+        POS_COLOR[pos],
+      )}
+    >
+      <span className="whitespace-nowrap">{full ? POSITION_LABEL[pos] : `${POSITION_SHORT[pos]}号位`}</span>
+      {alts.length > 0 &&
+        (full ? (
+          <span className="font-normal opacity-80">（{altPositionsText(alts)}）</span>
+        ) : (
+          <span className="ml-1 text-[10px] font-normal opacity-75">可{alts.map((q) => POSITION_SHORT[q]).join('/')}</span>
+        ))}
     </span>
   );
 }

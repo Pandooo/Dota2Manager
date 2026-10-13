@@ -2,6 +2,7 @@
 import type { GameState, Player, Position, Region, Team, Coach } from '../src/engine/types';
 import { POSITIONS } from '../src/engine/types';
 import { SAVE_VERSION } from '../src/engine/config';
+import { ROLE_DATA_VERSION } from '../src/engine/roles';
 
 let counter = 0;
 
@@ -143,6 +144,7 @@ export function makeTestState(teamCount = 8, seed = 12345): GameState {
     history: { tournaments: [], seasons: [], honor: [], gold: [], playerSettlements: [] },
     popups: [],
     gameOver: null,
+    roleDataVersion: ROLE_DATA_VERSION, // 与新游戏一致：无需真实生涯位置迁移
   };
   for (let i = 0; i < teamCount; i++) {
     addTeam(state, `t${i}`, { isPlayer: i === 0, power: 70 + i, region: (['CN', 'EU', 'CIS', 'SEA', 'NA', 'SA'] as Region[])[i % 6] });

@@ -3,6 +3,7 @@ import { CONFIG, POSITION_LABEL } from './config';
 import { computeSalary, effectiveAttr, isAvailable, overallRating, playerRating } from './player';
 import { rngOf } from './rng';
 import { aiLineupPriority } from './lineupPriority';
+import { naturalPositions } from './roles';
 import type { Coach, GameState, InMatchEvent, Player, Position, Team } from './types';
 import { POSITIONS } from './types';
 
@@ -62,7 +63,9 @@ function canPlayFor(p: Player, tournamentId?: string | null): boolean {
 }
 
 /**
- * 自动排首发：优先本位置评分最高者，其次用跨位置评分填补空位。
+ * 自动排首发：使首发 playerRating 之和最大——位置系数（roles.roleFactor）本位置 1 > 副位置 / 四五号位互换 > 其他非本位置，
+ * 因此优先本位置评分最高者，其次副位置 / 四五号位互换，最后才用其他位置的选手填补空位（例：4 名四号位、没有五号位时，
+ * 副位置是五号位或评分最高的四号位打五号位，阵容完整）。
  * tournamentId 给出时排除无法参加该赛事的选手。
  * AI 战队先按首发优先级（lineupPriority.aiLineupPriority：使命选手 → 巅峰选手）把优先选手排在各自的本位置
  * （同一位置先比优先级、再比综合评分，落选者回到候选中按评分竞争其余位置），其余位置再按评分排；人类玩家战队只按评分。
@@ -308,10 +311,13 @@ export function addPlayerToTeam(
   if (p.status === 'active' && !POSITIONS.some((q) => team.lineup[q] === playerId)) {
     const tid = p.tempSubUntilTournament;
     if (!tid) {
-      if (!slotPlayer(state, team, p.position)) team.lineup[p.position] = playerId;
+      // 本位置空着优先补本位置，否则补空着的副位置（第十三波，roles.naturalPositions）
+      const hole = naturalPositions(p).find((q) => !slotPlayer(state, team, q));
+      if (hole) team.lineup[hole] = playerId;
     } else {
-      // 临时替补：顶替本位置（优先）或任意一个「空缺 / 无法参加该赛事」的首发位
-      const order: Position[] = [p.position, ...POSITIONS.filter((q) => q !== p.position)];
+      // 临时替补：顶替本位置 / 副位置（优先）或任意一个「空缺 / 无法参加该赛事」的首发位
+      const natural = naturalPositions(p);
+      const order: Position[] = [...natural, ...POSITIONS.filter((q) => !natural.includes(q))];
       const hole = order.find((q) => {
         const occ = slotPlayer(state, team, q);
         return !occ || !canPlayFor(occ, tid);

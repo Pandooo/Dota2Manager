@@ -2,6 +2,7 @@
 import { getHeroes, getPlayerIndex } from '../data';
 import { CONFIG } from './config';
 import { clampPlayerAttrs, computeSalary, playerTier, regionOfNationality, seasonEconIndex, seasonYear, tierIndex } from './player';
+import { realRoleFor, refreshAltPositions } from './roles';
 import type { Rng } from './rng';
 import { hashSeed, rngOf } from './rng';
 import { addPlayerToTeam, autoLineup } from './team';
@@ -682,6 +683,8 @@ export function playerFromSeed(state: GameState, seed: SeedPlayer, teamId: strin
     isReal: true,
   };
   if (seed.name) p.name = seed.name;
+  // 副位置（第十三波，roles.ts）：截至当届真实生涯中担任过的其他位置（种子位置即当届位置）
+  refreshAltPositions(p, ti);
   clampPlayerAttrs(p);
   p.salary = computeSalary(state, p);
   state.players[p.id] = p;
@@ -766,7 +769,9 @@ export function rookieFromIndex(state: GameState, entry: PlayerIndexEntry): Play
   const gen = CONFIG.generation;
   const ti = state.season?.ti ?? state.settings.startTi;
   const firstPower = num(entry.firstPower, 60);
-  const position: Position = POSITIONS.includes(entry.position) ? entry.position : 'C';
+  // 位置：当届（或此前最近一届）的真实位置（第十三波；错过登场时机的旧条目不再沿用首次出现时的位置），无数据时用索引的首次位置
+  const real = realRoleFor(entry.id, ti);
+  const position: Position = real ?? (POSITIONS.includes(entry.position) ? entry.position : 'C');
   const birthYear = num(entry.birthYear, seasonYear(state) - 18);
   const age = seasonYear(state) - birthYear;
   const [rLo, rHi] = gen.rookiePowerMult;
@@ -795,6 +800,7 @@ export function rookieFromIndex(state: GameState, entry: PlayerIndexEntry): Play
     isReal: true,
   };
   if (entry.name) p.name = entry.name;
+  refreshAltPositions(p, ti);
   clampPlayerAttrs(p);
   p.salary = computeSalary(state, p, true);
   state.players[p.id] = p;

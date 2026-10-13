@@ -35,6 +35,7 @@ import {
 } from './missions';
 import { orgTeam, peakOrgsOfPlayer } from './clubs';
 import { lineupPriorityLocks } from './lineupPriority';
+import { naturalPositions, playsNaturally, roleFactor, uncoveredPositions } from './roles';
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -149,6 +150,12 @@ function starterAt(state: GameState, team: Team, pos: Position): Player | null {
   const id = team.lineup?.[pos];
   const p = id ? state.players[id] : undefined;
   return p && p.teamId === team.id && p.status === 'active' ? p : null;
+}
+
+/** 首发打非本位置的程度（0 = 本位置，1 = 非本位置 offRoleFactor；副位置 / 四五号位互换按位置系数折算），换人顺序的错位扣分用 */
+function offRoleShare(p: Player, slot: Position): number {
+  const off = CONFIG.team.offRoleFactor;
+  return off < 1 ? clamp((1 - roleFactor(p, slot)) / (1 - off), 0, 1) : 0;
 }
 
 function rangeOf(rng: Rng, r: readonly [number, number]): number {
@@ -331,7 +338,7 @@ function replaceOrder(w: World, team: Team): string[] {
     const score = c.weakness * (1 - rel)
       + c.ageStep * Math.max(0, age - c.ageFrom + 1)
       + c.lowLoyalty * Math.max(0, (50 - loyalty) / 50)
-      + (p.position !== s.pos ? c.offRole : 0)
+      + c.offRole * offRoleShare(p, s.pos)
       - sticky
       + rng.normal(0, c.replaceNoise);
     return { id: p.id, score };
@@ -716,7 +723,7 @@ function findCandidate(
   let best: Candidate | null = null;
   let bestScore = -Infinity;
   const consider = (p: Player, source: Candidate['source'], fee: number, reason: ShuffleReason, bonus: number) => {
-    const r = overallRating(p);
+    const r = playerRating(p, pos); // 本职选手在该位置上的评分（副位置打折）
     if (!(r > (source === 'listing' ? minRating : faMin))) return;
     const salary = computeSalary(state, p);
     if (!canAfford(state, team, fee, salary)) return;
@@ -732,11 +739,11 @@ function findCandidate(
   for (const l of w.listings.values()) {
     if (l.sellerId === team.id || !buyerRankOk(l, ctx.rank)) continue;
     const p = state.players[l.playerId];
-    if (!p || p.status !== 'active' || p.teamId !== l.sellerId || p.position !== pos) continue;
+    if (!p || p.status !== 'active' || p.teamId !== l.sellerId || !playsNaturally(p, pos)) continue;
     consider(p, 'listing', l.fee, l.reason, l.wantsOut ? c.wantsOutWillingnessBonus : 0);
   }
   for (const p of w.fa) {
-    if (p.teamId || p.status !== 'active' || p.position !== pos) continue;
+    if (p.teamId || p.status !== 'active' || !playsNaturally(p, pos)) continue;
     consider(p, 'fa', signingFee(state, p), 'upgrade', 0);
   }
   if (best) return best;
@@ -747,11 +754,11 @@ function findCandidate(
   for (const other of w.ctxs.values()) {
     if (other.team.id === team.id || other.team.disbanded || other.rank <= ctx.rank) continue;
     for (const p of regular(state, other.team.id)) {
-      if (p.position !== pos || w.movedIds.has(p.id) || w.listings.has(p.id)) continue;
-      if (overallRating(p) > minRating) targets.push(p);
+      if (!playsNaturally(p, pos) || w.movedIds.has(p.id) || w.listings.has(p.id)) continue;
+      if (playerRating(p, pos) > minRating) targets.push(p);
     }
   }
-  targets.sort((a, b) => overallRating(b) - overallRating(a) || (a.id < b.id ? -1 : 1));
+  targets.sort((a, b) => playerRating(b, pos) - playerRating(a, pos) || (a.id < b.id ? -1 : 1));
   let tries = 0;
   for (const p of targets) {
     if (tries >= c.poachTries) break;
@@ -855,12 +862,18 @@ function acquire(w: World, ctx: TeamCtx, cand: Candidate, replaced: Player | nul
   return true;
 }
 
-/** 本位置没有本职首发（空缺或由其他位置的选手客串） */
+/**
+ * 本位置没有本职首发（空缺或由其他位置的选手客串），且阵中没有本位置选手（有的话 autoLineup 会让他回到本位）。
+ * 首发空缺时，阵中的副位置选手能覆盖（roles.uncoveredPositions，每人只打一个位置）也不需要引进；
+ * 首发由其他位置的选手客串（autoLineup 认为他打这个位置仍强于副位置选手）时照样引进本职选手——与改动前「只看本位置」的力度一致，
+ * 否则 AI 会因为替补席上有一名较弱的副位置选手而长期让主力打非本位置。
+ */
 function needsNatural(w: World, team: Team, pos: Position): boolean {
   const s = starterAt(w.state, team, pos);
-  if (s && s.position === pos) return false;
-  // 阵中已有本职选手（autoLineup 会让他回到本位）
-  return !regular(w.state, team.id).some((p) => p.position === pos);
+  if (s && playsNaturally(s, pos)) return false;
+  const regs = regular(w.state, team.id);
+  if (regs.some((p) => p.position === pos)) return false;
+  return !!s || uncoveredPositions(regs).includes(pos);
 }
 
 function processTeam(w: World, ctx: TeamCtx, lastPass: boolean): boolean {
@@ -873,13 +886,13 @@ function processTeam(w: World, ctx: TeamCtx, lastPass: boolean): boolean {
     if (!needsNatural(w, team, pos)) continue;
     const cur = starterAt(state, team, pos);
     const cand = findCandidate(w, ctx, pos, cur ? playerRating(cur, pos) : 0, 0, true, false);
-    if (cand && acquire(w, ctx, cand, cur && cur.position === pos ? cur : null)) acted = true;
+    if (cand && acquire(w, ctx, cand, cur && playsNaturally(cur, pos) ? cur : null)) acted = true;
   }
   // 2. 被挖走首发的位置：在替补顶上后尝试补强（连锁转会）
   const vac = ctx.vacancies.splice(0);
   for (const pos of vac) {
     const cur = starterAt(state, team, pos);
-    if (!cur || cur.position !== pos) continue; // 已在步骤 1 处理
+    if (!cur || !playsNaturally(cur, pos)) continue; // 已在步骤 1 处理
     if (w.movedIds.has(cur.id)) continue; // 本窗口已引进新援补上（不再替换刚签下的选手）
     if (lineupPriorityLocks(state, team.id, cur, pos)) continue; // 首发优先级锁定（顶上的是使命 / 巅峰选手）：引进的人只会坐替补
     const cand = findCandidate(w, ctx, pos, playerRating(cur, pos), S().minGainNormal, false, true);
@@ -944,7 +957,7 @@ function pursueMissions(w: World): void {
         cand = { p, source: listing ? 'listing' : 'poach', fee, reason: 'mission', will: clamp(will, 0, 1) };
       }
       const cur = starterAt(state, team, p.position);
-      const replaced = cur && cur.position === p.position && !isOwnMission(w, cur, team.id) ? cur : null;
+      const replaced = cur && playsNaturally(cur, p.position) && !isOwnMission(w, cur, team.id) ? cur : null;
       const before = w.moves.length;
       if (!acquire(w, ctx, cand, replaced)) continue;
       for (let i = before; i < w.moves.length; i++) if (w.moves[i].reason === 'mission') w.moves[i].notable = true;
@@ -990,7 +1003,7 @@ function placeStars(w: World): void {
     }
     if (!opts.length) continue;
     const pick = rng.weighted(opts, opts.map((o) => o.wt));
-    const replaced = pick.cur && pick.cur.position === p.position ? pick.cur : null;
+    const replaced = pick.cur && playsNaturally(pick.cur, p.position) ? pick.cur : null;
     if (!acquire(w, pick.ctx, { p, source: 'listing', fee: l.fee, reason: l.reason, will: clamp(pick.will, 0, 1) }, replaced)) continue;
     pick.ctx.starSigned = true;
     if (pick.ctx.budget > 0) pick.ctx.budget -= 1;
@@ -1048,17 +1061,16 @@ function cleanup(w: World): void {
       if (p.status === 'active' && !p.teamId) w.fa.push(p);
       w.moves.push({ playerId: p.id, handle: p.handle, kind: 'release', fromTeamId: team.id, toTeamId: null, fee: 0, reason: 'surplus', notable: isNotable(w, p) });
     }
-    // 五个位置都要有本职选手
+    // 五个位置都要有本职选手（本位置 / 副位置，每人只打一个位置：roles.uncoveredPositions）
     for (let guard = 0; guard < POSITIONS.length; guard++) {
-      const have = new Set(regular(state, team.id).map((p) => p.position));
-      if (POSITIONS.every((pos) => have.has(pos))) break;
+      const holes = uncoveredPositions(regular(state, team.id)).length;
+      if (!holes) break;
       const roster = regular(state, team.id);
       if (roster.length >= CONFIG.ai.maxRoster) {
-        // 腾位：放走一名位置重复的最弱替补
-        const counts = new Map<Position, number>();
-        for (const p of roster) counts.set(p.position, (counts.get(p.position) ?? 0) + 1);
+        // 腾位：放走一名「放走后不会多出空缺位置」的最弱替补（位置重复者）
         const dup = roster
-          .filter((p) => (counts.get(p.position) ?? 0) > 1 && !starterPos(team, p.id) && !isOwnMission(w, p, team.id))
+          .filter((p) => !starterPos(team, p.id) && !isOwnMission(w, p, team.id)
+            && uncoveredPositions(roster.filter((q) => q.id !== p.id)).length <= holes)
           .sort((a, b) => (w.movedIds.has(a.id) ? 1 : 0) - (w.movedIds.has(b.id) ? 1 : 0)
             || overallRating(a) - overallRating(b) || (a.id < b.id ? -1 : 1))[0];
         if (!dup) break;
@@ -1100,13 +1112,14 @@ function humanInterest(w: World, report: ShuffleReport): void {
       const value = marketValue(state, p);
       const fee = roundFee(value * rangeOf(rng, c.humanOfferFee));
       if (fee <= 0) continue;
-      const r = overallRating(p);
       const salary = computeSalary(state, p);
-      const fits = buyers.filter((b) => {
-        const s = starterAt(state, b.team, p.position);
-        return (!s || playerRating(s, p.position) < r * c.humanOfferFit) && canAfford(state, b.team, fee, salary)
-          && !lineupPriorityLocks(state, b.team.id, s, p.position, p); // 首发优先级锁定的位置不求购（买来也只能坐替补）
-      });
+      // 本职位置（本位置 / 副位置）中任一位置能明显提升买家首发即可（副位置按打折后的评分）
+      const slots = naturalPositions(p);
+      const fits = buyers.filter((b) => canAfford(state, b.team, fee, salary) && slots.some((pos) => {
+        const s = starterAt(state, b.team, pos);
+        return (!s || playerRating(s, pos) < playerRating(p, pos) * c.humanOfferFit)
+          && !lineupPriorityLocks(state, b.team.id, s, pos, p); // 首发优先级锁定的位置不求购（买来也只能坐替补）
+      }));
       if (!fits.length) continue;
       const buyer = rng.weighted(fits, fits.map((b) => 1 / b.rank)).team;
       const offer = createTransferOffer(state, p, buyer, fee, false);

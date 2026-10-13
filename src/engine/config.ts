@@ -607,7 +607,20 @@ export const CONFIG = {
      * 赛事临时替补与新秀选秀不受限制（选秀新秀总是入队，由经理决定首发与替补）。
      */
     hardMaxRoster: 12,
+    /**
+     * 位置系数（roles.roleFactor；第十三波，用户反馈 2026-10-12「四号、五号位都可以」）：选手评分 = 有效战力 × 天梯倍数 × 位置系数。
+     * 本位置 1 > 副位置 altRoleFactor（真实生涯中担任过的其他位置，Player.altPositions）≥ 四五号位互换 supportSwapFactor（所有选手：
+     * 4 号位打 5 号位或反之）> 其他非本位置 offRoleFactor。两者同时适用时取较高者。规则与实测见 DESIGN.md 2.2.1。
+     */
     offRoleFactor: 0.85,
+    altRoleFactor: 0.95,
+    supportSwapFactor: 0.93,
+    /**
+     * 真实生涯位置同步（roleSync.syncSeasonRoles）的新闻：人类玩家战队的队员一律私有通知；AI 战队 / 自由选手中天梯等级 ≥ roleNewsMinTier 的
+     * 真实选手进入一条世界新闻（最多列 roleNewsMaxNames 人，其余计数）。
+     */
+    roleNewsMinTier: 'S' as Tier,
+    roleNewsMaxNames: 8,
     newClubHonor: 100,
     /** 玩家接管真实俱乐部时起始资金的难度倍数（economy.realClubStartingFunds；新俱乐部见 economy.startingFunds.newClubDifficultyMult） */
     realClubFundsMult: { easy: 1.5, normal: 1.0, hard: 0.7 } as Record<string, number>,
@@ -2041,6 +2054,8 @@ export const POSITION_LABEL: Record<Position, string> = {
   C: '1号位 核心', M: '2号位 中单', O: '3号位 劣势路', SS: '4号位 游走辅助', HS: '5号位 保姆辅助',
 };
 export const POSITION_SHORT: Record<Position, string> = { C: '1', M: '2', O: '3', SS: '4', HS: '5' };
+/** 中文数字位置名（新闻 / 位置标签：「Miposhka 转型为五号位」「四号位（可打五号位）」） */
+export const POSITION_CN: Record<Position, string> = { C: '一号位', M: '二号位', O: '三号位', SS: '四号位', HS: '五号位' };
 
 export const REGION_LABEL: Record<Region, string> = {
   CN: '中国', SEA: '东南亚', CIS: '独联体/东欧', EU: '西欧', NA: '北美', SA: '南美',

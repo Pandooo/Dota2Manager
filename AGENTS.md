@@ -67,7 +67,9 @@ npx vite build --outDir <临时目录>
 
 ## 4. 数据维护
 
-- 修改 `src/data/rosters/ti*.json` 后运行：`npm run data:index`（真实新秀索引）、`npx tsx scripts/build-trajectories.ts`（真实生涯轨迹）、`npx tsx scripts/build-coach-index.ts`（教练索引），再运行 `npm run data:validate`。
+- 修改 `src/data/rosters/ti*.json` 后运行：`npm run data:index`（真实新秀索引）、`npx tsx scripts/build-trajectories.ts`（真实生涯轨迹与逐届位置 `pos`，供真实生涯位置同步 / 副位置）、`npx tsx scripts/build-coach-index.ts`（教练索引）、`npx tsx scripts/build-club-index.ts`（俱乐部索引，含各届阵容位置），再运行 `npm run data:validate`（校验轨迹、位置、俱乐部索引的位置和 roster 一致）。
+- 同一届里同一选手的位置必须一致（同时列在战队与自由选手中时）；选手在不同届的位置可以不同（真实转型，引擎在新赛季同步，见 `docs/DESIGN.md` 2.2.1）。
+- 修改**已经打过的届次**的选手位置（或副位置口径）时，把 `src/engine/roles.ts` 的 `ROLE_DATA_VERSION` 加 1：已有存档只在版本落后时重新同步位置（赛季同步只应用当届数据）。
 - 选手 id 为跨届一致的规范 slug（最知名 ID 的小写字母数字，如 `miracle`、`n0tail`）；同一人在各届文件中的 id、出生年份、国籍必须一致。
 - 英雄 id 以 `src/data/heroes.json` 为准。
 

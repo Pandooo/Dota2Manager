@@ -130,7 +130,7 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
                         {p ? (
                           <div className="flex items-center gap-1.5">
                             <PlayerLink player={p} />
-                            <PosBadge pos={p.position} />
+                            <PosBadge pos={p.position} alt={p.altPositions} />
                             {starters.has(p.id) && <Badge className="bg-info/15 text-info">首发</Badge>}
                             {o.poach && <Badge className="bg-dota/20 text-dota-2" title="低归属感挖角：违约金可能低于身价">挖角</Badge>}
                             {o.listing && <Badge className="bg-gold/15 text-gold" title="针对挂牌选手的报价（见「我的挂牌」）">挂牌</Badge>}

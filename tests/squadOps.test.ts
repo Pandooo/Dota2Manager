@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import type { GameState, Player, SeasonPhase } from '../src/engine/types';
 import { CONFIG } from '../src/engine/config';
 import { makeCoach, makeTestState } from './helpers';
@@ -806,6 +806,13 @@ describe('squadOps · 整赛季挂牌（真实对局）', () => {
     };
     const listAt = 12;
     while (s.roundIndex < listAt) step();
+    // 本用例验证「整季无人报价 → 到期解约」：关掉与挂牌无关的普通随机求购（generateAiOffers），
+    // 否则结果取决于随机序列（任何引擎改动都可能让某回合的普通求购恰好落到这名选手身上，收到过报价就不会解约）
+    const offerChance = CONFIG.market.aiOfferChancePerRound;
+    (CONFIG.market as { aiOfferChancePerRound: number }).aiOfferChancePerRound = 0;
+    onTestFinished(() => {
+      (CONFIG.market as { aiOfferChancePerRound: number }).aiOfferChancePerRound = offerChance;
+    });
     const me0 = s.settings.playerTeamId;
     // 最年轻的正式队员（避免赛季末退役）；挂牌后把标价抬到没有俱乐部负担得起，保证整季无人报价
     const p = teamPlayers(s, me0)

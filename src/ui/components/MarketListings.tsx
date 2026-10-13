@@ -103,7 +103,7 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
                       <td>
                         <div className="flex items-center gap-1.5">
                           <PlayerLink player={p} />
-                          <PosBadge pos={p.position} />
+                          <PosBadge pos={p.position} alt={p.altPositions} />
                           {starters.has(p.id) && <Badge className="bg-info/15 text-info">首发</Badge>}
                         </div>
                       </td>

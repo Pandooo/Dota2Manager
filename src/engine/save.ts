@@ -5,6 +5,7 @@ import { POSITIONS } from './types';
 import { SAVE_VERSION } from './config';
 import { stripLegacyGameBoxes } from './stats';
 import { migrateTransferListings } from './squadOps';
+import { migrateRealRoles } from './roleSync';
 
 export interface SaveMeta {
   slot: string;               // 'auto' | '1' | '2' | '3' ...
@@ -188,6 +189,14 @@ function normalizeState(s: GameState): GameState {
     p.stats ??= { matches: 0, wins: 0, titles: 0, tiTitles: 0, mvp: 0 };
     p.status ??= 'active';
     p.teamId ??= null;
+    // 副位置（第十三波）：手工编辑 / 损坏的存档只保留合法位置
+    if (p.altPositions !== undefined) {
+      const alt = Array.isArray(p.altPositions)
+        ? p.altPositions.filter((q, i, a) => POSITIONS.includes(q) && q !== p.position && a.indexOf(q) === i)
+        : [];
+      if (alt.length) p.altPositions = alt;
+      else delete p.altPositions;
+    }
   }
   for (const id in s.teams) {
     const t = s.teams[id];
@@ -257,11 +266,22 @@ export function importSave(json: string): GameState {
   if (typeof data.roundIndex !== 'number' || !Number.isInteger(data.roundIndex) || data.roundIndex < 0) {
     throw new Error('存档损坏：回合序号无效');
   }
-  const state = normalizeState(data as unknown as GameState);
+  return upgradeLoadedState(data as unknown as GameState);
+}
+
+/**
+ * 读档后的规范化与一次性迁移（均幂等）。importSave 校验通过后调用；会话进度从 IndexedDB 继续（store/session.loadProgress，
+ * 不经过 JSON 导入）时也必须调用——否则旧进度不会迁移（第十三波修正：「继续游戏」曾跳过全部迁移）。
+ */
+export function upgradeLoadedState(state: GameState): GameState {
+  normalizeState(state);
   // 旧存档（DotaPedia 统计格式 v1）的逐局个人 K/D/A（GameRecord.box）不再存储：读档即清除
   stripLegacyGameBoxes(state);
   // 旧存档的「3 个转会回合」挂牌：按已经过的回合迁移到整赛季挂牌期（squadOps.migrateListing，幂等）
   migrateTransferListings(state);
+  // 真实生涯位置（第十三波，roleSync.migrateRealRoles，按 roleDataVersion 幂等）：旧存档的真实选手位置沿用首次登场时的位置，
+  // 一次性同步到当届真实位置并补齐副位置，人类玩家战队收到一条修正汇总
+  migrateRealRoles(state);
   // 未来的存档迁移在这里按 version 逐级处理
   state.version = SAVE_VERSION;
   return state;

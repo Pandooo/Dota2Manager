@@ -6,9 +6,9 @@ import {
   getCoach, getPlayerTeam, marketValue, overallRating, playerRating, playerTier, rankTeamsByRating,
   rosterRoom, roundWageBill, teamInsight, teamRating, validateLineup, releaseCompensation,
   isTransferWindowOpen, formatGold, activeListing, listingDurationLabel, listingProgress, teamBuildingCost,
-  teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood,
+  teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood, ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
-import type { GameState, Player, Position, SalaryMood, Team, Tournament } from '../../engine';
+import type { GameState, Player, Position, RoleFit, SalaryMood, Team, Tournament } from '../../engine';
 import {
   Button, Card, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TierBadge, cx,
 } from '../components/common';
@@ -17,7 +17,7 @@ import { SquadSynergyStrip } from '../components/SynergyKit';
 import { ScreenHeader } from '../layout/HubKit';
 import {
   Chip, Flag, PowerValue, SortTh, fmt1, loyaltyClass, modifierDuration, modifierPositive, modifierText, MOD_ATTR_LABEL,
-  safe, sortList, upcomingPlayerTournament, useSort,
+  safe, sortList, upcomingPlayerTournament, useSort, ROLE_FIT_TEXT, RoleFitChip, roleFitTitle,
 } from '../components/SquadShared';
 
 type SortKey =
@@ -344,7 +344,9 @@ export default function Squad() {
               </div>
             </div>
             <Hint className="mt-3">
-              选手评分 = 有效战力 × 天梯倍数 × 位置系数（非本位置 ×{CONFIG.team.offRoleFactor}）；战队评分 = 五名首发评分之和 + 教练灵性 ×
+              选手评分 = 有效战力 × 天梯倍数 × 位置系数（本位置 ×1；副位置 ×{CONFIG.team.altRoleFactor}；四五号位互换 ×
+              {CONFIG.team.supportSwapFactor}；其他非本位置 ×{CONFIG.team.offRoleFactor}。副位置是真实生涯中担任过的其他位置，真实选手的本位置
+              随真实生涯在新赛季调整）；战队评分 = 五名首发评分之和 + 教练灵性 ×
               {CONFIG.coach.ratingBonusPerInsight}。在下拉框中选择已在其他位置的首发，会与该位置互换。首发训练获得全额收益，替补 ×
               {CONFIG.growth.benchTrainingMult}，且连续替补超过 {CONFIG.loyalty.benchGraceRounds} 回合会降低归属感；阵容超出常规上限
               （{maxRoster} 人）时，每多 1 人替补归属感下降更快，所有签约选手的工资照付。
@@ -515,7 +517,7 @@ export default function Squad() {
                       </td>
                       <td>
                         {slot ? (
-                          <span className={cx('text-xs font-semibold', slot === p.position ? 'text-gold' : 'text-bad')} title={POSITION_LABEL[slot]}>
+                          <span className={cx('text-xs font-semibold', ROLE_FIT_TEXT[roleFit(p, slot)])} title={`${POSITION_LABEL[slot]}首发 · ${roleFitTitle(p, slot)}`}>
                             首发·{POSITION_SHORT[slot]}
                           </span>
                         ) : (
@@ -530,7 +532,7 @@ export default function Squad() {
                         </span>
                       </td>
                       <td>
-                        <PosBadge pos={p.position} />
+                        <PosBadge pos={p.position} alt={p.altPositions} />
                       </td>
                       <td className="num">{ageOf(game, p)}</td>
                       <td>
@@ -593,7 +595,7 @@ function PlayerConfirmList({ players, right }: { players: Player[]; right: (p: P
       {players.map((p) => (
         <span key={p.id} className="flex items-center justify-between gap-2 rounded bg-panel-3/60 px-1.5 py-0.5">
           <span className="flex min-w-0 items-center gap-1 text-ink">
-            <PosBadge pos={p.position} />
+            <PosBadge pos={p.position} alt={p.altPositions} />
             <span className="truncate">{p.handle}</span>
             <TierBadge tier={safe(() => playerTier(p), 'C' as const)} />
           </span>
@@ -628,7 +630,7 @@ function SlotCard({
     .slice()
     .sort((a, b) => safe(() => playerRating(b, pos), 0) - safe(() => playerRating(a, pos), 0));
   const rating = player ? safe(() => playerRating(player, pos), 0) : 0;
-  const offRole = !!player && player.position !== pos;
+  const fit: RoleFit = player ? safe(() => roleFit(player, pos), 'off' as RoleFit) : 'main';
   const blocked = player && ctxT ? (player.unavailableTournamentIds ?? []).includes(ctxT.id) : false;
   const otherTemp = !!player?.tempSubUntilTournament && !!ctxT && player.tempSubUntilTournament !== ctxT.id;
   const mods = player?.modifiers ?? [];
@@ -646,7 +648,7 @@ function SlotCard({
         {player && (
           <span className="text-right leading-none">
             <span className="block text-[10px] text-faint">位置评分</span>
-            <span className={cx('text-base font-bold tabular', offRole ? 'text-bad' : 'text-gold')}>{rating.toFixed(1)}</span>
+            <span className={cx('text-base font-bold tabular', ROLE_FIT_TEXT[fit])} title={roleFitTitle(player, pos)}>{rating.toFixed(1)}</span>
           </span>
         )}
       </div>
@@ -664,11 +666,7 @@ function SlotCard({
             <MiniStat label="年龄" value={ageOf(game, player)} />
           </div>
           <div className="flex min-h-5 flex-wrap gap-1">
-            {offRole && (
-              <Chip tone="bad" title={`${player.handle} 的本位置是 ${POSITION_LABEL[player.position]}，打其他位置评分 ×${CONFIG.team.offRoleFactor}`}>
-                非本位置 ×{CONFIG.team.offRoleFactor}
-              </Chip>
-            )}
+            <RoleFitChip player={player} slot={pos} />
             {blocked && ctxT && <Chip tone="bad" title={`无法参加「${ctxT.name}」（签证/伤病）`}>无法参赛</Chip>}
             {player.tempSubUntilTournament && (
               <Chip tone={otherTemp ? 'bad' : 'info'} title={`仅效力：${game.tournaments[player.tempSubUntilTournament]?.name ?? '指定赛事'}`}>
@@ -700,13 +698,16 @@ function SlotCard({
         {sorted.map((p) => {
           const other = slotOf.get(p.id);
           const r = safe(() => playerRating(p, pos), 0);
+          const optFit = safe(() => roleFit(p, pos), 'off' as RoleFit);
           const tags: string[] = [];
           if (other && other !== pos) {
             // setLineupSlot：原位置由本位置当前首发顶上；本位置为空时原位置变为空缺
             tags.push(player ? `现${POSITION_SHORT[other]}号位首发，将互换` : `现${POSITION_SHORT[other]}号位首发，移来后该位空缺`);
           }
-          else if (!other && p.position !== pos) tags.push(`替补·本位${POSITION_SHORT[p.position]}号`);
           else if (!other) tags.push('替补');
+          // 位置适配：本位置 / 副位置 / 四五号位互换 / 非本位置（评分已含系数）
+          if (optFit === 'off') tags.push(`非本位置·本位${POSITION_SHORT[p.position]}号`);
+          else if (optFit !== 'main') tags.push(`${ROLE_FIT_LABEL[optFit]} ×${roleFitFactor(optFit)}`);
           if (ctxT && (p.unavailableTournamentIds ?? []).includes(ctxT.id)) tags.push('无法参赛');
           if (p.tempSubUntilTournament) tags.push('临时替补');
           return (
@@ -740,7 +741,7 @@ function StatusChips({ game, player: p, slot }: { game: GameState; player: Playe
   if (p.status === 'active') {
     if (slot) {
       chips.push(
-        <Chip key="st" tone="gold" title={slot !== p.position ? `首发 ${POSITION_LABEL[slot]}（非本位置）` : `首发 ${POSITION_LABEL[slot]}`}>
+        <Chip key="st" tone="gold" title={`首发 ${POSITION_LABEL[slot]}（${ROLE_FIT_LABEL[roleFit(p, slot)]}）`}>
           首发
         </Chip>,
       );

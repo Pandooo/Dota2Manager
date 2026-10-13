@@ -6,7 +6,7 @@
 //   可把进度同步到服务器。
 // ============================================================================
 import type { GameState } from '../engine/types';
-import { exportSave, importSave } from '../engine';
+import { exportSave, importSave, upgradeLoadedState } from '../engine';
 
 export type SessionKind = 'anonymous' | 'account';
 
@@ -272,7 +272,15 @@ export async function loadProgress(): Promise<GameState | null> {
   if (db) {
     const g = await idbGet<GameState>(db, sid);
     // 多人对战的座位视图不能在单机中继续（无法推进）；正常流程不会写入会话进度，这里防御性跳过
-    if (g && !g.multiplayer) return g;
+    if (g && !g.multiplayer) {
+      // 与 JSON 读档同样做规范化与一次性迁移（如真实生涯位置），否则旧进度「继续游戏」不会迁移
+      try {
+        upgradeLoadedState(g);
+      } catch (err) {
+        console.error('[session] 进度迁移失败', err);
+      }
+      return g;
+    }
   }
   try {
     const raw = ls()?.getItem(LS_FALLBACK_KEY(sid));

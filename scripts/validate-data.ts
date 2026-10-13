@@ -1,10 +1,11 @@
 // 数据校验：npx tsx scripts/validate-data.ts
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { HeroInfo, PatchInfo, RosterFile, TiInfo, TournamentTemplate } from '../src/engine/types';
+import type { HeroInfo, PatchInfo, PlayerIndexEntry, PlayerTrajectory, Position, RosterFile, TiInfo, TournamentTemplate } from '../src/engine/types';
 import { POSITIONS, REGIONS } from '../src/engine/types';
 import { ROSTER_DIR, readRosterSync } from './nodeData';
 import { brandOrgs, brandingProblems } from '../src/engine/branding';
+import { buildTrajectories } from './build-trajectories';
 
 const DATA = join(ROSTER_DIR, '..');
 const read = <T,>(f: string): T => JSON.parse(readFileSync(join(DATA, f), 'utf8')) as T;
@@ -85,6 +86,76 @@ for (const ti of rosterTis) {
     if (seen.has(p.id)) err(`${tag}: free agent duplicate ${p.id}`);
     seen.add(p.id);
   }
+}
+
+// 真实生涯位置（第十三波，src/data/trajectories.json 的 pos，游程压缩）与生涯轨迹：与全部 roster 一致（由 scripts/build-trajectories.ts 生成，
+// 不要手改）；每名选手首届必有 pos；playerIndex.position（首次出现时的位置）= 首届 pos；同一届同一选手位置一致
+{
+  const trajFile = read<Record<string, PlayerTrajectory>>('trajectories.json');
+  const rebuilt = buildTrajectories(rosterTis.map((ti) => {
+    const r = readRosterSync(ti);
+    return { ti, players: [...r.teams.flatMap((t) => t.players), ...(r.freeAgents ?? [])] };
+  }));
+  if (JSON.stringify(rebuilt) !== JSON.stringify(trajFile)) err('trajectories.json 与 rosters 不一致：请运行 npx tsx scripts/build-trajectories.ts');
+  const index = read<PlayerIndexEntry[]>('playerIndex.json');
+  const byId = new Map(index.map((e) => [e.id, e]));
+  let changers = 0;
+  for (const [id, traj] of Object.entries(trajFile)) {
+    const tis2 = Object.keys(traj).map(Number).sort((a, b) => a - b);
+    if (!tis2.length) { err(`trajectories ${id}: 没有任何届次`); continue; }
+    const first = traj[tis2[0]];
+    if (!first.pos) err(`trajectories ${id}: 首届 TI${tis2[0]} 缺少 pos`);
+    const roles = new Set<Position>();
+    for (const k of tis2) {
+      const pos = traj[k].pos;
+      if (pos === undefined) continue;
+      if (!POSITIONS.includes(pos)) err(`trajectories ${id} TI${k}: pos ${pos} 无效`);
+      roles.add(pos);
+    }
+    if (roles.size > 1) changers++;
+    const e = byId.get(id);
+    if (!e) err(`trajectories ${id}: playerIndex 中没有该选手`);
+    else if (first.pos && e.position !== first.pos) err(`playerIndex ${id}: position ${e.position} ≠ 首届位置 ${first.pos}`);
+  }
+  for (const e of index) if (!trajFile[e.id]) err(`playerIndex ${e.id}: trajectories 中没有该选手`);
+  // 同一届同一选手（同时列在战队与自由选手中）位置必须一致，否则「当届真实位置」有歧义
+  for (const ti of rosterTis) {
+    const r = readRosterSync(ti);
+    const posOf = new Map<string, Position>();
+    for (const p of [...r.teams.flatMap((t) => t.players), ...(r.freeAgents ?? [])]) {
+      const prev = posOf.get(p.id);
+      if (prev && prev !== p.position) err(`ti${ti} ${p.id}: 同一届位置不一致（${prev} / ${p.position}）`);
+      posOf.set(p.id, p.position);
+    }
+  }
+  console.log(`真实生涯位置：${Object.keys(trajFile).length} 名选手，其中 ${changers} 名在真实生涯中换过位置`);
+  // clubIndex.json（新俱乐部签回真实选手时优先用其中的当届位置，clubs.bringBackRealPlayer）与逐届真实位置一致：
+  // roster 位置变动后若只重建了轨迹、没有重建俱乐部索引，这里会报错
+  const exact = new Map<string, Map<number, Position>>();
+  for (const [id, traj] of Object.entries(trajFile)) {
+    const m = new Map<number, Position>();
+    let cur: Position | undefined;
+    for (const k of Object.keys(traj).map(Number).sort((a, b) => a - b)) {
+      cur = traj[k].pos ?? cur;
+      if (cur) m.set(k, cur);
+    }
+    exact.set(id, m);
+  }
+  type ClubApp = [number, string, string, string, string, string, number, number, number, string, string[], string | null, Position[]];
+  const clubs = read<{ orgs: { id: string; apps: ClubApp[] }[] }>('clubIndex.json');
+  let clubChecked = 0;
+  for (const org of clubs.orgs ?? []) {
+    for (const app of org.apps ?? []) {
+      const [ti, teamId, , , , , , , , , players, , positions] = app;
+      (players ?? []).forEach((pid, i) => {
+        const want = exact.get(pid)?.get(ti);
+        if (!want || !positions?.[i]) return;
+        clubChecked++;
+        if (positions[i] !== want) err(`clubIndex ${org.id} TI${ti} ${teamId} ${pid}: 位置 ${positions[i]} ≠ 当届真实位置 ${want}（请运行 npx tsx scripts/build-club-index.ts）`);
+      });
+    }
+  }
+  console.log(`俱乐部索引位置：核对 ${clubChecked} 条`);
 }
 
 // 俱乐部品牌变迁（第十波 #4，src/data/branding.json）：结构合法，teamIds 都是 roster 中出现过的战队 id

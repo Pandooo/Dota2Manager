@@ -24,6 +24,7 @@ import { rngOf, type Rng } from './rng';
 import { clamp, formatGold } from './util';
 import { addNews, pushPopup } from './news';
 import { ageOf, effectiveAttr, overallRating, playerRating, playerTier, seasonEconIndex, tierIndex } from './player';
+import { naturalPositions } from './roles';
 import { activeTeams, addPlayerToTeam, autoLineup, rankTeamsByRating } from './team';
 import { generatePlayer, rookieFromIndex } from './generation';
 import { departToFreeAgency } from './market';
@@ -352,14 +353,19 @@ export function rookieDraftScore(
     + effectiveAttr(p, 'talent') * num(cfg.talentWeight, 0)
     + (20 - (Number.isFinite(age) ? age : 20)) * num(cfg.youthWeight, 0);
   const pos: Position = p.position;
-  const starterId = team.lineup?.[pos];
-  const starter = starterId ? roster.find((q) => q.id === starterId) : undefined;
-  if (!starter) {
-    score += num(cfg.needEmpty, 0);
-  } else {
-    const diff = playerRating(p, pos) - playerRating(starter, pos);
-    if (diff > 0) score += Math.min(num(cfg.needUpgradeMax, 0), diff * num(cfg.needUpgrade, 0));
+  // 位置需求：本职位置（本位置 / 副位置，第十三波）中需求最大的一个（首发空缺 > 能提升首发；副位置按打折后的评分）
+  let need = 0;
+  for (const q of naturalPositions(p)) {
+    const starterId = team.lineup?.[q];
+    const starter = starterId ? roster.find((x) => x.id === starterId) : undefined;
+    if (!starter) {
+      need = Math.max(need, num(cfg.needEmpty, 0));
+    } else {
+      const diff = playerRating(p, q) - playerRating(starter, q);
+      if (diff > 0) need = Math.max(need, Math.min(num(cfg.needUpgradeMax, 0), diff * num(cfg.needUpgrade, 0)));
+    }
   }
+  score += need;
   const same = roster.filter((q) => q.position === pos).length;
   if (same >= 2) score -= num(cfg.depthPenalty, 0) * (same - 1);
   if (homeTeam && homeTeam === team.id && p.isReal && !team.isPlayer) score += num(cfg.homeTeamBonus, 0);

@@ -588,7 +588,7 @@ export default function Finance() {
                       <td>
                         <div className="flex items-center gap-1.5">
                           <PlayerLink player={p} />
-                          <PosBadge pos={p.position} />
+                          <PosBadge pos={p.position} alt={p.altPositions} />
                           {p.isRookie && <span className="text-[10px] text-faint">新秀</span>}
                         </div>
                       </td>

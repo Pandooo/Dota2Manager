@@ -21,6 +21,7 @@ import { clamp } from './util';
 import { addNews } from './news';
 import { activeTeams, autoLineup, rankTeamsByRating, teamPlayers } from './team';
 import { computeSalary, marketValue, overallRating, playerTier, seasonYear } from './player';
+import { realRoleFor } from './roles';
 import { addFinance, econ, realClubStartingFunds, roundWageBill } from './economy';
 import { departToFreeAgency, executeTransfer, fillRosterFromMarket, roundFee } from './market';
 import { coachFromSeed, colorFromId, generateTeamName, playerFromSeed } from './generation';
@@ -230,7 +231,8 @@ function bringBackRealPlayer(state: GameState, pid: string, ti: number, position
     ...(e.name ? { name: e.name } : {}),
     nationality: e.nationality,
     birthYear: e.birthYear,
-    position: position && POSITIONS.includes(position) ? position : e.position,
+    // 俱乐部当届阵容中的位置；缺失时取当届（或此前最近一届）的真实位置（第十三波，roles.realRoleFor），再退回首次出现时的位置
+    position: position && POSITIONS.includes(position) ? position : realRoleFor(pid, ti) ?? e.position,
     mmr: point.mmr,
     power: point.power,
     talent: clamp(e.peakTalent - C().bringBackTalentDecline * Math.max(0, age - C().bringBackTalentAgeFrom), 20, CONFIG.player.maxAttr),

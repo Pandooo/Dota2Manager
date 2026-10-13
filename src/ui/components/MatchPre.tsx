@@ -5,7 +5,9 @@
 import type { GameRecord, GameState, Series, Team, Tournament } from '../../engine/types';
 import {
   REGION_LABEL, effectivePower, getCoach, isAvailable, lineupPlayers, playerRating, playerTier, teamInsight, teamRating,
+  ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
+import type { RoleFit } from '../../engine';
 import { Badge, Button, Card, Hint, PlayerLink, PosBadge, TeamLink, TeamTag, TierBadge, cx } from './common';
 import { HeroAvatar, heroCn } from './MatchHero';
 import { CompareRow, FACTION_LABEL, FACTION_TEXT, MineBadge, fmtDuration, gameWinnerId, pct, safe, strengthShare, type Faction, type Side } from './MatchShared';
@@ -211,7 +213,7 @@ function LineupCard({
               const eff = safe(() => effectivePower(player), player.power);
               const diff = eff - player.power;
               const mods = (player.modifiers ?? []).filter((m) => m.attr === 'power').map((m) => m.source);
-              const offRole = player.position !== pos;
+              const fit = safe(() => roleFit(player, pos), 'off' as RoleFit);
               const unavailable = !safe(() => isAvailable(player, tournamentId), true);
               return (
                 <tr key={pos}>
@@ -221,9 +223,12 @@ function LineupCard({
                   <td>
                     <div className="flex items-center gap-1.5">
                       <PlayerLink player={player} />
-                      {offRole && (
-                        <Badge className="bg-bad/15 text-bad" title="非本位置，战力打折">
-                          错位
+                      {fit !== 'main' && (
+                        <Badge
+                          className={fit === 'off' ? 'bg-bad/15 text-bad' : 'bg-info/15 text-info'}
+                          title={`${ROLE_FIT_LABEL[fit]}，评分 ×${roleFitFactor(fit)}`}
+                        >
+                          {fit === 'off' ? '错位' : fit === 'alt' ? '副位' : '4/5互换'}
                         </Badge>
                       )}
                       {unavailable && <Badge className="bg-bad/25 text-bad">缺阵</Badge>}

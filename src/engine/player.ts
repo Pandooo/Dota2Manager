@@ -3,6 +3,7 @@ import { CONFIG, TI_YEAR } from './config';
 import type { GameState, ModAttr, Modifier, Player, Position, Region, Tier } from './types';
 import { TIERS } from './types';
 import { clamp, nextId, yearOf } from './util';
+import { roleFactor } from './roles';
 
 // ---------------------------------------------------------------------------
 // 天梯等级
@@ -118,10 +119,12 @@ export function playerTier(p: Player): Tier {
   return tierOf(effectiveAttr(p, 'mmr'));
 }
 
-/** 选手在某位置上的评分 = effectivePower × ladderMult × (位置匹配 ? 1 : offRoleFactor) */
+/**
+ * 选手在某位置上的评分 = effectivePower × ladderMult × 位置系数（roles.roleFactor：本位置 1 > 副位置 altRoleFactor ≥
+ * 四五号位互换 supportSwapFactor > 其他非本位置 offRoleFactor）
+ */
 export function playerRating(p: Player, slot: Position): number {
-  const roleFactor = slot === p.position ? 1 : CONFIG.team.offRoleFactor;
-  return effectivePower(p) * ladderMult(playerTier(p)) * roleFactor;
+  return effectivePower(p) * ladderMult(playerTier(p)) * roleFactor(p, slot);
 }
 
 /** 选手综合评分（本位置 playerRating），用于排序/展示 */

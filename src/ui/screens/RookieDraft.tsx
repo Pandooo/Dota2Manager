@@ -345,7 +345,7 @@ export default function RookieDraft() {
                           {starter && <Badge className="bg-good/15 text-good">首发</Badge>}
                         </div>
                       </td>
-                      <td><PosBadge pos={p.position} /></td>
+                      <td><PosBadge pos={p.position} alt={p.altPositions} /></td>
                       <td className="num">{safe(() => ageOf(g, p), 0)}</td>
                       <td><TierBadge tier={playerTier(p)} /></td>
                       <td className="num font-semibold"><AttrNum value={effectivePower(p)} digits={1} /></td>

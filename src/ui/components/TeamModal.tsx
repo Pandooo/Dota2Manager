@@ -4,9 +4,13 @@ import { useGameStore } from '../../store/gameStore';
 import type { GameState, Player, Position } from '../../engine/types';
 import {
   CONFIG, REGION_LABEL, ageOf, benchPlayers, effectivePower, formatGold, formatRank, getCoach, lineupPlayers, overallRating,
-  playerRating, playerTier, rankTeamsByRating, seasonStandings, teamRating, trainingBlockReason,
+  playerRating, playerTier, rankTeamsByRating, seasonStandings, teamRating, trainingBlockReason, ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
+import type { RoleFit } from '../../engine';
 import { Badge, Button, EmptyState, Modal, PosBadge, RegionBadge, TierBadge, cx } from './common';
+
+/** 位置评分的颜色：本位置 / 副位置与四五号位互换 / 非本位置 */
+const FIT_TEXT: Record<RoleFit, string> = { main: 'text-mute', alt: 'text-info', swap: 'text-info', off: 'text-bad' };
 import { TeamEmblem } from './TeamEmblem';
 import { TourTierBadge, openTournamentView, rankClass, safe } from './TourShared';
 import { PediaEntryButton } from './PediaKit';
@@ -231,7 +235,12 @@ function TeamBody({
                 <th>天梯</th>
                 <th className="num">战斗力</th>
                 <th className="num" title="本位置评分">综合</th>
-                <th className="num" title={`在当前首发位置上的评分（非本位 ×${CONFIG.team.offRoleFactor}）`}>位置评分</th>
+                <th
+                  className="num"
+                  title={`在当前首发位置上的评分（本位置 ×1；副位置 ×${CONFIG.team.altRoleFactor}；四五号位互换 ×${CONFIG.team.supportSwapFactor}；其他非本位 ×${CONFIG.team.offRoleFactor}）`}
+                >
+                  位置评分
+                </th>
                 {isMine && <th className="num">合同至</th>}
               </tr>
             </thead>
@@ -360,7 +369,7 @@ function RosterRow({
         )}
       </td>
       <td>
-        <PosBadge pos={p.position} />
+        <PosBadge pos={p.position} alt={p.altPositions} />
       </td>
       <td className="num">{safe(() => ageOf(game, p), 0)}</td>
       <td>
@@ -368,7 +377,10 @@ function RosterRow({
       </td>
       <td className="num">{safe(() => effectivePower(p), p.power).toFixed(1)}</td>
       <td className="num font-semibold">{safe(() => overallRating(p), 0).toFixed(1)}</td>
-      <td className={cx('num', slot && slot !== p.position ? 'text-bad' : 'text-mute')}>
+      <td
+        className={cx('num', !slot ? 'text-mute' : FIT_TEXT[safe(() => roleFit(p, slot), 'off' as RoleFit)])}
+        title={slot ? `${ROLE_FIT_LABEL[safe(() => roleFit(p, slot), 'off' as RoleFit)]} ×${roleFitFactor(safe(() => roleFit(p, slot), 'off' as RoleFit))}` : undefined}
+      >
         {slot ? safe(() => playerRating(p, slot), 0).toFixed(1) : '—'}
       </td>
       {showContract && <td className="num text-mute">TI{p.contractUntil}</td>}

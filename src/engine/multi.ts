@@ -34,6 +34,8 @@ import { advanceTournamentUntilPlayer, readySeries } from './tournament';
 import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './generation';
 import { aiEnsureRosters } from './ai';
 import { autoLineup, setLineupSlot } from './team';
+import { ROLE_DATA_VERSION } from './roles';
+import { migrateRealRoles } from './roleSync';
 import { computeSalary } from './player';
 import { newClubStartingFunds, seedTeamStartingFunds } from './economy';
 import { registerForTournament, unregisterFromTournament } from './schedule';
@@ -615,6 +617,18 @@ export function allSeatsReady(state: GameState): boolean {
 }
 
 /**
+ * 多人房间的存档迁移（服务器载入房间时由 server/rooms.ts 经 MpEngine.migrate 调用；回合推进与 RPC 前再兜底一次——幂等，
+ * 已是最新版本时只做一次版本比较）。当前只有真实生涯位置（第十三波，roleSync.migrateRealRoles：旧房间的真实选手同步到当届
+ * 真实位置、补齐副位置，各人类玩家战队收到一条私有的修正汇总）。在中性上下文中执行。返回是否执行了迁移。
+ */
+export function migrateRoomState(state: GameState): boolean {
+  if (!state?.multiplayer || Number(state.roleDataVersion) >= ROLE_DATA_VERSION) return false;
+  ensureNeutral(state);
+  migrateRealRoles(state);
+  return true;
+}
+
+/**
  * 全员准备后推进回合：全局部分执行一次、玩家相关部分对每个座位执行一次（season.ts 已用 forEachSeat 拆分）；
  * 推进后清空 ready；处理出局（荣誉 < 0 的座位 eliminated=true，其余继续）；全部出局或到达终点 → gameOver。
  * opts.force：不要求全员准备（房主强制推进；各座位的阻塞仍须清空）。
@@ -625,6 +639,7 @@ export function advanceMultiplayer(state: GameState, opts: { force?: boolean } =
   if (state.gameOver) return fail('游戏已结束');
   try {
     ensureNeutral(state);
+    migrateRoomState(state);
     if (!opts.force && !allSeatsReady(state)) {
       const waiting = activeHumanIds(state).filter((id) => !mp.seats[id]?.ready).map((id) => seatName(state, id));
       return fail(`还有玩家未准备：${waiting.join('、')}`);
@@ -720,6 +735,7 @@ export function callAsSeat(state: GameState, teamId: string, fn: string, args: u
     if (state.gameOver) return fail('游戏已结束');
     if (seat.eliminated || state.teams[teamId]?.disbanded) return fail('战队已解散，当前为观战模式');
   }
+  migrateRoomState(state); // 旧房间（服务器载入时未迁移）兜底；已迁移时只是一次版本比较
   let result: unknown;
   try {
     result = withSeat(state, teamId, () => impl(state, ...list));
@@ -759,6 +775,7 @@ export function autopilotSeat(state: GameState, teamId: string): OpResult {
   const notes: string[] = [];
   try {
     ensureNeutral(state);
+    migrateRoomState(state); // 旧房间（服务器载入时未迁移）兜底，与 callAsSeat / advanceMultiplayer 一致；已迁移时只是一次版本比较
     const rep = autoHandleSeat(state, teamId, { source: 'autopilot' });
     // 只是在等待（对手 / 其他玩家）时不产生摘要
     if (rep?.progressed) notes.push(...rep.lines);

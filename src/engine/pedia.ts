@@ -20,6 +20,7 @@ import { CONFIG, POSITION_SHORT, TOURNAMENT_TIER_LABEL } from './config';
 import { formatRank } from './util';
 import { tiYear } from './calendar';
 import { ageOf, overallRating, playerTier, tierIndex } from './player';
+import { realRoleSpans } from './roles';
 import { rankTeamsByRating } from './team';
 import { heroById, heroName } from './heroes';
 import { pediaOf, pediaRevision } from './stats';
@@ -369,6 +370,10 @@ export interface PediaPlayerPage {
   };
   heroes: { heroId: string; name: string; games: number; wins: number; winRate: number }[];
   heroOther: { games: number; wins: number } | null;
+  /** 副位置（第十三波，Player.altPositions；本局已不在库中的选手为空） */
+  altPositions: Position[];
+  /** 真实生涯位置（真实阵容数据截至本局当届，相邻届次的相同位置合并为一段；程序生成选手为空） */
+  realRoles: { from: number; to: number; pos: Position }[];
   /** 开局前（现实）的 TI 履历 */
   preGame: { tiResults: PediaPlayerTiResult[] } | null;
   standing: PediaPlayerStanding | null;
@@ -1688,6 +1693,9 @@ export function pediaPlayerPage(state: GameState, playerId: string): PediaPlayer
     achievements: { tiResults, tiTitles, titles, finals, titleCounts: counts, mvps: totals.mvps },
     heroes,
     heroOther: e?.ho && e.ho[0] > 0 ? { games: e.ho[0], wins: e.ho[1] } : null,
+    altPositions: (p?.altPositions ?? []).slice(),
+    // 只显示到本局当届（不剧透本局尚未到来的届次，与开局前 TI 履历 / 俱乐部高光同口径）
+    realRoles: p && !p.isReal ? [] : realRoleSpans(playerId, state.season?.ti ?? startTi),
     preGame: real.length ? { tiResults: real.filter((r) => r.ti < startTi) } : null,
     standing: pediaPlayerStanding(state, playerId),
     since: sinceOf(idx.ps, state),

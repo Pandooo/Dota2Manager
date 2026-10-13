@@ -117,7 +117,11 @@ export default function ShellRules() {
             {' '}{lm.C.toFixed(2)}~{lm.SSR.toFixed(2)} 的倍数；
             <B>灵性</B>影响 BP，<B>韧性</B>越高受事件影响越小，<B>归属感</B>过低的选手可能申请离队或被挖走。
           </p>
-          <p>选手打非本位置时战力打 {Math.round(CONFIG.team.offRoleFactor * 100)} 折。</p>
+          <p>
+            选手打非本位置时评分打 {Math.round(CONFIG.team.offRoleFactor * 100)} 折；<B>副位置</B>（真实生涯中担任过的其他位置）只打
+            {' '}{Math.round(CONFIG.team.altRoleFactor * 100)} 折，四号位与五号位互换打 {Math.round(CONFIG.team.supportSwapFactor * 100)} 折。
+            真实选手的位置随真实生涯在新赛季调整（如 Miposhka 从 TI7 起打五号位）。
+          </p>
         </Section>
 
         <Section icon="♛" title="荣誉" accent="bg-gold/20 text-gold">

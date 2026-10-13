@@ -9,6 +9,7 @@ import { listingProgress } from './listingRules';
 import {
   computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex,
 } from './player';
+import { playsNaturally, uncoveredPositions } from './roles';
 import {
   addPlayerToTeam, autoLineup, lineupPlayers, removePlayerFromTeam, rosterSigningBlock, teamPlayers, activeTeams,
 } from './team';
@@ -400,10 +401,12 @@ export function bidForPlayer(state: GameState, playerId: string, fee: number): O
 // AI 补员 / 裁员（供 ai.ts、events.ts 复用）
 // ---------------------------------------------------------------------------
 
-/** 战队缺失的位置（无任何正式队员担任该位置） */
+/**
+ * 战队缺失的位置：正式队员按「本职」（本位置 / 副位置，每人只打一个位置）匹配后仍无人担任的位置（roles.uncoveredPositions；
+ * 四五号位互换不算本职——没有五号位的阵容仍会去找真正的五号位）
+ */
 function missingPositions(state: GameState, teamId: string): Position[] {
-  const have = new Set(regularRoster(state, teamId).map((p) => p.position));
-  return POSITIONS.filter((pos) => !have.has(pos));
+  return uncoveredPositions(regularRoster(state, teamId));
 }
 
 /** AI 能否负担：付完签字费后，余额仍能覆盖（现有工资 + 新增工资）× signBudgetRounds */
@@ -413,7 +416,7 @@ function canAfford(state: GameState, team: Team, fee: number, salary: number): b
 
 /**
  * 从自由选手池中为 AI 战队挑选某位置的最佳可负担、愿意加盟的选手（pool 按评分降序）。
- * position 为空时不限位置。
+ * position 为空时不限位置；给出时只看该位置的本职选手（本位置 / 副位置），minRating 与该位置上的评分比较。
  */
 export function pickAffordableFreeAgent(
   state: GameState,
@@ -424,8 +427,9 @@ export function pickAffordableFreeAgent(
 ): Player | null {
   for (const p of pool) {
     if (p.teamId || p.status !== 'active') continue;
-    if (position && p.position !== position) continue;
-    if (overallRating(p) <= minRating) return null; // 降序：后面只会更弱
+    if (position && !playsNaturally(p, position)) continue;
+    if (overallRating(p) <= minRating) return null; // 降序：后面只会更弱（位置评分不超过综合评分）
+    if (position && position !== p.position && playerRating(p, position) <= minRating) continue; // 副位置评分打折
     const fee = signingFee(state, p);
     if (!canAfford(state, team, fee, computeSalary(state, p))) continue;
     if (playerWillingness(state, p.id, team.id) < CONFIG.ai.minWillingness) continue;
@@ -885,7 +889,7 @@ export function generateTempSubCandidatesFor(state: GameState, positions: Positi
     const tier = rng.weighted(TIERS, tierWeights);
     let p: Player | undefined;
     if (rng.chance(CONFIG.market.realTempSubChance)) {
-      const reals = realPool.filter((r) => r.position === pos && playerTier(r) === tier && !used.has(r.id));
+      const reals = realPool.filter((r) => playsNaturally(r, pos) && playerTier(r) === tier && !used.has(r.id));
       if (reals.length) p = rng.pick(reals);
     }
     if (!p) {

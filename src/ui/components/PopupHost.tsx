@@ -201,7 +201,7 @@ function SettlementBody({ game, tournamentId }: { game: GameState; tournamentId:
                     <tr key={g.playerId}>
                       <td>
                         <span className="flex items-center gap-2">
-                          {p && <PosBadge pos={p.position} />}
+                          {p && <PosBadge pos={p.position} alt={p.altPositions} />}
                           {p ? <PlayerLink player={p} /> : <span className="text-mute">{g.playerId}</span>}
                           {p && <TierBadge tier={playerTier(p)} />}
                         </span>

@@ -8,9 +8,9 @@ import {
   activeListing, listingBidOutlook, listingDurationLabel, listingListedAtLabel, listingOffers, listingProgress, listingRoundStatus, raiseSalaryPreview,
   talkSuccessChance, talkedThisRound,
   SALARY_MOOD_LABEL, playerMoodSummary, renewalAsk, draftedRookieReleaseBlock,
-  developmentOutlook, GROWTH_OUTLOOK_HINT,
+  developmentOutlook, GROWTH_OUTLOOK_HINT, ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
-import type { GameState, GrowthOutlook, OverallMood, Player, SalaryMood, Team } from '../../engine';
+import type { GameState, GrowthOutlook, OverallMood, Player, RoleFit, SalaryMood, Team } from '../../engine';
 import {
   AttrRow, Badge, Button, EmptyState, Gold, Modal, PosBadge, RegionBadge, StatBar, TeamLink, TeamTag, TierBadge, cx,
 } from './common';
@@ -75,7 +75,7 @@ function PlayerModalInner({ id, onClose }: { id: string; onClose: () => void }) 
           <Flag cc={p.nationality} className="text-lg" />
           <span className="text-lg font-bold tracking-wide">{p.handle}</span>
           <TierBadge tier={tier} />
-          <PosBadge pos={p.position} full />
+          <PosBadge pos={p.position} full alt={p.altPositions} />
           {p.status === 'banned' && <Chip tone="bad">永久禁赛</Chip>}
           {p.status === 'retired' && <Chip>已退役</Chip>}
           {p.isRookie && <Chip tone="info">新秀</Chip>}
@@ -88,7 +88,7 @@ function PlayerModalInner({ id, onClose }: { id: string; onClose: () => void }) 
           {p.status === 'active' && ownTeam && (
             starterPos ? (
               <Chip tone="gold" title={`${ownTeam.name} 首发：${POSITION_LABEL[starterPos]}`}>
-                首发{starterPos !== p.position ? `·${POSITION_LABEL[starterPos].slice(0, 3)}` : ''}
+                首发{starterPos !== p.position ? `·${POSITION_LABEL[starterPos].slice(0, 3)}（${ROLE_FIT_LABEL[roleFit(p, starterPos)]}）` : ''}
               </Chip>
             ) : !p.tempSubUntilTournament ? (
               <Chip title={`${ownTeam.name} 替补`}>替补</Chip>
@@ -173,8 +173,8 @@ function PlayerDetail({ game, p, onClose }: { game: GameState; p: Player; onClos
                   </span>
                 )}
               </Info>
-              <Info label="位置">
-                <PosBadge pos={p.position} full />
+              <Info label="位置" wrap>
+                <PosBadge pos={p.position} full alt={p.altPositions} />
               </Info>
               <Info label="身份">
                 <span className="inline-flex flex-wrap gap-1">
@@ -241,15 +241,21 @@ function PlayerDetail({ game, p, onClose }: { game: GameState; p: Player; onClos
             <div className="mt-3 grid grid-cols-5 gap-1.5">
               {POSITIONS.map((pos) => {
                 const r = safe(() => playerRating(p, pos), 0);
-                const own = pos === p.position;
+                const fit = safe(() => roleFit(p, pos), 'off' as RoleFit);
+                const own = fit === 'main';
+                const near = fit === 'alt' || fit === 'swap';
                 return (
                   <div
                     key={pos}
-                    className={cx('rounded border px-1.5 py-1 text-center', own ? 'border-gold/50 bg-gold/10' : 'border-line bg-panel-3/40')}
-                    title={own ? '本位置评分' : `打 ${POSITION_LABEL[pos]}：×${CONFIG.team.offRoleFactor}`}
+                    className={cx(
+                      'rounded border px-1.5 py-1 text-center',
+                      own ? 'border-gold/50 bg-gold/10' : near ? 'border-info/40 bg-info/5' : 'border-line bg-panel-3/40',
+                    )}
+                    title={own ? '本位置评分' : `打 ${POSITION_LABEL[pos]}：${ROLE_FIT_LABEL[fit]} ×${roleFitFactor(fit)}`}
                   >
                     <div className="text-[10px] text-faint">{POSITION_LABEL[pos].slice(0, 3)}</div>
-                    <div className={cx('text-sm font-semibold tabular', own ? 'text-gold' : 'text-mute')}>{r.toFixed(1)}</div>
+                    <div className={cx('text-sm font-semibold tabular', own ? 'text-gold' : near ? 'text-info' : 'text-mute')}>{r.toFixed(1)}</div>
+                    {!own && <div className="text-[9px] leading-3 text-faint">{fit === 'alt' ? '副位置' : fit === 'swap' ? '4/5 互换' : '非本位'}</div>}
                   </div>
                 );
               })}
@@ -1057,11 +1063,12 @@ function Panel({ title, children }: { title: ReactNode; children: ReactNode }) {
   );
 }
 
-function Info({ label, children }: { label: ReactNode; children: ReactNode }) {
+/** wrap：内容可换行（如带副位置的位置徽章），默认单行截断 */
+function Info({ label, children, wrap }: { label: ReactNode; children: ReactNode; wrap?: boolean }) {
   return (
     <div className="min-w-0">
       <div className="text-[11px] text-faint">{label}</div>
-      <div className="mt-0.5 truncate">{children}</div>
+      <div className={wrap ? 'mt-0.5 min-w-0' : 'mt-0.5 truncate'}>{children}</div>
     </div>
   );
 }

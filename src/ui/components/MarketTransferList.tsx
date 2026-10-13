@@ -4,6 +4,7 @@ import { useGame } from '../../store/gameStore';
 import {
   CONFIG, POSITIONS, REGIONS, TIERS, ageOf, effectiveAttr, effectivePower, marketValue, overallRating, playerTier,
   suggestedFee, tierIndex, POSITION_LABEL, REGION_LABEL, formatGold,
+  playsNaturally, playerRating, roleFit, roleFitText,
   type Player, type Position, type Region, type Team, type Tier,
 } from '../../engine';
 import { Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from './common';
@@ -54,7 +55,8 @@ export default function MarketTransferList({ windowOpen }: { windowOpen: boolean
         age: ageOf(g, p),
         tier: playerTier(p),
         power: effectivePower(p),
-        rating: overallRating(p),
+        // 按位置筛选时为打该位置的评分（副位置 ×0.95 等已计入），否则为本位置综合评分
+        rating: pos === 'all' ? overallRating(p) : safe(() => playerRating(p, pos), overallRating(p)),
         talent: effectiveAttr(p, 'talent'),
         value: safe(() => marketValue(g, p), 0),
         starter: starters.has(p.id),
@@ -65,7 +67,7 @@ export default function MarketTransferList({ windowOpen }: { windowOpen: boolean
   const needle = q.trim().toLowerCase();
   const filtered = all.filter(
     (r) =>
-      (pos === 'all' || r.p.position === pos) &&
+      (pos === 'all' || playsNaturally(r.p, pos)) && // 含副位置（第十三波）
       (tier === 'all' || r.tier === tier) &&
       (region === 'all' || r.team.region === region) &&
       (teamId === 'all' || r.team.id === teamId) &&
@@ -152,7 +154,14 @@ export default function MarketTransferList({ windowOpen }: { windowOpen: boolean
                   <SortTh k="age" {...sp} num>年龄</SortTh>
                   <SortTh k="tier" {...sp}>等级</SortTh>
                   <SortTh k="power" {...sp} num>战力</SortTh>
-                  <SortTh k="rating" {...sp} num title="综合评分 = 有效战力 × 天梯倍数">评分</SortTh>
+                  <SortTh
+                    k="rating"
+                    {...sp}
+                    num
+                    title={pos === 'all' ? '综合评分 = 有效战力 × 天梯倍数' : `打${POSITION_LABEL[pos]}的评分（副位置等非本位置已按位置系数折算）`}
+                  >
+                    评分
+                  </SortTh>
                   <SortTh k="talent" {...sp} num>天赋</SortTh>
                   <SortTh k="contract" {...sp} num>合同</SortTh>
                   <SortTh k="value" {...sp} num>身价</SortTh>
@@ -178,11 +187,14 @@ export default function MarketTransferList({ windowOpen }: { windowOpen: boolean
                           <span className="text-[10px] text-faint">{r.team.region}</span>
                         </span>
                       </td>
-                      <td><PosBadge pos={r.p.position} /></td>
+                      <td><PosBadge pos={r.p.position} alt={r.p.altPositions} /></td>
                       <td className="num">{r.age}</td>
                       <td><TierBadge tier={r.tier} /></td>
                       <td className="num"><AttrNum value={r.power} digits={1} /></td>
-                      <td className="num font-semibold">{r.rating.toFixed(1)}</td>
+                      <td className="num font-semibold" title={pos !== 'all' && r.p.position !== pos ? `打${POSITION_LABEL[pos]}：${roleFitText(r.p, pos)}` : undefined}>
+                        {r.rating.toFixed(1)}
+                        {pos !== 'all' && roleFit(r.p, pos) !== 'main' && <span className="ml-1 text-[10px] font-normal text-info">副</span>}
+                      </td>
                       <td className="num"><AttrNum value={r.talent} /></td>
                       <td className={cx('num text-xs', num(r.p.contractUntil) <= g.season.ti ? 'text-gold' : 'text-mute')}
                         title={num(r.p.contractUntil) <= g.season.ti ? '合同本赛季到期' : undefined}>

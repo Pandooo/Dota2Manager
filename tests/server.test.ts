@@ -935,6 +935,37 @@ describe('server · 持久化', () => {
     expect(existsSync(join(dataDir, 'rooms', `${roomId}.json`))).toBe(true);
   });
 
+  it('重启载入进行中的房间时调用引擎的存档迁移（如真实生涯位置），迁移结果随状态下发', async () => {
+    const dataDir = tmp('migrate');
+    const eng = makeFakeEngine();
+    const s1 = await boot({ dataDir, engine: eng });
+    const [a] = await startGame(s1, ['甲', '乙']);
+    const roomId = a.room!.id;
+    await s1.close();
+    running.splice(running.indexOf(s1), 1);
+    await until(() => a.closed, 3000, '断开');
+
+    const migrated: string[] = [];
+    const eng2: MpEngine = {
+      ...eng,
+      migrate(state) {
+        const s = state as unknown as FakeState & { roleDataVersion?: number };
+        if (s.roleDataVersion) return false;
+        s.roleDataVersion = 1;
+        migrated.push(roomId);
+        return true;
+      },
+    };
+    const s2 = await boot({ dataDir, engine: eng2 });
+    expect(migrated).toEqual([roomId]);
+    const a2 = new TestClient(s2.wsUrl, { sessionId: a.sessionId, name: '甲' });
+    clients.push(a2);
+    const st = a2.waitFor('state');
+    await a2.hello();
+    await st;
+    expect((a2.state as unknown as { roleDataVersion?: number }).roleDataVersion).toBe(1);
+  });
+
   it('被移出的玩家与座位键随房间存档；重启后仍不能加入，座位键不变', async () => {
     const dataDir = tmp('kicked');
     const s1 = await boot({ dataDir });

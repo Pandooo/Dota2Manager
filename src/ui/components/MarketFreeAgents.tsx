@@ -5,6 +5,7 @@ import {
   CONFIG, POSITIONS, TIERS, ageOf, effectiveAttr, effectivePower, formatGold, freeAgents, marketValue, overallRating,
   playerTier, playerWillingness, rosterRoom, rosterSigningBlock, rosterSigningNote, signingSalary, tierIndex, POSITION_LABEL,
   REGION_LABEL,
+  playsNaturally,
   type Player, type Position, type Tier,
 } from '../../engine';
 import { Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TierBadge, cx } from './common';
@@ -72,7 +73,7 @@ export default function MarketFreeAgents({ windowOpen }: { windowOpen: boolean }
   const needle = q.trim().toLowerCase();
   const filtered = all.filter(
     (r) =>
-      (pos === 'all' || r.p.position === pos) &&
+      (pos === 'all' || playsNaturally(r.p, pos)) && // 含副位置（第十三波）
       (tier === 'all' || r.tier === tier) &&
       r.power >= minPower &&
       (!needle ||
@@ -232,7 +233,7 @@ export default function MarketFreeAgents({ windowOpen }: { windowOpen: boolean }
                           <span className="text-[10px] text-faint" title={REGION_LABEL[r.p.region]}>{r.p.nationality}</span>
                         </div>
                       </td>
-                      <td><PosBadge pos={r.p.position} /></td>
+                      <td><PosBadge pos={r.p.position} alt={r.p.altPositions} /></td>
                       <td className="num">{r.age}</td>
                       <td><TierBadge tier={r.tier} /></td>
                       <td className="num font-semibold"><AttrNum value={r.power} digits={1} /></td>
