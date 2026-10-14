@@ -12,15 +12,17 @@
 // 所有查询共用一份按状态修订号缓存的索引（WeakMap），一次构建 O(选手 + 赛事)，之后每次查询只做排序 / 切片。
 // ============================================================================
 import type {
-  GameState, PediaPlayerSeason, PediaState, PediaTeamSeason, Player, Position, Region, Team, Tier,
+  GachaCardKind, GameState, HallOfFameMember, PediaPlayerSeason, PediaState, PediaTeamSeason, Player, PlayerIndexEntry, Position, Region,
+  Team, Tier,
   TournamentHistoryEntry, TournamentTier,
 } from './types';
 import { TIERS } from './types';
 import { CONFIG, POSITION_SHORT, TOURNAMENT_TIER_LABEL } from './config';
-import { formatRank } from './util';
+import { formatRank, ownEntry } from './util';
 import { tiYear } from './calendar';
 import { ageOf, overallRating, playerTier, tierIndex } from './player';
 import { realRoleSpans } from './roles';
+import { hofMember, isSummonable, livingSummonsOf } from './hallOfFame';
 import { rankTeamsByRating } from './team';
 import { heroById, heroName } from './heroes';
 import { pediaOf, pediaRevision } from './stats';
@@ -29,7 +31,7 @@ import {
   teamLegacyStats,
 } from './legacy';
 import type { LegacyClubRef, LegacyScore, LegacyStats, LegacyTitle } from './legacy';
-import { getAllTiInfo, getTournamentTemplates, lastTournamentDataSeason } from '../data/index';
+import { getAllTiInfo, getPlayerIndex, getTournamentTemplates, lastTournamentDataSeason } from '../data/index';
 import tiResultsJson from '../data/tiResults.json';
 
 const P = () => CONFIG.pedia;
@@ -343,6 +345,8 @@ export interface PediaPlayerPage {
   region: Region | null;
   position: Position | null;
   age: number | null;
+  /** 出生年份（本局选手；不在本局的真实选手 / 名人堂传奇取选手索引或名人堂登记） */
+  birthYear: number | null;
   tier: Tier | null;
   peakTier: Tier | null;
   rating: number | null;
@@ -378,6 +382,20 @@ export interface PediaPlayerPage {
   preGame: { tiResults: PediaPlayerTiResult[] } | null;
   standing: PediaPlayerStanding | null;
   since: { ti: number; round: number };
+  /** 新秀抽卡出身（2026-10-14；gacha.ts） */
+  gacha: { ti: number; tier: Tier; kind: GachaCardKind; teamId: string; teamName: string | null; placed: boolean } | null;
+  /** 请神新秀：原型（名人堂成员）；protoHasPage = 原型在 DotaPedia 中有词条 */
+  summon: { protoId: string; protoHandle: string; ti: number; protoHasPage: boolean } | null;
+  /** 名人堂成员：入选信息与在役的请神新秀 */
+  hallOfFame: {
+    source: HallOfFameMember['source'];
+    era: 'dota1' | null;
+    ti: number;
+    debutTier: Tier;
+    peakTier: Tier;
+    summonable: boolean;
+    summons: { id: string; handle: string; teamId: string | null; teamName: string | null }[];
+  } | null;
 }
 
 export interface PediaTournamentRow {
@@ -903,7 +921,7 @@ function ensureLiveRank(state: GameState, idx: Index): void {
 
 /** 本局成就（AI 战队：赛事史 + 赛季末实力快照 + 当季实时实力；人类战队：legacy.teamLegacyStats，与结算页一致） */
 function inGameStats(state: GameState, idx: Index, teamId: string): LegacyStats {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const log = state.legacyLog?.[teamId];
   if (team && (team.isPlayer || (Array.isArray(log) && log.length > 0))) {
     try {
@@ -971,7 +989,7 @@ function mergeStats(pre: LegacyStats | null, cur: LegacyStats): LegacyStats {
 }
 
 function legacyFor(state: GameState, idx: Index, teamId: string): Omit<PediaTeamLegacy, 'rank' | 'total' | 'summary'> {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const startTi = state.settings?.startTi ?? state.season?.ti ?? 1;
   const pre = pediaPreGameOf(startTi, teamId);
   const inGame = inGameStats(state, idx, teamId);
@@ -1421,7 +1439,7 @@ function teamStatus(team: Team | undefined): { status: PediaTeamPage['status']; 
 /** 战队页（仿 Liquipedia）；未知战队 id 返回 null */
 export function pediaTeamPage(state: GameState, teamId: string): PediaTeamPage | null {
   const idx = indexOf(state);
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const t = idx.teams.get(teamId);
   if (!team && !t && !idx.ps?.teams?.[teamId]) return null;
   const ti = t ?? newTeamIdx(teamId);
@@ -1582,6 +1600,20 @@ function playerStatus(state: GameState, id: string, p: Player | undefined): { st
   return { status: 'active', label: p.tempSubUntilTournament ? '临时替补' : '现役' };
 }
 
+let PLAYER_INDEX_BY_ID: Map<string, PlayerIndexEntry> | null = null;
+/** 真实选手索引（不在本局的真实选手的身份：显示 ID、国籍、出生年份） */
+function playerIndexEntry(id: string): PlayerIndexEntry | undefined {
+  if (!PLAYER_INDEX_BY_ID) {
+    PLAYER_INDEX_BY_ID = new Map();
+    try {
+      for (const x of getPlayerIndex() ?? []) if (x?.id) PLAYER_INDEX_BY_ID.set(x.id, x);
+    } catch {
+      /* 无索引 */
+    }
+  }
+  return PLAYER_INDEX_BY_ID.get(id);
+}
+
 /** 选手页（仿 Liquipedia）；完全未知的选手 id 返回 null */
 export function pediaPlayerPage(state: GameState, playerId: string): PediaPlayerPage | null {
   const idx = indexOf(state);
@@ -1670,14 +1702,19 @@ export function pediaPlayerPage(state: GameState, playerId: string): PediaPlayer
   const peakIdx = Math.max(curTierIdx, e?.pt ?? -1);
   const rating = p ? Math.round(overallRating(p) * 10) / 10 : null;
   const real = tiResults.filter((r) => r.real);
+  // 不在本局的真实选手 / 名人堂传奇（如晚开局时的 DotA1 时代选手）：身份取真实选手索引或名人堂登记，不显示小写 id
+  const ix = p ? undefined : playerIndexEntry(playerId);
+  const hm = p ? undefined : hofMember(state, playerId);
+  const birthYear = p?.birthYear ?? ix?.birthYear ?? hm?.birthYear ?? null;
   return {
     id: playerId,
-    handle: p?.handle ?? e?.n ?? pi?.name ?? playerId,
-    name: p?.name ?? null,
-    nationality: p?.nationality ?? null,
+    handle: p?.handle ?? e?.n ?? pi?.name ?? ix?.handle ?? hm?.handle ?? playerId,
+    name: p?.name ?? ix?.name ?? null,
+    nationality: p?.nationality ?? ix?.nationality ?? hm?.nationality ?? null,
     region: p?.region ?? null,
-    position: p?.position ?? e?.p ?? pi?.pos ?? null,
+    position: p?.position ?? e?.p ?? pi?.pos ?? ix?.position ?? hm?.position ?? null,
     age: p ? ageOf(state, p) : null,
+    birthYear: typeof birthYear === 'number' && Number.isFinite(birthYear) ? birthYear : null,
     tier: p ? playerTier(p) : null,
     peakTier: peakIdx >= 0 ? TIERS[peakIdx] : null,
     rating,
@@ -1699,7 +1736,46 @@ export function pediaPlayerPage(state: GameState, playerId: string): PediaPlayer
     preGame: real.length ? { tiResults: real.filter((r) => r.ti < startTi) } : null,
     standing: pediaPlayerStanding(state, playerId),
     since: sinceOf(idx.ps, state),
+    ...summonInfo(state, idx, playerId, p),
   };
+}
+
+/** DotaPedia 中是否有该选手的词条（与 pediaPlayerPage 返回非空同口径） */
+export function pediaHasPlayer(state: GameState, playerId: string): boolean {
+  const idx = indexOf(state);
+  return !!(state.players[playerId] || idx.ps?.players?.[playerId] || idx.players.get(playerId) || realPlayerTis().get(playerId));
+}
+
+/** 选手页的抽卡出身、请神关系与名人堂信息（只读） */
+function summonInfo(
+  state: GameState,
+  idx: ReturnType<typeof indexOf>,
+  playerId: string,
+  p: Player | undefined,
+): Pick<PediaPlayerPage, 'gacha' | 'summon' | 'hallOfFame'> {
+  const g = p?.gacha;
+  const gacha: PediaPlayerPage['gacha'] = g
+    ? { ti: g.ti, tier: g.tier, kind: g.kind, teamId: g.teamId, teamName: g.teamId ? teamName(state, idx, g.teamId) : null, placed: !!g.placed }
+    : null;
+  const s = p?.summon;
+  const summon: PediaPlayerPage['summon'] = s
+    ? { protoId: s.id, protoHandle: hofMember(state, s.id)?.handle ?? s.handle, ti: s.ti, protoHasPage: pediaHasPlayer(state, s.id) }
+    : null;
+  const m = hofMember(state, playerId);
+  const hallOfFame: PediaPlayerPage['hallOfFame'] = m
+    ? {
+      source: m.source,
+      era: m.era ?? null,
+      ti: m.ti,
+      debutTier: m.debutTier,
+      peakTier: m.peakTier,
+      summonable: isSummonable(m),
+      summons: livingSummonsOf(state, m.id).map((x) => ({
+        id: x.id, handle: x.handle, teamId: x.teamId, teamName: x.teamId ? teamName(state, idx, x.teamId) : null,
+      })),
+    }
+    : null;
+  return { gacha, summon, hallOfFame };
 }
 
 // ===========================================================================

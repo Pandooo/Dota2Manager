@@ -10,11 +10,11 @@
 // 继续收进「更多」，不会压住主按钮。左侧为本回合信息与「自动处理」开关（tooltip 说明自动处理内容）。
 // 多人模式：主按钮为「准备进入下一回合（n/m）」/「取消准备」，开启自动处理时为自动准备（服务器先自动处理再准备），
 // 全员准备后服务器推进回合。在比赛页且比赛进行中时不渲染（比赛页自带 MatchDock 底栏，避免两条底栏）。
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { mpHumanTeamIds, useCall, useCallSilent, useGame, useGameStore } from '../../store/gameStore';
 import {
-  currentPlayerTournament, formatGold, getAdvanceBlockers, isAvailable, playerNextSeries, previewAutoActions,
+  POSITION_CN, currentPlayerTournament, formatGold, getAdvanceBlockers, isAvailable, playerNextSeries, previewAutoActions,
   rosterOverflowNotice, roundKindForPlayer, teamPlayers, trainingSessionsLeft,
   type AutoRoundPreview, type GameState, type PendingDecision, type TrainingFocus,
 } from '../../engine';
@@ -45,6 +45,8 @@ const SCRIM_SUGGEST = 5;
 const LAZY_TIP =
   '下一回合自动处理（懒人模式）：开启后直接点「下一回合」即可——先按保守默认处理本回合挡住推进的事务再推进：'
   + '待决事件按默认选项处理（配合调查 / 低调处理 / 替补顶上 / 尝试挽留 / 拒绝报价 / 续约 1 赛季等）；'
+  + '抽卡后阵容超过绝对上限（超编）时先退回本回合抽到的新秀中评分最低者（返还部分费用），仍超编再解约替补中代价（解约补偿 + 身价）最低者；'
+  + '转会窗口开放期间，正式阵容缺位置或不足 5 人时签下负担得起、愿意加盟的自由选手补位（优先签下后收入仍付得起工资的人选；本回合因事件离队的不签回；不自动抽卡）；'
   + '首发不合法时自动补位，可出场不足 5 人时招募负担得起的临时替补；本方本回合剩余比赛快速模拟（自动 BP、跳过直播）。'
   + '未用完的训练本来就会在回合结束时按当前焦点自动完成。处理结果记入消息中心「本回合自动处理」。'
   + '\n多人模式下「准备」同样先自动处理，能准备时自动准备。'
@@ -105,13 +107,20 @@ export default function ActionBar() {
   const view = useGameStore((s) => s.view);
   const setTrainingOpen = useGameStore((s) => s.setTrainingOpen);
   const setTournamentOpen = useGameStore((s) => s.setTournamentOpen);
+  const version = useGameStore((s) => s.version);
+  const autoPending = !!roundStatus?.autoPending?.[game.settings.playerTeamId];
+  // 自动处理预览只在开启自动处理（或多人已请求自动准备）时用到；按状态版本缓存（有待决事件时预览会在状态副本上推演一遍）
+  const preview = useMemo(
+    () => (lazy || autoPending) && !game.gameOver ? safe<AutoRoundPreview | null>(() => previewAutoActions(game), null) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 引擎原地修改 game，version 变化即状态变化
+    [game, version, lazy, autoPending],
+  );
 
   if (game.gameOver) return null;
   // 比赛页的比赛进行中：MatchDock 已显示阶段与操作，这里不再渲染第二条底栏
   if (game.activeMatch && view === 'match') return null;
 
   const blockers = getAdvanceBlockers(game);
-  const preview = safe<AutoRoundPreview | null>(() => previewAutoActions(game), null);
   const tour = currentPlayerTournament(game);
   const next = tour && tour.status === 'running' ? playerNextSeries(game, tour.id) : null;
   const me = game.settings.playerTeamId;
@@ -132,8 +141,10 @@ export default function ActionBar() {
   // 多人：已出局（战队解散）的座位只能观战——先于一切阻塞驱动的操作（解散的战队可能仍挂在本回合的赛事里）
   const spectating = multi && (!!roundStatus?.eliminated?.[me] || !!game.multiplayer?.seats?.[me]?.eliminated || !!game.teams[me]?.disbanded);
 
+  // 超编（抽卡后超过绝对上限，阻塞推进，见 getAdvanceBlockers 的 roster_over_cap）：情境按钮「处理超编」去新秀抽卡页退回
+  const overCap = blockers.find((b) => b.code === 'roster_over_cap') ?? null;
   // 阵容超出常规上限：不阻塞，只在右侧给一句温和提示（点击去阵容页）
-  const overflow = safe(() => rosterOverflowNotice(game, me), null);
+  const overflow = overCap ? null : safe(() => rosterOverflowNotice(game, me), null);
   const rosterHint = overflow ? (
     <button className="cursor-pointer text-right hover:text-gold hover:underline" title="打开阵容页安排首发与替补" onClick={() => setView('squad')}>
       {overflow} ›
@@ -154,8 +165,8 @@ export default function ActionBar() {
   const blockSub = !lazy && blockers.length ? `需先处理：${blockers[0].message}` : undefined;
   const blockHint = !lazy && blockers.length > 1 ? blockerText : undefined;
   /**
-   * 自动处理预览（开启懒人模式时）：「将自动：…」的事项写在主按钮的小字里（previewAutoActions.items），
-   * 右侧提示只说明无法推进 / 仍需等待的原因
+   * 自动处理预览（开启懒人模式时）：「将自动：…」的事项写在主按钮的小字里（previewAutoActions.items，完整内容在按钮的悬停提示），
+   * 右侧提示说明无法推进 / 仍需等待的原因；没有这些时列出将自动签下的自由选手（补员会花钱，推进前就能看到是谁）
    */
   const lazySub = lazy && preview && !preview.blocked && preview.items.length ? `⚡ 自动：${preview.items.join(' · ')}` : undefined;
   const lazyHint = (): LazyHint => {
@@ -166,6 +177,35 @@ export default function ActionBar() {
         hint: (
           <span title={LAZY_TIP}>
             <span className="text-gold">⚡</span> {preview.waiting}
+          </span>
+        ),
+      };
+    }
+    if (preview.trims.length || preview.overCapLeft > 0) {
+      const d = preview.trims.filter((x) => x.action === 'discard');
+      const r = preview.trims.filter((x) => x.action === 'release');
+      const refund = d.reduce((a, x) => a + x.amount, 0);
+      const parts: string[] = [];
+      if (d.length) parts.push(`退回新秀 ${d.slice(0, 3).map((x) => x.handle).join('、')}${d.length > 3 ? ` 等 ${d.length} 人` : ''}（返还 ${formatGold(refund)}）`);
+      if (r.length) parts.push(`解约 ${r.map((x) => x.handle).join('、')}`);
+      return {
+        hint: (
+          <span title={preview.text}>
+            <span className="text-gold">⚡</span> 超编 {preview.overCap} 人：将自动{parts.join('，')}
+            {preview.overCapLeft > 0 ? `；仍超编 ${preview.overCapLeft} 人，需手动处理` : ''}
+          </span>
+        ),
+        bad: preview.overCapLeft > 0,
+      };
+    }
+    if (preview.signings.length) {
+      const names = preview.signings.map((x) => `${x.handle}（${POSITION_CN[x.position]}）`).join('、');
+      const fee = preview.signings.reduce((a, x) => a + x.fee, 0);
+      return {
+        hint: (
+          <span title={preview.text}>
+            <span className="text-gold">⚡</span> 将自动签下 {names}，签字费 {formatGold(fee)}
+            {preview.rosterFillExact ? '' : '（婉拒则顺延）'}
           </span>
         ),
       };
@@ -268,6 +308,27 @@ export default function ActionBar() {
     ),
     menu: <MenuItem onClick={onClick} title={title}>{label}</MenuItem>,
   });
+
+  if (!spectating && overCap) {
+    const goFix = () => setView('gacha');
+    const fixTitle = `${overCap.message}。点击打开新秀抽卡页退回本回合抽到的新秀（也可在阵容页解约 / 出售队员）`;
+    const overN = overCap.message.split('：')[0].replace('超编 ', '');
+    const fixBtn = (label: string) => (
+      <Button variant={guide ? 'gold' : 'secondary'} className={cx(guide && 'glow')} onClick={goFix} title={fixTitle}>
+        {label}
+      </Button>
+    );
+    // 窄屏放不下时先换成「超编 3 人」，仍放不下再收进「更多」（不压住主按钮）
+    ctx.push({
+      key: 'overCap',
+      side: 'left',
+      compact: 1.8,
+      demote: 2.7,
+      el: fixBtn(`处理超编 · ${overN}`),
+      compactEl: fixBtn(`超编 ${overN}`),
+      menu: <MenuItem onClick={goFix} title={fixTitle}>处理超编 · {overN}</MenuItem>,
+    });
+  }
 
   if (!spectating && decisions > 0) {
     ctx.push({

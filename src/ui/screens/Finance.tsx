@@ -12,6 +12,7 @@ import {
 } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
 import { ConfirmButton } from '../components/ConfirmPopover';
+import NewBadge from '../components/NewBadge';
 import { Banner, Field, Pager, Select, TableWrap, TextInput, num, safe, usePaged } from '../components/MarketKit';
 import {
   GoldLineChart, RoundPnlChart, SourceBreakdown, type PnlRow, type SeriesPoint, type SourceItem,
@@ -32,7 +33,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
   signing: '签约费',
   training: '训练',
   scrim: '训练赛',
-  gacha: '抽卡（旧存档）',
+  gacha: '新秀抽卡',
   temp_sub: '临时替补',
   event: '事件',
   other: '其他',
@@ -77,7 +78,7 @@ const EXPENSE_LABEL: Record<ExpenseGroup, string> = {
   coach: '教练工资',
   transfer: '转会与签约',
   training: '额外训练与训练赛',
-  gacha: '抽卡（旧存档）',
+  gacha: '新秀抽卡',
   temp_sub: '临时替补',
   misc: '事件与其他',
 };
@@ -336,7 +337,7 @@ export default function Finance() {
       )}
       {gold >= 0 && proj && proj.projectedEnd < 0 && (runway === null || runway >= 3) && (
         <Banner tone="warn" title="按当前收支，赛季末资金将转负">
-          只计赞助、直播与周边收入和工资，预计赛季末资金 {formatGold(proj.projectedEnd)}。需要靠赛事奖金、出场费或出售选手填补缺口，额外训练与训练赛请量力而行（不需要的选秀新秀可在赛季初免费放弃）。
+          只计赞助、直播与周边收入和工资，预计赛季末资金 {formatGold(proj.projectedEnd)}。需要靠赛事奖金、出场费或出售选手填补缺口，额外训练与训练赛请量力而行（新秀抽卡同样要花钱，抽到的新秀只在当回合内可以退回）。
         </Banner>
       )}
 
@@ -797,7 +798,11 @@ function PrizeShareCard({ g, me, roundLabel }: { g: GameState; me: string; round
 
   return (
     <Card
-      title="选手奖金分成"
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          选手奖金分成 <NewBadge feature="prizeShare" dismissOn="view" />
+        </span>
+      }
       subtitle={`赛事奖金的 ${pct(current)} 分给队员，俱乐部保留 ${pct(1 - current)}；出场费与赞助、直播、周边收入全归俱乐部`}
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

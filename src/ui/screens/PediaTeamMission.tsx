@@ -5,6 +5,7 @@ import { MISSION_STATUS_LABEL, clubMissionView, foundingOf, tiYear } from '../..
 import type { ClubMissionView, GameState, MissionMemberStatus } from '../../engine';
 import { PosBadge, StatBar, cx } from '../components/common';
 import { Chip, type ChipTone } from '../components/SquadShared';
+import NewBadge from '../components/NewBadge';
 import { InfoRow, PPlayer, PSection, PTeam, safe } from '../components/PediaKit';
 
 const STATUS_TONE: Record<MissionMemberStatus, ChipTone> = {
@@ -49,7 +50,15 @@ export default function PediaTeamMission({ view, id = 'pt-mission' }: { view: Cl
     <Chip tone="info">进行中</Chip>
   );
   return (
-    <PSection id={id} title="使命" right={<span>组建现实巅峰阵容 · 转会窗口中优先引进、尽量留住，不保证成功</span>}>
+    <PSection
+      id={id}
+      title={
+        <>
+          使命 <NewBadge feature="missions" dismissOn="view" />
+        </>
+      }
+      right={<span>组建现实巅峰阵容 · 转会窗口中优先引进、尽量留住，不保证成功</span>}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span className="text-sm text-ink">
           目标：重组 <span className="font-semibold text-gold">TI{view.peakTi} 巅峰阵容</span>

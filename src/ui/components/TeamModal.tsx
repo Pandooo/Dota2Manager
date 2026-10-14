@@ -12,6 +12,7 @@ import { Badge, Button, EmptyState, Modal, PosBadge, RegionBadge, TierBadge, cx 
 /** 位置评分的颜色：本位置 / 副位置与四五号位互换 / 非本位置 */
 const FIT_TEXT: Record<RoleFit, string> = { main: 'text-mute', alt: 'text-info', swap: 'text-info', off: 'text-bad' };
 import { TeamEmblem } from './TeamEmblem';
+import { MomentumBadge } from './MomentumBadge';
 import { TourTierBadge, openTournamentView, rankClass, safe } from './TourShared';
 import { PediaEntryButton } from './PediaKit';
 
@@ -163,6 +164,7 @@ function TeamBody({
               <span className="truncate text-xl font-bold">{team.name}</span>
               <RegionBadge region={team.region} />
               {isMine && <Badge className="bg-gold text-black">我的战队</Badge>}
+              {!team.disbanded && <MomentumBadge game={game} teamId={team.id} />}
               {team.disbanded && (
                 <Badge
                   className="bg-bad/20 text-bad border border-bad/40"

@@ -14,5 +14,5 @@
     "strict": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "scripts", "tests", "server"]
+  "include": ["vite.config.ts", "scripts", "tests", "server", "src/vite-env.d.ts"]
 }

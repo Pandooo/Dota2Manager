@@ -40,7 +40,7 @@ export function RecordKindChip({ kind }: { kind: TrainingRecordKind }) {
 export function unavailableReason(kind: RoundKind, tour: Tournament | null): string {
   switch (kind) {
     case 'preseason':
-      return '赛季初不能训练：这是新秀选秀、转会与赛事报名的阶段。点击「开始赛季」进入常规回合后，在休赛回合进行训练。';
+      return '赛季初不能训练：这是新秀抽卡、转会与赛事报名的阶段。点击「开始赛季」进入常规回合后，在休赛回合进行训练。';
     case 'tournament':
       return `本回合参加${tour ? `「${tour.name}」` : '赛事'}，赛事回合无法训练。比赛主要带来荣誉、奖金与韧性（打得越久、赛事越大韧性涨得越多），战力 / 天梯 / 灵性只有少量提升——队员的成长主要靠休赛回合训练。`;
     case 'ti_qualifier':

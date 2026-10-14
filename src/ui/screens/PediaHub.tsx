@@ -1,14 +1,16 @@
-// DotaPedia 中心页：总览 | 战队 | 选手 | 赛事 | 英雄 | 羁绊图鉴（只读百科；标签行右侧为全站搜索）
+// DotaPedia 中心页：总览 | 战队 | 选手 | 名人堂 | 赛事 | 英雄 | 羁绊图鉴（只读百科；标签行右侧为全站搜索）
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame, useGameStore, type PediaTab as Tab } from '../../store/gameStore';
 import { pediaSearch } from '../../engine';
 import type { PediaSearchHit } from '../../engine';
 import { HubShell, useHubTab, type HubTabDef } from '../layout/HubKit';
 import { cx } from '../components/common';
+import NewBadge from '../components/NewBadge';
 import { PEDIA_KIND_LABEL, openPedia, pediaTabReselect, safe, syncPediaGame, type PediaKind } from '../components/PediaKit';
 import PediaHome from './PediaHome';
 import PediaTeams from './PediaTeams';
 import PediaPlayers from './PediaPlayers';
+import PediaHallOfFame from './PediaHallOfFame';
 import PediaTours from './PediaTours';
 import PediaHeroes from './PediaHeroes';
 import PediaSynergies from './PediaSynergies';
@@ -23,9 +25,20 @@ export default function PediaHub() {
     { key: 'pediaHome', label: '总览', title: '历史数据、TI 冠军、排行榜、单局纪录与历史地位榜' },
     { key: 'pediaTeams', label: '战队', title: '全部战队（含已解散）的词条：成就、战绩、阵容变迁与历史地位' },
     { key: 'pediaPlayers', label: '选手', title: '全部选手的词条：生涯数据、成就、战队履历与常用英雄' },
+    {
+      key: 'pediaHall',
+      label: '名人堂',
+      title: '名人堂：DotA1 时代传奇、开局之前真实历史中的 SS / SSR（补录）与本局历届 SS / SSR 选手，新秀抽卡「请神」的原型',
+      badge: <NewBadge feature="hallOfFame" />, // 新功能徽标（v0.3.0）：点击标签后消失
+    },
     { key: 'pediaTours', label: '赛事', title: '历届赛事的冠亚军与名次' },
     { key: 'pediaHeroes', label: '英雄', title: '英雄出场、胜率与禁用（按赛季）' },
-    { key: 'pediaSynergies', label: '羁绊图鉴', title: '羁绊图鉴：历届 TI 冠军阵容（及少数经典阵容）的隐藏羁绊，五人同队集齐后觉醒并解锁' },
+    {
+      key: 'pediaSynergies',
+      label: '羁绊图鉴',
+      title: '羁绊图鉴：历届 TI 冠军阵容（及少数经典阵容）的隐藏羁绊，五人同队集齐后觉醒并解锁',
+      badge: <NewBadge feature="synergies" />, // 新功能徽标（v0.2）：点击标签后消失
+    },
   ];
 
   return (
@@ -34,6 +47,7 @@ export default function PediaHub() {
       {tab === 'pediaHome' && <PediaHome />}
       {tab === 'pediaTeams' && <PediaTeams />}
       {tab === 'pediaPlayers' && <PediaPlayers />}
+      {tab === 'pediaHall' && <PediaHallOfFame />}
       {tab === 'pediaTours' && <PediaTours />}
       {tab === 'pediaHeroes' && <PediaHeroes />}
       {tab === 'pediaSynergies' && <PediaSynergies />}

@@ -15,7 +15,7 @@ import { CONFIG, POSITION_LABEL, TOURNAMENT_TIER_LABEL } from './config';
 import { addNews, humanTeamIds, newsIsMine, newsScopeOf } from './news';
 import { teamRating } from './team';
 import { overallRating, playerTier, tierIndex } from './player';
-import { formatGold, formatRank, placementPercentile } from './util';
+import { formatGold, formatRank, ownEntry, placementPercentile } from './util';
 import { isFillerCup } from './schedule';
 import { prizePoolLabel } from './revenue';
 import { regularRoundCount } from './calendar';
@@ -68,26 +68,22 @@ function rosterPlayer(p: Player | undefined): p is Player {
 // 知名战队 / 实力榜
 // ---------------------------------------------------------------------------
 
-/** 知名战队缓存：同一 (赛季, 回合, 阶段, 战队数) 内复用（新闻口径，回合内的小幅评分变化可忽略） */
-const notableCache = new WeakMap<GameState, { key: string; set: Set<string> }>();
-
-/** 知名战队：荣誉前 N ∪ 战队评分前 N（includeHumans 时再加上全部玩家战队） */
+/**
+ * 知名战队：荣誉前 N ∪ 战队评分前 N（includeHumans 时再加上全部玩家战队）。
+ * 每次按当前状态现算（不缓存）：原来按 (赛季, 回合, 阶段, 战队数) 缓存在内存里，回合内荣誉 / 阵容变化（退赛扣分、交易等）后缓存过期，
+ * 读档后重新计算得到不同的集合 → 冠军新闻条数不同 → id 序号错开 → 以 id 排序的平局判定改变走向，连续游玩与每回合读档的结果分叉
+ * （2026-10-14 审查）。现算是存档内容的纯函数，读档前后一致；16 季无头模拟耗时不变（DESIGN.md 第 11 节）。
+ */
 export function notableTeamSet(state: GameState, includeHumans = true): Set<string> {
-  const key = `${state.season?.ti}:${state.roundIndex}:${state.phase}:${Object.keys(state.teams).length}`;
-  let cached = notableCache.get(state);
-  if (!cached || cached.key !== key) {
-    const n = Math.max(1, NR().notableTeams);
-    const teams = Object.values(state.teams).filter(isActiveTeam);
-    const set = new Set<string>();
-    const byHonor = teams.slice().sort((a, b) => (b.honor ?? 0) - (a.honor ?? 0) || a.id.localeCompare(b.id));
-    for (const t of byHonor.slice(0, n)) set.add(t.id);
-    const rating = new Map(teams.map((t) => [t.id, teamRating(state, t.id)]));
-    const byRating = teams.slice().sort((a, b) => (rating.get(b.id) ?? 0) - (rating.get(a.id) ?? 0) || a.id.localeCompare(b.id));
-    for (const t of byRating.slice(0, n)) set.add(t.id);
-    cached = { key, set };
-    notableCache.set(state, cached);
-  }
-  const out = new Set(cached.set);
+  const n = Math.max(1, NR().notableTeams);
+  const teams = Object.values(state.teams).filter(isActiveTeam);
+  const set = new Set<string>();
+  const byHonor = teams.slice().sort((a, b) => (b.honor ?? 0) - (a.honor ?? 0) || a.id.localeCompare(b.id));
+  for (const t of byHonor.slice(0, n)) set.add(t.id);
+  const rating = new Map(teams.map((t) => [t.id, teamRating(state, t.id)]));
+  const byRating = teams.slice().sort((a, b) => (rating.get(b.id) ?? 0) - (rating.get(a.id) ?? 0) || a.id.localeCompare(b.id));
+  for (const t of byRating.slice(0, n)) set.add(t.id);
+  const out = set;
   for (const id of humanTeamIds(state)) {
     if (includeHumans) out.add(id);
     else out.delete(id);
@@ -376,7 +372,7 @@ function processFinished(state: GameState, h: TournamentHistoryEntry, notable: S
   const humans = new Set(humanTeamIds(state));
 
   for (const [teamId, pl] of Object.entries(h.placements ?? {})) {
-    const team = state.teams[teamId];
+    const team = ownEntry(state.teams, teamId);
     if (!team) continue;
     // 连冠
     if (teamId === h.championId) streaks[teamId] = (streaks[teamId] ?? 0) + 1;

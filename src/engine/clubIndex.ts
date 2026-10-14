@@ -4,6 +4,7 @@
 import clubIndexJson from '../data/clubIndex.json';
 import type { GameState, Position, Region, SeedCoach } from './types';
 import { REGIONS } from './types';
+import { ownEntry } from './util';
 
 // ---------------------------------------------------------------------------
 // 俱乐部索引（src/data/clubIndex.json，scripts/build-club-index.ts 生成）
@@ -145,7 +146,7 @@ export function orgAppAt(org: ClubOrg, ti: number): ClubApp | undefined {
 /** 本局中某支战队对应的真实组织（虚构 / 程序化战队返回 undefined） */
 export function realOrgOf(state: GameState, teamId: string | null | undefined): ClubOrg | undefined {
   if (!teamId) return undefined;
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (team?.founded) return team.founded.kind === 'real' ? clubOrg(team.founded.orgId) ?? orgOfTeamId(teamId) : undefined;
   return orgOfTeamId(teamId);
 }

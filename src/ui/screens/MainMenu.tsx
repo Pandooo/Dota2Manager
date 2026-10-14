@@ -5,6 +5,7 @@ import { getSession, type ProgressMeta } from '../../store/session';
 import { formatGold } from '../../engine';
 import { availableStartTis } from '../../data/index';
 import { Button, Modal, cx } from '../components/common';
+import ChangelogButton from '../components/ChangelogPanel';
 import { ConfirmPopover, useConfirmPopover } from '../components/ConfirmPopover';
 import { Spinner, safe } from '../components/ShellKit';
 import ShellRules from '../components/ShellRules';
@@ -281,7 +282,8 @@ export default function MainMenu() {
 
       {/* ---------- 内容 ---------- */}
       <div className="relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-6 py-10">
-        <div className="grid w-full max-w-5xl items-center gap-10 lg:grid-cols-[1.15fr_1fr]">
+        {/* 窄屏单列也用 minmax(0,1fr)：截断显示的长说明不会按自身宽度把列撑出屏幕 */}
+        <div className="grid w-full max-w-5xl grid-cols-[minmax(0,1fr)] items-center gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           {/* 标题 */}
           <div className="shell-rise text-center lg:text-left">
             <div className="mb-5 flex justify-center lg:justify-start">
@@ -363,8 +365,8 @@ export default function MainMenu() {
             />
             <MenuButton
               icon="⚔"
-              label="多人对战（局域网）"
-              desc="与同一局域网的朋友同场竞技（房主运行服务器）"
+              label="多人对战"
+              desc="与朋友在线或在局域网同场竞技"
               onClick={openLobby}
               delay={185}
             />
@@ -389,7 +391,10 @@ export default function MainMenu() {
       </div>
 
       <footer className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-t border-line/60 bg-bg/60 px-6 py-2.5 text-[11px] text-faint backdrop-blur">
-        <span>v0.1 · 粉丝自制的 Dota 2 电竞经理模拟游戏，与 Valve Corporation 无关</span>
+        {/* 版本号即「更新说明」入口（与游戏内顶栏的版本芯片打开同一个面板；有未读新版本时带红点） */}
+        <span>
+          <ChangelogButton variant="footer" /> · 粉丝自制的 Dota 2 电竞经理模拟游戏，与 Valve Corporation 无关
+        </span>
         <span>历届阵容与赛事基于公开资料整理，部分未来赛季为推演数据</span>
       </footer>
 

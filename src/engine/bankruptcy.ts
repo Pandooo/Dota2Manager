@@ -18,7 +18,7 @@ import type { BankruptcyRecord, GameState, Team } from './types';
 import { CONFIG } from './config';
 import { roundWageBill } from './economy';
 import { addNews, pushPopup } from './news';
-import { formatGold } from './util';
+import { formatGold, ownEntry } from './util';
 import { activeHumanIds, forEachSeat, inSeatOf, isHumanTeam, isMultiplayer, seatOf } from './seat';
 import { legacyCareerSummary, recordLegacyPartial } from './legacy';
 
@@ -87,7 +87,7 @@ function streakWageOf(team: Team | undefined): number {
  * 负债期间裁员 / 解约（解约还要付补偿）会降低当前工资 —— 若上限随之下降，削减开支反而会立即触发破产。
  */
 function limitWageOf(state: GameState, teamId: string): number {
-  return Math.max(wageOf(state, teamId), streakWageOf(state.teams?.[teamId]));
+  return Math.max(wageOf(state, teamId), streakWageOf(ownEntry(state.teams, teamId)));
 }
 
 /** 负债上限（每回合工资 × debtWageRounds；工资取当前与本轮连续为负期间最高值的较高者）；没有工资时 null */
@@ -97,7 +97,7 @@ export function debtLimitOf(state: GameState, teamId: string): number | null {
 }
 
 export function bankruptcyStatus(state: GameState, teamId: string): BankruptcyStatus {
-  const team = state.teams?.[teamId];
+  const team = ownEntry(state.teams, teamId);
   const { rounds } = bankruptcyRules();
   const gold = Number.isFinite(team?.gold) ? Math.round(team!.gold) : 0;
   const negative = gold < 0;
@@ -194,7 +194,7 @@ export function checkBankruptcy(state: GameState): string[] {
  * 非人类战队、已解散或已破产时返回 false（幂等）。
  */
 export function declareBankruptcy(state: GameState, teamId: string, rule: BankruptcyRecord['rule']): boolean {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded || team.bankrupt || !isHumanTeam(state, teamId)) return false;
   const mp = isMultiplayer(state);
   const rec: BankruptcyRecord = {

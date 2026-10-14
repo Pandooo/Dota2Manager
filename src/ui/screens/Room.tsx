@@ -1,17 +1,18 @@
 // ============================================================================
 // 多人房间：座位列表（昵称 / 准备 / 在线 / 所选战队）、房主设置（起止 TI、难度、玩法）、
-// 我的战队设置（新俱乐部或真实战队）、准备、房主开始 / 踢人、离开、房间码与局域网地址、聊天。
+// 我的战队设置（新俱乐部或真实战队）、准备、房主开始 / 踢人、离开、房间码与邀请地址（局域网服务器且来自局域网时为局域网地址，
+// 否则为当前页面地址）、服务器在线人数、聊天。
 // ============================================================================
 import { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { httpUrlOf, onRequestError } from '../../store/net';
+import { getManualServer, invitePageUrl, onRequestError } from '../../store/net';
 import { REGION_LABEL, type RosterFile } from '../../engine';
 import { loadRoster } from '../../data/index';
 import { isRoomHost, mySeat, type RoomInfo, type RoomSeat, type RoomSettings } from '../../shared/protocol';
 import { Badge, Button, Card, Hint, TeamTag, cx } from '../components/common';
 import { ConfirmButton } from '../components/ConfirmPopover';
 import { Spinner } from '../components/ShellKit';
-import { ConnBadge, CopyButton, OnlineDot, settingsSummary } from '../components/MpKit';
+import { ConnBadge, CopyButton, OnlineDot, ServerStatsLine, settingsSummary } from '../components/MpKit';
 import MpRoomSettings from '../components/MpRoomSettings';
 import MpSeatSetup, { seatSetupError } from '../components/MpSeatSetup';
 import MpChat from '../components/MpChat';
@@ -194,7 +195,9 @@ export default function Room() {
         : offline.length
           ? `有玩家离线：${offline.join('、')}`
           : null;
-  const pageUrl = mp.lanUrls[0] ?? httpUrlOf(mp.net.url);
+  // 局域网地址只发给局域网内的连接（公网服务器从不发送）；没有时邀请朋友打开当前页面地址
+  const lanPages = mp.serverMode === 'public' ? [] : mp.lanUrls.filter(Boolean);
+  const pageUrl = lanPages[0] ?? invitePageUrl();
 
   const updateSettings = (patch: Partial<RoomSettings>) => send({ t: 'updateSettings', settings: patch });
   const toggleReady = () => {
@@ -210,20 +213,29 @@ export default function Room() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel/95 px-5">
-        <Button variant="ghost" size="sm" onClick={leave} title="离开房间，回到大厅">
-          ‹ 离开房间
+      {/* 手机宽度（< sm）：收紧间距、按钮缩为「‹ 离开」、隐藏「房间码」字样与在线人数（大厅里仍可看到）、房间码字距收窄，
+          房间码与连接状态不被挤出（375px 实测：离开按钮不再折成三行，房间名有更多空间） */}
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-panel/95 px-3 sm:gap-3 sm:px-5">
+        <Button variant="ghost" size="sm" onClick={leave} title="离开房间，回到大厅" className="shrink-0 whitespace-nowrap">
+          ‹ 离开<span className="hidden sm:inline">房间</span>
         </Button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 sm:flex-none">
           <div className="truncate text-base font-bold tracking-wide">{room.name}</div>
           <div className="truncate text-[11px] text-faint">{settingsSummary(room.settings)}</div>
         </div>
-        <div className="ml-3 flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 py-0.5 pl-2.5 pr-1">
-          <span className="text-[11px] text-mute">房间码</span>
-          <span className="font-mono text-base font-bold tracking-[0.25em] text-gold">{room.id}</span>
+        <div className="flex shrink-0 items-center gap-1 rounded-md border border-gold/40 bg-gold/10 py-0.5 pl-2 pr-1 sm:ml-3 sm:gap-1.5 sm:pl-2.5" title="房间码">
+          <span className="hidden text-[11px] text-mute sm:inline">房间码</span>
+          <span className="font-mono text-sm font-bold tracking-[0.08em] text-gold sm:text-base sm:tracking-[0.25em]">{room.id}</span>
           <CopyButton text={room.id} title="复制房间码" />
         </div>
-        <ConnBadge net={mp.net} className="ml-auto" />
+        <div className="flex shrink-0 items-center gap-3 sm:ml-auto">
+          {mp.net.status === 'open' && (
+            <span className="hidden sm:inline-flex">
+              <ServerStatsLine stats={mp.serverStats} compact />
+            </span>
+          )}
+          <ConnBadge net={mp.net} />
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
@@ -289,14 +301,21 @@ export default function Room() {
               )}
             </Card>
 
-            <Card title="邀请朋友" subtitle="同一局域网内打开下面的地址，进入多人对战后输入房间码">
+            <Card
+              title="邀请朋友"
+              subtitle={
+                lanPages.length
+                  ? '同一局域网内打开下面的地址，进入多人对战后输入房间码'
+                  : `把${getManualServer() ? '服务器的网页地址' : '本页地址'}发给朋友，进入「多人对战」后用房间码加入`
+              }
+            >
               <div className="space-y-2 text-xs">
                 <div className="flex items-center gap-2 rounded-md border border-line bg-panel-2/50 px-2 py-1">
                   <span className="text-faint">网页</span>
                   <span className="min-w-0 flex-1 truncate font-mono text-ink">{pageUrl}</span>
-                  <CopyButton text={pageUrl} />
+                  <CopyButton text={pageUrl} title="复制邀请地址" />
                 </div>
-                {mp.lanUrls.slice(1).map((u) => (
+                {lanPages.slice(1).map((u) => (
                   <div key={u} className="flex items-center gap-2 rounded-md border border-line bg-panel-2/50 px-2 py-1">
                     <span className="text-faint">备选</span>
                     <span className="min-w-0 flex-1 truncate font-mono text-ink">{u}</span>

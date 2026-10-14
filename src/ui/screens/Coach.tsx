@@ -145,7 +145,7 @@ export default function Coach() {
             {supply.real > 0 && <span>知名教练 {supply.real}</span>}
             {supply.retired > 0 && <span>退役选手转任 {supply.retired}</span>}
             {supply.other > 0 && <span>其他自由教练 {supply.other}</span>}
-            <span className="text-faint">每个赛季开始时（新秀选秀后）都会有一批教练进入市场</span>
+            <span className="text-faint">每个赛季开始时都会有一批教练进入市场</span>
           </div>
         )}
         {market.length === 0 ? (
@@ -391,7 +391,7 @@ function ExplainCard({ game }: { game: GameState }) {
           <span className="font-semibold text-ink">退役选手可转教练：</span>选手在 TI 结算时可能退役，并按其天梯等级转为同级教练进入市场；若退役前效力于你的战队，你会收到优先签约的邀请。
         </li>
         <li>
-          <span className="font-semibold text-ink">每赛季教练供给：</span>每个赛季开始时（新秀选秀后），市场会迎来一批新教练（新人教练、当届知名教练与退役选手转任，标记为「新到」），
+          <span className="font-semibold text-ink">每赛季教练供给：</span>每个赛季开始时，市场会迎来一批新教练（新人教练、当届知名教练与退役选手转任，标记为「新到」），
           赛季初可签约教练不少于 {CONFIG.coachSupply?.minAvailable ?? 8} 名、多于空缺岗位，其中至少 {CONFIG.coachSupply?.minTopTier ?? 3} 名 S 级及以上；
           AI 战队只在没有主教练时聘请，不会把好教练全部签走。
         </li>

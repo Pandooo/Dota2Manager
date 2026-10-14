@@ -1,10 +1,10 @@
 // 侧栏：7 个中心页（总览 · 战队 · 转会 · 赛事 · 俱乐部 · DotaPedia · 消息）。中心页内的细分页面用页内标签切换；
-// 徽标（未读 / 报价 / 赛季初选中的新秀 / 进行中的赛事等）挂在对应中心页上；带「需处理」徽标时点击直接打开对应标签（hubEntryTab）。
+// 徽标（未读 / 报价 / 本回合抽到的新秀 / 进行中的赛事等）挂在对应中心页上；带「需处理」徽标时点击直接打开对应标签（hubEntryTab）。
 // 比赛页为独立视图（高亮「赛事」）。
 import type { ReactNode } from 'react';
 import { hubEntryTab, useGame, useGameStore, type HubKey } from '../../store/gameStore';
 import {
-  currentPlayerTournament, draftedRookiesOf, getCoach, isTransferWindowOpen, validateLineup,
+  currentPlayerTournament, gachaLog, getCoach, isTransferWindowOpen, validateLineup,
 } from '../../engine';
 import { cx } from '../components/common';
 import { safe } from '../components/ShellKit';
@@ -20,7 +20,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { key: 'dashboard', label: '总览', icon: '◎', hint: '本回合要做的事、要闻与世界动态' },
   { key: 'team', label: '战队', icon: '☰', hint: '阵容 · 训练 · 教练' },
-  { key: 'transfer', label: '转会', icon: '⇄', hint: '转会市场 · 新秀选秀' },
+  { key: 'transfer', label: '转会', icon: '⇄', hint: '转会市场 · 新秀抽卡' },
   { key: 'events', label: '赛事', icon: '♜', hint: '赛事中心 · 赛程报名 · 排名 · 版本' },
   { key: 'club', label: '俱乐部', icon: '♛', hint: '财务 · 荣誉史' },
   { key: 'pedia', label: 'DotaPedia', icon: '✦', hint: '百科：历史数据总览 · 战队 / 选手词条 · 赛事 · 英雄（含实时历史地位）' },
@@ -40,7 +40,8 @@ export default function SideNav() {
   const decisions = (game.pendingDecisions ?? []).length;
   const offers = (game.transferOffers ?? []).filter((o) => o && o.status === 'pending' && o.toTeamId === me).length;
   const tour = safe(() => currentPlayerTournament(game), null);
-  const rookies = game.phase === 'preseason' ? safe(() => draftedRookiesOf(game, me).length, 0) : 0;
+  // 本回合抽到、仍可退回的新秀
+  const rookies = safe(() => gachaLog(game, me).filter((r) => r.round === game.roundIndex && !r.discarded && game.players[r.playerId]?.teamId === me).length, 0);
   const windowOpen = safe(() => isTransferWindowOpen(game), true);
   const lineupErrors = safe(() => validateLineup(game, me, tour && tour.status !== 'finished' ? tour.id : null), [] as string[]);
   const noCoach = safe(() => !getCoach(game, me), false);
@@ -70,7 +71,7 @@ export default function SideNav() {
         return null;
       case 'transfer':
         if (offers) return <CountBadge n={offers} title={`收到 ${offers} 份转会报价`} />;
-        if (rookies) return <TextBadge tone="gold" title={`本届选秀选中 ${rookies} 名新秀（赛季初可保留或免费放弃）`}>新秀</TextBadge>;
+        if (rookies) return <TextBadge tone="gold" title={`本回合抽到 ${rookies} 名新秀（本回合内可退回）`}>新秀</TextBadge>;
         if (!windowOpen) return <TextBadge title="TI 阶段转会窗口锁定">锁定</TextBadge>;
         return null;
       case 'events':

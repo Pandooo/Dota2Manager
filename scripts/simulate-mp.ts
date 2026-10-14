@@ -2,7 +2,7 @@
 // 用法：npx tsx scripts/simulate-mp.ts [--ti 9] [--seasons 3] [--seed 7] [--mode both|build|existing] [--quiet] [--no-determinism]
 //
 // 3 个座位（与服务器相同，全部操作经 multi.callAsSeat 白名单 RPC）：每回合各座位以随机交错的顺序做随机的合法操作
-// （训练 / 训练赛 / 签自由选手——含两名玩家抢签同一名自由选手的先到先得校验 / 求购 AI 选手 / 报名 / 赛季初放弃选秀新秀 / 谈心 /
+// （训练 / 训练赛 / 签自由选手——含两名玩家抢签同一名自由选手的先到先得校验 / 求购 AI 选手 / 报名 / 新秀抽卡（共享卡池）与本回合退回 / 谈心 /
 // 挂牌 / 回应报价 / 篡改他队阵容的越权调用……），然后打完各自的比赛（快速模拟、手动 BP、玩家对玩家系列赛：
 // 双方各自 BP 或双方都请求快速模拟），全部准备后推进回合。
 // 每次 RPC 后检查不变量（中性上下文、名单/首发一致、无引擎异常），每回合结束检查座位隔离（视图不泄露其他座位
@@ -15,9 +15,9 @@ import { CONFIG } from '../src/engine/config';
 import * as M from '../src/engine/multi';
 import { seededRng, type Rng } from '../src/engine/rng';
 import { freeAgents, isTransferWindowOpen, signingFee, suggestedFee } from '../src/engine/market';
-import { rosterHardRoom, rosterRoom, validateLineup } from '../src/engine/team';
+import { rosterHardRoom, rosterOverCap, rosterRoom, validateLineup } from '../src/engine/team';
 import { effectiveAttr, marketValue } from '../src/engine/player';
-import { draftedRookiesOf } from '../src/engine/rookieDraft';
+import { gachaPullBlock, gachaView, poolRemaining, type GachaPullResult } from '../src/engine/gacha';
 import { newsIsMine } from '../src/engine/news';
 import { applyHonorChange } from '../src/engine/honor';
 import { currentStep } from '../src/engine/draft';
@@ -94,10 +94,19 @@ interface Stats {
   forcedEliminations: number;
   /** 全部出局座位（含荣誉自然跌破 0） */
   eliminated: number;
+  /** 新秀抽卡张数 / 退回张数 */
+  pulls: number;
+  discards: number;
+  /** 抽卡后超编（超过绝对上限）的次数 / 其中由「下一回合」自动处理退回的次数（其余为手动退回） */
+  overCaps: number;
+  overCapAuto: number;
+  /** 最后一个赛季已完成强制十连的座位（保证每局都覆盖超编 → 不能准备 → 自动处理的路径） */
+  forcedTen: string[];
 }
 const newStats = (): Stats => ({
   rpc: 0, rpcOk: 0, signings: 0, overSoftSignings: 0, races: 0, raceLosersRejected: 0, bids: 0, bidsOk: 0, trainings: 0, manualGames: 0,
   h2hSeries: 0, h2hManualGames: 0, h2hQuickSims: 0, forbiddenRejected: 0, rounds: 0, forcedEliminations: 0, eliminated: 0,
+  pulls: 0, discards: 0, overCaps: 0, overCapAuto: 0, forcedTen: [],
 });
 
 // ---------------------------------------------------------------------------
@@ -211,6 +220,9 @@ function checkSeatViews(g: GameState, where: string): void {
       if (s) check(s.teamA === id || s.teamB === id, `${where}: ${id} 的比赛视图不是本队的系列赛`);
     }
     for (const h of Object.values(vmp.h2h ?? {})) check(h.teamA === id || h.teamB === id, `${where}: ${id} 视图包含他人的玩家对决`);
+    // 新秀抽卡：逐张记录只下发给本人；卡池（全局）各视图一致
+    for (const t of Object.values(v.teams)) if (t.id !== id) check(!t.gacha?.log, `${where}: ${id} 视图包含 ${t.id} 的抽卡记录`);
+    check(poolRemaining(v.gacha?.pool) === poolRemaining(g.gacha?.pool), `${where}: ${id} 视图的卡池与全局不一致`);
   }
 }
 
@@ -235,6 +247,11 @@ function read<T>(g: GameState, id: string, fn: () => T): T {
 
 function live(g: GameState): string[] {
   return M.activeHumanIds(g);
+}
+
+/** 座位战队超出绝对上限的人数（抽卡超编） */
+function overCapOf(g: GameState, id: string): number {
+  return read(g, id, () => rosterOverCap(g, id));
 }
 
 function resolveDecisions(g: GameState, st: Stats, id: string, rnd: Rng): void {
@@ -343,17 +360,69 @@ function randomActions(g: GameState, st: Stats, id: string, rnd: Rng): void {
       const reg = read(g, id, () => g.season.registeredTournamentIds.slice());
       if (reg.length && rnd.chance(0.2)) rpc(g, st, id, 'unregisterFromTournament', rnd.pick(reg));
     },
-    // 新秀选秀（赛季初）：阵容超出常规上限时放弃多余的新秀（机器人策略，引擎不强制）；否则随机免费放弃一名
+    // 新秀抽卡（2026-10-14 取代选秀）：卡池全局共享、先到先得；赛季初常抽、常规赛偶尔抽，偶尔十连（总是抽满，可超出绝对上限）；
+    // 预检与结果一致、扣款与卡池张数正确；抽到的 C/B 虚构新秀随机退回；越权：其他玩家退回本队的新秀被拒。
+    // 超出常规上限不阻塞推进；超出绝对上限（超编）时不能准备，随机手动退回评分最低的新秀或留给「下一回合」自动处理（见准备循环）。
+    // 最后一个赛季每个座位强制十连一次（付得起时；抽完不手动退回），保证每个种子都覆盖「超编 → 不能准备 → 自动处理」
+    // （放在最后一个赛季：自动处理后阵容停在 12 人，之前的赛季仍有常规上限内的抢签等覆盖）
     () => {
-      if (g.phase !== 'preseason') return;
-      check(!M.seatBlockers(g, id).some((b) => b.message.includes('阵容超出')), `阵容人数不应阻塞推进：${id}`);
-      const mine = read(g, id, () => draftedRookiesOf(g, id).map((p) => p.id));
-      if (!mine.length) return;
-      const extra = Math.max(0, -rosterRoom(g, id));
-      const n = extra > 0 ? (rnd.chance(0.7) ? Math.min(extra, mine.length) : 0) : rnd.chance(0.3) ? 1 : 0;
-      for (const pid of rnd.shuffle(mine.slice()).slice(0, n)) {
-        const r = rpc(g, st, id, 'releaseDraftedRookie', pid);
-        if (r.ok) check(!g.players[pid]?.teamId, `放弃选秀新秀后仍在队：${pid}`);
+      check(!M.seatBlockers(g, id).some((b) => b.message.includes('阵容超出')), `常规上限不应阻塞推进：${id}`);
+      check(M.seatBlockers(g, id).some((b) => b.code === 'roster_over_cap') === (isTransferWindowOpen(g) && overCapOf(g, id) > 0),
+        `超编阻塞与阵容人数不一致：${id}`);
+      if (overCapOf(g, id) > 0) return; // 超编时不能再抽
+      if (!isTransferWindowOpen(g)) return;
+      const forceTen = g.season.ti === START_TI + SEASONS - 1 && !st.forcedTen.includes(id) && !read(g, id, () => gachaPullBlock(g, 10));
+      if (!forceTen) {
+        if (!rnd.chance(g.phase === 'preseason' ? 0.5 : 0.06)) return;
+        if (team().playerIds.length >= CONFIG.team.maxRoster + 1 && !rnd.chance(0.2)) return;
+      }
+      const view = read(g, id, () => gachaView(g, id));
+      const n = forceTen || rnd.chance(0.1) ? 10 : 1;
+      const block = read(g, id, () => gachaPullBlock(g, n));
+      const goldBefore = team().gold;
+      const left = poolRemaining(g.gacha?.pool);
+      const r = rpc(g, st, id, 'gachaPull', n) as Res & { results?: GachaPullResult[] };
+      check(!block === r.ok, `抽卡：预检（${block ?? '可抽'}）与结果（${r.message}）不一致`);
+      if (!r.ok) return;
+      if (forceTen) st.forcedTen.push(id);
+      const results = r.results ?? [];
+      st.pulls += results.length;
+      check(results.length === n, `抽卡：${id} 抽 ${n} 张只得到 ${results.length} 张`);
+      check(team().gold === goldBefore - (n === 10 ? view.ten : view.single), `抽卡扣款不符：${id}`);
+      if (left > n) check(poolRemaining(g.gacha?.pool) === left - n, `抽卡：共享卡池张数不符（${left} → ${poolRemaining(g.gacha?.pool)}）`);
+      for (const x of results) check(g.players[x.playerId]?.teamId === id, `抽到的新秀 ${x.handle} 不在 ${id}`);
+      const others = live(g).filter((x) => x !== id);
+      if (others.length && results[0]) {
+        const pid = results[0].playerId;
+        const d = rpc(g, st, rnd.pick(others), 'gachaDiscard', pid);
+        check(!d.ok && g.players[pid].teamId === id, '其他玩家退回本队新秀应被拒绝');
+        st.forbiddenRejected++;
+      }
+      // 抽卡结果的提示写的是抽完时的超编人数（之后的退回会减少它）
+      const overAtPull = overCapOf(g, id);
+      if (overAtPull > 0) {
+        st.overCaps++;
+        check(r.message.includes(`超编 ${overAtPull} 人`), `超编时抽卡结果应说明超编人数（${overAtPull}）：${r.message}`);
+      }
+      for (const x of forceTen ? [] : results) {
+        if (x.kind !== 'fictional' || (x.tier !== 'C' && x.tier !== 'B') || !rnd.chance(0.6)) continue;
+        const d = rpc(g, st, id, 'gachaDiscard', x.playerId);
+        check(d.ok && !g.players[x.playerId]?.teamId, `退回本回合抽到的新秀失败：${d.message}`);
+        st.discards++;
+      }
+      if (overCapOf(g, id) <= 0) return;
+      const ready = M.setSeatReady(g, id, true);
+      check(!ready.ok && !g.multiplayer!.seats[id].ready, `超编时不应能准备：${ready.message}`);
+      if (!forceTen && rnd.chance(0.5)) {
+        // 手动：退回本回合抽到的新秀中评分最低者，直到不超编
+        const pulled = results.map((x) => g.players[x.playerId]).filter((p) => p?.teamId === id).sort((a, b) => effectiveAttr(a, 'power') - effectiveAttr(b, 'power'));
+        for (const p of pulled) {
+          if (overCapOf(g, id) <= 0) break;
+          const d = rpc(g, st, id, 'gachaDiscard', p.id);
+          check(d.ok, `超编：退回新秀失败：${d.message}`);
+          st.discards++;
+        }
+        check(overCapOf(g, id) === 0, `超编：退回后仍超编 ${overCapOf(g, id)} 人`);
       }
     },
     // 谈心 / 团建 / 加薪
@@ -582,7 +651,13 @@ async function runGame(mode: 'build' | 'existing', seed: number, verbose: boolea
       let all = true;
       for (const id of live(g)) {
         resolveDecisions(g, st, id, rnd);
-        const r = M.setSeatReady(g, id, true);
+        let r = M.setSeatReady(g, id, true);
+        if (!r.ok && M.seatBlockers(g, id).some((b) => b.code === 'roster_over_cap')) {
+          // 超编：「下一回合」自动处理（先退回本回合抽到的新秀中评分最低者，仍超编再解约替补）后准备
+          r = M.setSeatReady(g, id, true, { auto: true });
+          check(overCapOf(g, id) === 0, `超编：自动处理后仍超编 ${overCapOf(g, id)} 人（${r.message}）`);
+          st.overCapAuto++;
+        }
         if (!r.ok) {
           all = false;
           if (hasMatchBlocker(g, id)) playMatches(g, st, rnd);
@@ -696,9 +771,11 @@ async function main(): Promise<void> {
     const s = out.stats;
     log(`   回合 ${s.rounds} · RPC ${s.rpc}（成功 ${s.rpcOk}）· 训练 ${s.trainings} · 签约 ${s.signings}（超出常规上限 ${s.overSoftSignings}；抢签 ${s.races} 次，后到者均被拒）`
       + ` · 求购 ${s.bidsOk}/${s.bids} · 手动对局 ${s.manualGames} · 玩家对决 ${s.h2hSeries} 场（手动局 ${s.h2hManualGames}，双方快速模拟 ${s.h2hQuickSims}）`
-      + ` · 越权调用被拦截 ${s.forbiddenRejected} · 出局 ${s.eliminated}（其中模拟制造 ${s.forcedEliminations}） · ${Math.round(out.ms)}ms`);
+      + ` · 抽卡 ${s.pulls}（退回 ${s.discards}；超编 ${s.overCaps} 次，其中自动处理 ${s.overCapAuto}） · 越权调用被拦截 ${s.forbiddenRejected} · 出局 ${s.eliminated}（其中模拟制造 ${s.forcedEliminations}） · ${Math.round(out.ms)}ms`);
     races += s.races;
     h2h += s.h2hSeries;
+    check(s.pulls > 0, `${mode}：没有成功的新秀抽卡`);
+    check(s.overCaps > 0 && s.overCapAuto > 0, `${mode}：没有覆盖抽卡超编（超编 ${s.overCaps} 次，自动处理 ${s.overCapAuto} 次）`);
     if (CHECK_DETERMINISM) {
       CHECKS = false;
       ROUNDTRIP = false;

@@ -17,6 +17,7 @@ import { addModifier } from './player';
 import { addNews } from './news';
 import type { GameState, Player, PlayerStatus, Position, SynergyAttr, SynergyDef, SynergyState, SynergyUnlock, Team } from './types';
 import { POSITIONS } from './types';
+import { ownEntry } from './util';
 
 const DEFS: readonly SynergyDef[] = (synergiesJson as unknown as SynergyDef[])
   .slice()
@@ -248,7 +249,7 @@ function onActivated(state: GameState, def: SynergyDef, team: Team, effective: b
 }
 
 function onDeactivated(state: GameState, def: SynergyDef, teamId: string): void {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team?.isPlayer || team.disbanded) return;
   const gone = def.members.filter((m) => !isRegularMember(state.players[m.id], teamId)).map((m) => state.players[m.id]?.handle ?? m.handle);
   addNews(

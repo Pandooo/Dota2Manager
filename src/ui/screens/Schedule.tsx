@@ -124,14 +124,25 @@ export default function Schedule() {
               <li>· 每个大回合<span className="text-ink">最多参加一项赛事</span>，同回合的多项赛事只能择一。</li>
               <li>
                 · <span className="text-gold">受邀赛事</span>（上赛季排名靠前或荣誉足够高）已自动报名、直接进入正赛；
-                开赛前可<span className="text-ink">婉拒</span>（无荣誉惩罚，空出的席位由其他战队递补），婉拒后也可<span className="text-ink">重新接受</span>。
+                开赛前可<span className="text-ink">婉拒</span>（空出的席位由其他战队递补），婉拒后也可<span className="text-ink">重新接受</span>。
                 同回合多项邀请默认保留等级最高者，想改打其他赛事需先婉拒保留的那项。
+              </li>
+              <li>
+                · <span className="text-ink">赛季中可随时报名、重新接受或退出</span>尚未开赛的赛事。退出（婉拒 / 取消报名）在报名或接受邀请的
+                <span className="text-ink">同一回合内不扣荣誉</span>，之后按等级扣荣誉：Major {-CONFIG.honor.withdraw.major} / 顶级赛事{' '}
+                {-CONFIG.honor.withdraw.premier} / Minor {-CONFIG.honor.withdraw.minor} / 线上公开赛 {-CONFIG.honor.withdrawOpenCup}，
+                距开赛 ≥ {CONFIG.honor.withdrawFarRounds} 个回合减半，低荣誉减损（按钮上标出本次扣分）。
+              </li>
+              <li>
+                · <span className="text-gold">补充邀请</span>：每回合结束时，本赛季积分榜排名进入某项未开赛赛事的直邀名额（或荣誉达到受邀线）的战队，
+                可收到该赛事的补充邀请（婉拒 / 解散腾出的席位 + 每项最多 {CONFIG.tournament.lateInvite.extraSlots} 个追加席位）；
+                默认接受，收到的回合内婉拒不扣荣誉。
               </li>
               <li>
                 · <span className="text-gold">TI 与 TI 赛区预选赛为赛季收官，必须参加</span>。报名但未受邀的赛事需先打封闭预选赛。
               </li>
               <li>· 未报名任何赛事的回合为<span className="text-ink">休赛回合</span>：可进行免费训练、购买额外训练或约训练赛。</li>
-              <li>· 报名 / 婉拒可在赛事所在回合开始前修改；TI 预选回合起转会窗口锁定。</li>
+              <li>· 报名 / 婉拒可在赛事所在回合开始前修改（回合开始即开赛）；TI 预选回合起转会窗口锁定。</li>
               <li>
                 · 每个回合开始时依次结算：<span className="text-info">版本更新</span>（按真实发布日期落在该回合，本赛季共 {totalPatches} 次）→{' '}
                 <span className="text-dota-2">随机事件</span> → 赛事开赛 / 训练。
@@ -397,7 +408,7 @@ function TourRow({ game, t, siblings, directInvites }: { game: GameState; t: Tou
           chip
         )}
       </div>
-      <div className="flex w-20 justify-end">{action}</div>
+      <div className="flex w-24 justify-end">{action}</div>
     </div>
   );
 }

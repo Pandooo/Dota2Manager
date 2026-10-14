@@ -1,6 +1,8 @@
 // 新秀选秀（src/engine/rookieDraft.ts，第八波）：抽签概率偏向弱队、确定性、顺位与阵容上限、新秀池等级分布与
 // 100 名新秀的 SSR 保底、赛季初免费放弃、首个赛季同样举行、多人模式全局一次；以及休赛回合结束时自动用掉全部训练额度。
-import { beforeAll, describe, expect, it } from 'vitest';
+// 2026-10-14 起新秀改由抽卡进入联赛（gacha.ts），选秀默认关闭（CONFIG.draft.enabled = false，保留一个版本）：
+// 经由赛季流程举行选秀的集成用例显式打开开关。
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { GameState, OpResult, Tier } from '../src/engine/types';
 import { TIERS } from '../src/engine/types';
 import { CONFIG } from '../src/engine/config';
@@ -400,6 +402,17 @@ function playToNextSeason(state: GameState): void {
 }
 
 describe('rookieDraft · 集成', () => {
+  // 选秀默认关闭（2026-10-14 抽卡取代选秀）：本组用例显式打开开关
+  const draftCfg = CONFIG.draft as { enabled: boolean };
+  let prevEnabled = draftCfg.enabled;
+  beforeAll(() => {
+    prevEnabled = draftCfg.enabled;
+    draftCfg.enabled = true;
+  });
+  afterAll(() => {
+    draftCfg.enabled = prevEnabled;
+  });
+
   it('新游戏首个赛季同样举行选秀（按初始实力 + 荣誉），新俱乐部获得新秀；欢迎弹窗在前；次赛季按上赛季排名并纳入真实新秀', async () => {
     const g = await createNewGame({
       startTi: 9, seasons: 2, difficulty: 'normal', managerName: 'T', seed: 2024,
@@ -470,11 +483,14 @@ describe('rookieDraft · 集成', () => {
     expect((M.callAsSeat(g, B, 'releaseDraftedRookie', [mine]) as OpResult).ok).toBe(false);
     expect((M.callAsSeat(g, A, 'releaseDraftedRookie', [mine]) as OpResult).ok).toBe(true);
     expect(g.players[mine!].teamId).toBeNull();
+    // 旧版抽卡的 RPC 名已不存在（2026-10-14 抽卡回归后为 gachaPull / gachaDiscard）
     expect(() => M.callAsSeat(g, A, 'gachaDraw', [1])).toThrow();
     expect(() => M.callAsSeat(g, A, 'discardGachaPlayers', [[]])).toThrow();
+    // 选秀开启时不建卡池：新秀抽卡不可用
+    expect((M.callAsSeat(g, A, 'gachaPull', [1]) as OpResult).ok).toBe(false);
   });
 
-  it('多人：每个座位同样适用软上限——阵容超出常规上限不阻塞准备，只有绝对上限挡住签约', async () => {
+  it('多人：每个座位同样适用软上限——阵容超出常规上限不阻塞准备，绝对上限挡住签约；超出绝对上限时不能准备', async () => {
     const g = await M.createMultiplayerGame({
       startTi: 9, endTi: 10, difficulty: 'normal', mode: 'build', seed: 11,
       players: [
@@ -483,20 +499,26 @@ describe('rookieDraft · 集成', () => {
       ],
     });
     const [A, B] = g.multiplayer!.order;
-    // 座位 A 塞到绝对上限（再多 2 人，模拟选秀新秀超过绝对上限）
+    // 座位 A 塞到绝对上限
     const regular = (id: string) => g.teams[id].playerIds.filter((x) => !g.players[x].tempSubUntilTournament).length;
     const blockersBefore = M.seatBlockers(g, A).map((b) => b.code);
-    while (regular(A) < CONFIG.team.hardMaxRoster + 2) {
+    while (regular(A) < CONFIG.team.hardMaxRoster) {
       const p = generatePlayer(g, { tier: 'B', position: 'SS' });
       addPlayerToTeam(g, p.id, A, { contractSeasons: 2 });
     }
-    // 阵容人数不产生任何新的阻塞：没有待决事件时可以直接准备
+    // 超出常规上限不产生新的阻塞：没有待决事件时可以直接准备
     expect(M.seatBlockers(g, A).map((b) => b.code)).toEqual(blockersBefore);
     if (!blockersBefore.length) expect(M.setSeatReady(g, A, true).ok).toBe(true);
     const fa = M.withSeat(g, A, () => freeAgents(g))[0];
     const r = M.callAsSeat(g, A, 'signFreeAgent', [fa.id]) as OpResult;
     expect(r.ok).toBe(false);
     expect(r.message).toContain('绝对上限');
+    // 再多 2 人（超出绝对上限，如抽卡超编）：不能准备，已准备的座位被撤销准备
+    for (let i = 0; i < 2; i++) addPlayerToTeam(g, generatePlayer(g, { tier: 'B', position: 'SS' }).id, A, { contractSeasons: 2 });
+    expect(M.seatBlockers(g, A).map((b) => b.code)).toContain('roster_over_cap');
+    M.callAsSeat(g, A, 'markAllNewsRead', []);
+    expect(g.multiplayer!.seats[A].ready).toBe(false);
+    expect(M.setSeatReady(g, A, true).ok).toBe(false);
     // 座位 B 不受 A 的阵容影响
     expect(regular(B)).toBeLessThan(CONFIG.team.hardMaxRoster);
     expect(M.seatBlockers(g, B).map((b) => b.code)).not.toContain('lineup_invalid');

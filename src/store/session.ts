@@ -55,9 +55,21 @@ function ls(): Storage | null {
   }
 }
 
+/**
+ * 随机 ID（会话 ID 是重连回座位的凭证）：优先 crypto.randomUUID；不安全上下文（如 http://公网 IP）中没有 randomUUID，
+ * 改用同样不可预测的 crypto.getRandomValues（128 位）；两者都不可用时才退回 Math.random。
+ */
 function randomId(): string {
   try {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const b = crypto.getRandomValues(new Uint8Array(16));
+      return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    }
   } catch {
     /* ignore */
   }

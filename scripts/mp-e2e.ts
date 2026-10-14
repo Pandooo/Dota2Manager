@@ -20,9 +20,10 @@ import {
   currentPlayerTournament, getAdvanceBlockers, trainingBlockReason, trainingSessionsLeft,
 } from '../src/engine/game';
 import { benchPlayers, rosterRoom, validateLineup } from '../src/engine/team';
-import { freeAgents, isTransferWindowOpen, playerWillingness, signingFee } from '../src/engine/market';
+import { freeAgents, isTransferWindowOpen, negotiationRoll, playerWillingness, signingFee } from '../src/engine/market';
+import * as M from '../src/engine/multi';
 import { playerNextSeries } from '../src/engine/tournament';
-import { hashSeed, seededRng } from '../src/engine/rng';
+import { gachaDiscardRefund, gachaPrice, poolRemaining } from '../src/engine/gacha';
 import { startServer, type RunningServer } from '../server/app';
 import { TestClient, until } from '../server/testClient';
 import { mySeat } from '../src/shared/protocol';
@@ -205,10 +206,13 @@ function replaceClient(p: Seat, c: TestClient): void {
 }
 
 /** 签约自由选手的成功判定（与 market.signFreeAgent 的意愿掷骰一致：确定性） */
-function wouldAccept(v: GameState, p: Player, teamId: string): boolean {
-  const will = playerWillingness(v, p.id, teamId);
-  const roll = seededRng(hashSeed(`${v.id}|${v.season?.ti ?? 0}|${v.roundIndex}|sign|${p.id}|${teamId}`)).next();
-  return roll < will;
+/**
+ * 选手是否会接受该座位的签约（用服务器端的真实状态计算：谈判骰子混入了服务器密钥，客户端视图里没有密钥、算不出来——
+ * 这正是要防的「预先算出谈判结果」，见 docs/MULTIPLAYER.md §15）
+ */
+function wouldAccept(serverState: GameState, p: Player, teamId: string): boolean {
+  const will = M.withSeat(serverState, teamId, () => playerWillingness(serverState, p.id, teamId));
+  return negotiationRoll(serverState, `sign|${p.id}|${teamId}`) < will;
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +259,7 @@ async function fixRoster(p: Seat): Promise<void> {
     if (!victim) break;
     const vv = view(p);
     const free = victim.draft?.ti === vv.season.ti && victim.draft.teamId === p.team && vv.phase === 'preseason';
+    // 本回合抽到的新秀：releasePlayer 会按「退回」处理（gacha.gachaDiscard）
     await call(p, free ? 'releaseDraftedRookie' : 'releasePlayer', victim.id);
   }
   // 正式队员不足 5 人且窗口开放：签下负担得起的自由选手
@@ -458,29 +463,41 @@ async function lobby(server: RunningServer, mode: RoomSettings['mode'], seats: S
     check(!!p.c.state?.teams[p.team]?.isPlayer, `${p.name} 的战队标记为玩家战队`);
   }
   check(new Set(seats.map((p) => p.team)).size === seats.length, '每位玩家控制不同的战队');
-  // 新秀选秀：全局只举行一次，每位玩家各收到一个选秀结果弹窗；赛季初可免费放弃选中的新秀
+  // 在线统计：hello 后立即收到，开局后（节流）推送对局中人数；只有数字
+  await until(() => seats.every((p) => p.c.stats?.inGame === seats.length && p.c.stats.playing === 1), 5000, '在线统计推送');
+  const pushed = seats[0].c.stats;
+  check(seats.every((p) => p.c.stats?.online === seats.length), `在线统计推送：在线 ${pushed?.online} 人 · 对局中 ${pushed?.playing} 局 · 房间 ${pushed?.rooms} 个`);
+  const st = server.stats.status();
+  check(st.online === seats.length && st.inGame === seats.length && st.rooms.active === 1 && st.today.gamesStarted >= 1, '/api/status 统计在线与对局中玩家');
+  // 新秀抽卡（2026-10-14 取代选秀）：卡池全局一份、各视图一致；没有选秀与选秀弹窗；名人堂已建立
   for (const p of seats) {
     const v = view(p);
-    const rec = (v.rookieDraft?.history ?? []).filter((r) => r.ti === v.season.ti);
-    check(rec.length === 1, `${p.name} 的视图中本赛季选秀恰好举行一次`);
-    check((v.popups ?? []).filter((x) => x.kind === 'rookie_draft').length === 1, `${p.name} 收到一个选秀结果弹窗`);
+    check(v.gacha?.pool?.ti === v.season.ti, `${p.name} 的视图中有本赛季卡池`);
+    check((v.popups ?? []).every((x) => x.kind !== 'rookie_draft'), `${p.name} 没有选秀结果弹窗`);
+    check((v.hallOfFame?.members.length ?? 0) > 0, `${p.name} 的视图中有名人堂`);
   }
   {
-    const p = seats[0];
-    const v = view(p);
-    const rookie = v.teams[p.team]?.playerIds.map((id) => v.players[id]).find((x) => x?.draft?.ti === v.season.ti && x.draft.teamId === p.team);
-    if (rookie) {
-      const r = await call(p, 'releaseDraftedRookie', rookie.id);
-      check(r.ok && !view(p).players[rookie.id]?.teamId, `${p.name} 免费放弃选秀新秀 ${rookie.handle}`);
-      await until(() => !view(seats[1]).players[rookie.id]?.teamId, 5_000, '其他玩家的视图同步放弃结果');
-    }
-    const other = seats[1];
-    const ov = view(other);
-    const theirs = ov.teams[other.team]?.playerIds.map((id) => ov.players[id]).find((x) => x?.draft?.ti === ov.season.ti);
-    if (theirs) {
-      const r = await call(p, 'releaseDraftedRookie', theirs.id);
-      check(!r.ok && view(p).players[theirs.id]?.teamId === other.team, '不能放弃其他玩家选中的新秀');
-    }
+    // 玩家 A 单抽：扣款、新秀入队、共享卡池少一张（其他玩家的视图同步）；逐张记录只在 A 的视图中；
+    // B 不能退回 A 的新秀；A 本回合退回（返还部分费用，进入自由市场）
+    const [p, other] = seats;
+    const left = poolRemaining(view(p).gacha?.pool);
+    const gold = view(p).teams[p.team].gold;
+    const price = gachaPrice(view(p)).single;
+    const r = await call(p, 'gachaPull', 1);
+    const results = ((r.result as { results?: { playerId: string; handle: string }[] } | undefined)?.results) ?? [];
+    check(r.ok && results.length === 1, `${p.name} 单抽成功（${r.message}）`);
+    const pid = results[0]?.playerId ?? '';
+    await until(() => view(p).players[pid]?.teamId === p.team, 5_000, '抽到的新秀入队');
+    check(view(p).teams[p.team].gold === gold - price, `${p.name} 单抽扣款 ${price}`);
+    await until(() => poolRemaining(view(other).gacha?.pool) === left - 1, 5_000, '其他玩家视图中的共享卡池同步');
+    check((view(p).teams[p.team].gacha?.log?.length ?? 0) === 1, `${p.name} 的视图中有自己的抽卡记录`);
+    check(!view(other).teams[p.team]?.gacha?.log, `${other.name} 的视图中看不到 ${p.name} 的逐张抽卡记录`);
+    const steal = await call(other, 'gachaDiscard', pid);
+    check(!steal.ok && view(other).players[pid]?.teamId === p.team, '不能退回其他玩家抽到的新秀');
+    const d = await call(p, 'gachaDiscard', pid);
+    check(d.ok && !view(p).players[pid]?.teamId, `${p.name} 本回合退回新秀（${d.message}）`);
+    check(view(p).teams[p.team].gold === gold - price + gachaDiscardRefund(view(p)), `${p.name} 退回返还 ${gachaDiscardRefund(view(p))}`);
+    await until(() => !view(other).players[pid]?.teamId, 5_000, '其他玩家的视图同步退回结果');
   }
   // 每位玩家设置不同的训练重点（座位私有）；之后每一份视图都校验是自己的
   const focuses = ['power', 'mmr', 'insight'];
@@ -495,13 +512,17 @@ async function lobby(server: RunningServer, mode: RoomSettings['mode'], seats: S
 }
 
 /** 两名玩家同时签同一名自由选手 */
-async function race(seats: Seat[]): Promise<boolean> {
+async function race(seats: Seat[], server: RunningServer, roomId: string): Promise<boolean> {
   const [a, b, c] = seats;
   const v = view(b);
   if (!isTransferWindowOpen(v)) return false;
+  const st = server.rooms.getRoomState(roomId);
+  if (!st) return false;
+  // 客户端视图不含随机数状态与谈判密钥（服务器端有）
+  check(v.rngState === 0 && v.multiplayer?.secret === '' && !!st.multiplayer?.secret, '视图不含随机数状态与谈判密钥，服务器端有密钥');
   const cands = freeAgents(v)
     .filter((p) => [b, c].every((s) => rosterRoom(v, s.team) > 0 && v.teams[s.team].gold >= signingFee(v, p)))
-    .map((p) => ({ p, both: wouldAccept(v, p, b.team) && wouldAccept(v, p, c.team), fee: signingFee(v, p) }))
+    .map((p) => ({ p, both: wouldAccept(st, p, b.team) && wouldAccept(st, p, c.team), fee: signingFee(v, p) }))
     .sort((x, y) => Number(y.both) - Number(x.both) || x.fee - y.fee);
   const target = cands[0];
   if (!target) return false;
@@ -633,7 +654,7 @@ async function scenario(mode: RoomSettings['mode']): Promise<void> {
     while (rounds < MAX_ROUNDS) {
       const st = seats[0].c.roundStatus!;
       if (st.season >= endSeason || seats[0].c.state?.gameOver) break;
-      if (!raced) raced = await race(seats);
+      if (!raced) raced = await race(seats, server, roomId);
       if (rounds === 3) await reconnect(server, seats, 1);
       if (rounds === 6) await startAutopilot(seats, 2);
       if (rounds === 10) await endAutopilot(server, seats, 2, rounds - 6);

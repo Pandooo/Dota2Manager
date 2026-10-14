@@ -14,6 +14,7 @@ import { overallRating } from './player';
 import { synergiesOfPlayer, synergyAvailable } from './synergy';
 import { isHumanTeam } from './seat';
 import type { GameState, Player, Position } from './types';
+import { ownEntry } from './util';
 
 /** 优先级：1 = 使命选手，2 = 巅峰选手（数字越小越优先） */
 export type LineupPriority = 1 | 2;
@@ -31,7 +32,7 @@ export function isPeakRosterPlayer(state: GameState, playerId: string): boolean 
 export function aiLineupPriority(state: GameState, teamId: string): Map<string, LineupPriority> | null {
   const c = CONFIG.team.aiLineupPriority;
   if (!c || (!c.mission && !c.peak)) return null;
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded || team.isPlayer || isHumanTeam(state, teamId)) return null;
   const ids = team.playerIds ?? [];
   if (!ids.length) return null;

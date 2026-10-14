@@ -18,7 +18,7 @@ import type { GameState, OpResult, Player, PrizeShareChange, Team } from './type
 import { POSITIONS } from './types';
 import { CONFIG } from './config';
 import { rngOf } from './rng';
-import { clamp, formatGold, round1, round2 } from './util';
+import { clamp, formatGold, ownEntry, round1, round2 } from './util';
 import { addNews } from './news';
 import { addFinance } from './economy';
 import { adjustLoyalty } from './growth';
@@ -75,7 +75,7 @@ export function defaultPrizeShare(_state: GameState, _team?: Team | null): numbe
 
 /** 战队当前的分成比例（缺失时按默认值，不写入状态） */
 export function prizeShareOf(state: GameState, teamOrId: Team | string | null | undefined): number {
-  const team = typeof teamOrId === 'string' ? state.teams?.[teamOrId] : teamOrId;
+  const team = typeof teamOrId === 'string' ? ownEntry(state.teams, teamOrId) : teamOrId;
   if (!team) return defaultPrizeShare(state, null);
   if (typeof team.prizeShare === 'number' && Number.isFinite(team.prizeShare)) return normalizePrizeShare(team.prizeShare);
   return defaultPrizeShare(state, team);
@@ -156,7 +156,7 @@ function prizeRecipients(state: GameState, team: Team): Recipient[] {
  */
 export function splitPrize(state: GameState, teamId: string, prize: number): PrizeSplit {
   const total = Math.max(0, Math.round(num(prize)));
-  const team = state.teams?.[teamId];
+  const team = ownEntry(state.teams, teamId);
   const share = team ? prizeShareOf(state, team) : 0;
   if (!team || total <= 0) return { total, club: total, players: 0, share, cuts: [] };
   const rec = prizeRecipients(state, team);
@@ -197,7 +197,7 @@ export function prizeCutLoyaltyGain(cut: number, salary: number): number {
  * 每名分到奖金的正式队员（非临时 / 野外替补）提升归属感并记入近期奖金收入。返回拆分结果。
  */
 export function payTournamentPrize(state: GameState, teamId: string, prize: number, label: string): PrizeSplit {
-  const team = state.teams?.[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (team) ensurePrizeShare(state, team);
   const split = splitPrize(state, teamId, prize);
   if (!team || split.total <= 0) return split;
@@ -447,7 +447,7 @@ export interface PrizeShareStatus {
 export function prizeShareStatus(state: GameState, teamId?: string | null): PrizeShareStatus {
   const c = C();
   const id = teamId ?? state.settings?.playerTeamId ?? '';
-  const team = state.teams?.[id];
+  const team = ownEntry(state.teams, id);
   const share = team ? prizeShareOf(state, team) : defaultPrizeShare(state, null);
   let reason = '';
   if (!team || team.disbanded || state.gameOver) reason = '战队不存在或游戏已结束';

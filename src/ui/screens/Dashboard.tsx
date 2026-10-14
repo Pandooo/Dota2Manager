@@ -1,7 +1,8 @@
 // 总览（每个回合的中枢，信息精简版，没有弹窗）：
-//   新闻滚动栏 → 通知（有回合通知时：赛事结算 / 版本更新 / 赛季总结 / 新秀选秀 / 消息，最新在前，点击在原处展开，见 PopupHost）→
+//   新闻滚动栏 → 通知（有回合通知时：赛事结算 / 版本更新 / 赛季总结 / 消息，最新在前，点击在原处展开，见 PopupHost）→
 //   本回合（时间轴 + 指引 + 内嵌卡片：赛事回合为赛事卡片〔回合开始时自动展开，见 TournamentModal〕，
-//   休赛 / 观赛回合为训练卡片〔见 TrainingModal〕；报名 / 新秀选秀等跳转对应中心页）→ 待处理（红点，点击展开）→
+//   休赛 / 观赛回合为训练卡片〔见 TrainingModal〕；报名 / 新秀抽卡等跳转对应中心页）→ 待处理（红点，点击展开）→
+//   赛事报名（本赛季未开赛赛事的报名 / 退出，收到补充邀请时自动展开，见 EntryPlanCard）→
 //   回合要闻 + 世界动态 | 俱乐部概况（评分、排名、荣誉、金币、每回合收支）+ 积分榜。
 // 最省事的玩法是一直点底部操作栏的主按钮（快速模拟本场 / 下一回合）；需要细调时在本页展开卡片完成，不必切换页面。
 // 阵容、赛程、走势、版本详情分别在「战队」「赛事」「俱乐部」中心页查看，这里不再重复；
@@ -11,8 +12,8 @@ import { useGame, useGameStore } from '../../store/gameStore';
 import {
   CONFIG,
   activeTeams, currentPlayerTournament, currentRound, formatGold, formatRank, getCoach,
-  draftedRookiesOf, isTransferWindowOpen, rankTeamsByRating, regularRoundCount, roundKindForPlayer, roundRevenue,
-  roundWageBill, rosterOverflowNotice, seasonStandings, teamPlayers, teamRating, trainingSessionsLeft, validateLineup,
+  gachaLog, isTransferWindowOpen, rankTeamsByRating, regularRoundCount, roundKindForPlayer, roundRevenue,
+  roundWageBill, rosterOverCapNotice, rosterOverflowNotice, seasonStandings, teamPlayers, teamRating, trainingSessionsLeft, validateLineup,
   bankruptcyCountdownText, bankruptcyRules, bankruptcyStatus,
   type BankruptcyStatus, type GameState, type RoundInfo, type RoundRevenue, type Team, type Tournament,
 } from '../../engine';
@@ -27,6 +28,8 @@ import { roundTournamentOf, seatSpectating, tourRoundKeyOf } from '../components
 import { NoticesCard } from '../components/PopupHost';
 import { TournamentCard } from '../components/TournamentModal';
 import { TrainingCard } from '../components/TrainingModal';
+import { EntryPlanCard } from '../components/EntryPlanCard';
+import { MomentumBadge } from '../components/MomentumBadge';
 
 type Kind = 'preseason' | 'rest' | 'tournament' | 'ti_qualifier' | 'ti' | 'ti_watch';
 
@@ -112,9 +115,13 @@ export default function Dashboard() {
   const kind = safe<Kind>(() => roundKindForPlayer(game, game.roundIndex), game.roundIndex === 0 ? 'preseason' : 'rest');
   const tour = safe(() => currentPlayerTournament(game), null as Tournament | null);
   const sessions = safe(() => trainingSessionsLeft(game), 0);
-  // 赛季初：本届选秀选中、仍在队的新秀（可保留 / 免费放弃）
-  const rookies = game.phase === 'preseason' ? safe(() => draftedRookiesOf(game, me).length, 0) : 0;
+  // 本回合抽到、仍在队的新秀（本回合内可退回，返还部分抽卡费用）
+  const rookies = safe(
+    () => gachaLog(game, me).filter((r) => r.round === game.roundIndex && !r.discarded && game.players[r.playerId]?.teamId === me).length,
+    0,
+  );
   const windowOpen = safe(() => isTransferWindowOpen(game), game.phase === 'preseason' || game.phase === 'regular');
+  const poolOpen = windowOpen && !!game.gacha?.pool && game.gacha.pool.ti === game.season?.ti;
 
   const wage = safe(() => roundWageBill(game, me), 0);
   // 回合结算时先入账赞助 / 直播 / 周边，再付工资（economy.payRoundSalaries）
@@ -163,7 +170,7 @@ export default function Dashboard() {
     guideTitle = '赛季初 · 备战期';
     guideText = (
       <>
-        确认<b className="text-ink">赛事报名</b>（受邀赛事已自动报名），补强阵容；新秀选秀已自动完成，<b className="text-ink">选中的新秀只能在赛季初免费放弃</b>。准备好后点击底部「开始赛季 ▶」。
+        确认<b className="text-ink">赛事报名</b>（受邀赛事已自动报名），补强阵容；本赛季<b className="text-ink">新秀卡池</b>已开放（真实新秀 / 请神新秀 / 虚构新秀，所有战队共享、先到先得）。真实新秀只能在赛季初抽：第 1 回合开始时没被抽走的真实新秀按真实出道去向加盟，随后 AI 战队按资金与阵容空位抽卡（资金不足时可能不抽）。准备好后点击底部「开始赛季 ▶」。
       </>
     );
     ctas = (
@@ -171,8 +178,8 @@ export default function Dashboard() {
         <Button variant="primary" onClick={() => setView('schedule')} title="赛事 / 赛程报名">
           ▤ 赛程报名
         </Button>
-        <Button variant={rookies ? 'gold' : 'secondary'} onClick={() => setView('draft')} title="转会 / 新秀选秀：本届选秀结果与我的新秀">
-          ✧ 新秀选秀{rookies ? `（${rookies}）` : ''}
+        <Button variant={poolOpen ? 'gold' : 'secondary'} onClick={() => setView('gacha')} title="转会 / 新秀抽卡：本赛季卡池、单抽 / 十连、SSR 保底">
+          ✧ 新秀抽卡{rookies ? `（${rookies}）` : ''}
         </Button>
         {marketBtn}
       </>
@@ -257,8 +264,10 @@ export default function Dashboard() {
   const lowLoyal = roster.filter((p) => p.loyalty < CONFIG.loyalty.leaveThreshold);
   const fundsShort = wage > 0 && team.gold + income < wage;
   const rosterCount = roster.filter((p) => !p.tempSubUntilTournament).length;
-  // 超出常规上限只是提醒（不阻塞推进）：工资照付、替补归属感下降更快
-  const overflowNote = safe<string | null>(() => rosterOverflowNotice(game, me), null);
+  // 超出绝对上限（抽卡超编，2026-10-15 用户决策「十连后本回合内退回到 12 人」）：本回合内必须退回，否则不能进入下一回合
+  const overCapNote = windowOpen ? safe<string | null>(() => rosterOverCapNotice(game, me), null) : null;
+  // 超出常规上限只是提醒（不阻塞推进）：工资照付、替补归属感下降更快（超编时只显示超编一项）
+  const overflowNote = overCapNote ? null : safe<string | null>(() => rosterOverflowNotice(game, me), null);
   // 破产倒计时（第十波 #1，engine/bankruptcy.ts）：资金为负时常驻在「待处理」标题行（不必展开也能看到）
   const bk = safe<BankruptcyStatus | null>(() => bankruptcyStatus(game, me), null);
   const bkWarn = !!bk?.warning && !spectating;
@@ -411,7 +420,7 @@ export default function Dashboard() {
       {(() => {
         const urgent =
           decisions.length + offers.length + (lineupErrors.length ? 1 : 0) + (fundsShort ? 1 : 0) +
-          (team.honor < 50 ? 1 : 0) + (rosterCount < 5 ? 1 : 0) + (bkWarn ? 1 : 0);
+          (team.honor < 50 ? 1 : 0) + (rosterCount < 5 ? 1 : 0) + (bkWarn ? 1 : 0) + (overCapNote ? 1 : 0);
         const info = (rookies ? 1 : 0) + (overflowNote ? 1 : 0) + (expiring.length ? 1 : 0) + (lowLoyal.length ? 1 : 0) + (!coach ? 1 : 0);
         const total = urgent + info;
         return (
@@ -430,6 +439,11 @@ export default function Dashboard() {
                   title={bkTitle}
                 >
                   {bk.negative ? bankruptcyCountdownText(bk.roundsLeft) : '资金已回正：回合结算时仍 ≥ 0 即解除破产倒计时'}
+                </span>
+              )}
+              {overCapNote && !todoOpen && (
+                <span className="rounded border border-bad/60 bg-bad/15 px-2 py-0.5 text-xs font-semibold text-bad" title={overCapNote}>
+                  {overCapNote.split('：')[0]}：退回 {CONFIG.team.hardMaxRoster} 人后才能进入下一回合
                 </span>
               )}
               <span className="ml-auto text-xs text-faint">{todoOpen ? '收起 ▴' : '展开 ▾'}</span>
@@ -460,6 +474,19 @@ export default function Dashboard() {
                   <div className="md:col-span-2">
                     <TodoRow icon="!" tone="bg-bad text-white" onClick={() => setView('finance')} title={bkTitle}>
                       <span className="text-bad">负债已超过 {bkRules.debtWageRounds} 个回合的工资：本回合结算时仍超过将立即破产</span>
+                    </TodoRow>
+                  </div>
+                )}
+                {overCapNote && (
+                  <div className="md:col-span-2">
+                    <TodoRow
+                      icon="!"
+                      tone="bg-bad text-white"
+                      onClick={() => setView(rookies > 0 ? 'gacha' : 'squad')}
+                      title={`阵容超过绝对上限 ${CONFIG.team.hardMaxRoster} 人（抽卡可以超出）：在新秀抽卡页退回本回合抽到的新秀（返还部分费用），或在阵容页解约 / 出售其他队员（挂牌不算）。`
+                        + '开启「下一回合」自动处理时会先自动退回评分最低的新秀'}
+                    >
+                      <span className="font-semibold text-bad">{overCapNote}</span>
                     </TodoRow>
                   </div>
                 )}
@@ -496,8 +523,8 @@ export default function Dashboard() {
                   </TodoRow>
                 )}
                 {rookies > 0 && (
-                  <TodoRow icon="✧" tone="bg-gold/20 text-gold" count={rookies} onClick={() => setView('draft')}>
-                    本届选秀选中的新秀：赛季初可保留或免费放弃
+                  <TodoRow icon="✧" tone="bg-gold/20 text-gold" count={rookies} onClick={() => setView('gacha')}>
+                    本回合抽到的新秀：本回合内可退回（返还部分抽卡费用），之后为正式队员
                   </TodoRow>
                 )}
                 {overflowNote && (
@@ -535,6 +562,9 @@ export default function Dashboard() {
           </section>
         );
       })()}
+
+      {/* ======================= 赛事报名（第十四波：赛季中报名 / 退出，补充邀请） ======================= */}
+      <EntryPlanCard className="mb-4" />
 
       {/* ======================= 回合要闻 + 世界动态 | 俱乐部概况 + 积分榜 ======================= */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -584,7 +614,10 @@ function ClubCard({ game, team, wage }: { game: GameState; team: Team; wage: num
     >
       <div className="grid grid-cols-2 gap-2">
         <button className={cx(tile, 'cursor-pointer hover:border-gold/40')} onClick={() => setView('squad')} title="战队评分（首发五人 + 教练）">
-          <div className="text-[10px] text-faint">战队评分</div>
+          <div className="flex items-center justify-between gap-1 text-[10px] text-faint">
+            战队评分
+            <MomentumBadge game={game} teamId={me} compact />
+          </div>
           <div className="text-base font-bold tabular">{rating.toFixed(0)}</div>
         </button>
         <button className={cx(tile, 'cursor-pointer hover:border-gold/40')} onClick={() => setView('rankings')} title="按战队评分的世界排名">

@@ -1,19 +1,20 @@
 // ============================================================================
-// 回合通知（消费 game.popups：赛事结算 / 赛季总结 / 版本更新 / 新秀选秀结果 / 消息）——不再弹出阻塞式弹窗：
+// 回合通知（消费 game.popups：赛事结算 / 赛季总结 / 版本更新 / 新秀选秀结果（选秀开启或旧存档）/ 消息）——不再弹出阻塞式弹窗：
 // - NoticesCard：总览顶部的「通知」卡片，最新在前、连续的版本更新合并为一条；每条点击在原处展开详情；
 //   「全部已读」一次清空（callSilent('dismissPopups', n)），条目较多时较早的折叠起来并可单独清除（队列从最早的开始移除）。
 // - NoticeBadge：在其他页面时左下角（侧栏底部）的小徽标（不阻塞操作、不遮挡页面内容），点击回到总览查看。
 // - 默认导出 PopupHost：原来的逐条弹窗，只在游戏结束（生涯总结）界面使用——那里没有总览可以承载通知卡片。
 // 多人模式下 popups 是每个座位私有的，各自的客户端只显示自己的通知。
 // ============================================================================
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useCallSilent, useGame, useGameStore, type ViewKey } from '../../store/gameStore';
 import {
   CONFIG, POSITIONS, TOURNAMENT_TIER_LABEL, formatGold, formatRank, heroName,
   patchByVersion, playerTier, rookieDraftRecord,
   type GameState, type PatchInfo, type Popup, type TournamentSettlement, type TournamentTier,
 } from '../../engine';
-import { RookieDraftPopupBody } from '../screens/RookieDraft';
+// 选秀结果（2026-10-14 起选秀默认关闭，只有旧存档 / 打开选秀开关时才有此通知）：按需加载，不进主包
+const RookieDraftPopupBody = lazy(() => import('../screens/RookieDraft').then((m) => ({ default: m.RookieDraftPopupBody })));
 import { Badge, Button, Delta, EmptyState, Gold, Modal, PlayerLink, PosBadge, TierBadge, cx } from './common';
 import { MiniTitle, TourTierBadge, roundLabel, safe, teamNameOf } from './ShellKit';
 
@@ -329,7 +330,7 @@ function SeasonSummaryBody({ game, ti }: { game: GameState; ti: number }) {
 
       {game.season?.ti > ti && !game.gameOver && (
         <div className="rounded-lg border border-info/30 bg-info/10 px-4 py-2.5 text-xs text-info">
-          TI{game.season.ti} 赛季已开始：新秀选秀已完成，赛季初可以报名赛事、处理选中的新秀与转会补强，准备好后点击「开始赛季 ▶」。
+          TI{game.season.ti} 赛季已开始：{CONFIG.draft.enabled ? '新秀选秀已完成，赛季初可以报名赛事、处理选中的新秀与转会补强' : '新秀卡池已开放（转会 › 新秀抽卡），赛季初可以报名赛事、抽卡与转会补强'}，准备好后点击「开始赛季 ▶」。
         </div>
       )}
     </div>
@@ -588,7 +589,11 @@ function noticeView(game: GameState, g: NoticeGroup): NoticeView {
         chip: KIND_CHIP.rookie_draft,
         title: `TI${p.ti} 新秀选秀结果`,
         summary: rookieSummary(game, p.ti),
-        body: <RookieDraftPopupBody game={game} ti={p.ti} />,
+        body: (
+          <Suspense fallback={<div className="py-6 text-center text-xs text-mute">正在载入选秀结果…</div>}>
+            <RookieDraftPopupBody game={game} ti={p.ti} />
+          </Suspense>
+        ),
         links: [{ label: '新秀选秀', to: 'draft', title: '转会 / 新秀选秀' }],
         width: 'max-w-4xl',
       };

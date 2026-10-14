@@ -14,7 +14,7 @@ import { CONFIG } from './config';
 import { computeSalary, effectiveAttr, playerTier, tierIndex } from './player';
 import { hashSeed, seededRng } from './rng';
 import type { GameState, Player, SalaryTrack, Team, Tier } from './types';
-import { clamp } from './util';
+import { clamp, ownEntry } from './util';
 import { rosterSize } from './team';
 
 /** 薪资满意度（定性） */
@@ -109,11 +109,14 @@ export function expectedSalary(state: GameState, p: Player, teamId?: string | nu
 }
 
 /**
- * 登场赛季的新秀与当前战队签的是新秀合同：被本队选秀选中（player.draft），或无选秀记录（旧存档的新秀签约）。
+ * 登场赛季的新秀与当前战队签的是新秀合同：被本队抽卡抽中（player.gacha）/ 选秀选中（player.draft），或无记录（旧存档的新秀签约）。
  * 被其他战队选中后转投本队（按市场工资转会 / 签约）的不算。
  */
 function rookieDealWith(p: Player, teamId: string): boolean {
   if (!p.isRookie) return false;
+  // 抽卡新秀（gacha.ts）：抽中他的战队（或按真实出道去向加盟的战队）签的是新秀合同
+  const g = p.gacha;
+  if (g && typeof g === 'object') return g.teamId === teamId;
   const d = p.draft;
   return !d || typeof d !== 'object' || d.teamId === teamId;
 }
@@ -444,7 +447,7 @@ export function renewalAsk(state: GameState, p: Player): number {
 export function signingSalary(state: GameState, p: Player, teamId: string): number {
   if (!p) return 0;
   const market = marketWage(state, p);
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded) return market;
   const R = CONFIG.salary.renew;
   const roll = seededRng(hashSeed(`${state.id ?? ''}|sign|${p.id}|${teamId}|${seasonTi(state)}`)).next();
@@ -461,7 +464,7 @@ export function signingSalary(state: GameState, p: Player, teamId: string): numb
  * 浮动按 存档/选手 哈希固定，不消耗 state.rng。返回调整的人数。
  */
 export function alignInitialSalaries(state: GameState, teamId: string): number {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const cfg = CONFIG.salary.initialPay;
   if (!team || team.disbanded || !cfg?.range) return 0;
   const lo = clamp(num(cfg.range[0], 1), 0.5, 1.5);

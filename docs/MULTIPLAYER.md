@@ -1,4 +1,4 @@
-# 多人对战（局域网）设计
+# 多人对战（局域网 / 公网服务器）设计
 
 ## 0. 使用指南（先看这里）
 
@@ -14,7 +14,7 @@
 4. 进入游戏后点「多人对战（局域网）」→ 创建房间 → 把 6 位**房间码**告诉朋友 → 设置起止 TI、难度、玩法 → 全员准备后「开始游戏」。
 5. 结束时在终端按 **Ctrl+C**：所有房间会先保存到 `server-data/rooms/`，下次 `npm run server` 启动后大家重新进入即可接着玩。
 
-常用参数：`npm run server -- --port 8787`（换端口）、`--data <目录>`（存档目录）、`--name 小明家`（服务器名称，显示在大厅）、`--keep-finished-hours 2`（已结束的对局在所有人离开后保留几小时）、`--keep-idle-days 14`（进行中的对局连续几天无人在线后删除，只计服务器运行时间，0 = 永不删除）、`--help`。
+常用参数：`npm run server -- --port 8787`（换端口）、`--data <目录>`（存档目录）、`--name 小明家`（服务器名称，显示在大厅）、`--keep-finished-hours 2`（已结束的对局在所有人离开后保留几小时）、`--keep-idle-days 14`（进行中的对局连续几天无人在线后删除，只计服务器运行时间，0 = 永不删除）、`--public`（公网模式，部署到公网服务器时使用，见 §14）、`--stats-interval-min 10`（在线统计日志间隔，见 §14）、`--help`。
 
 ### 朋友：加入
 1. 与房主连接**同一个局域网**（同一 Wi‑Fi / 路由器）。
@@ -23,7 +23,7 @@
 4. 在房间里选择战队（「选择已有战队」）或填写俱乐部信息（「各自组建战队」），点「准备」。
 
 ### 游戏中
-- 所有人共享同一个回合：各自完成训练、转会、比赛等操作后点底部「准备」，**全员准备后自动进入下一回合**。顶栏显示每位玩家的在线 / 准备状态。
+- 所有人共享同一个回合：各自完成训练、转会、比赛等操作后点底部「准备」，**全员准备后自动进入下一回合**。顶栏显示每位玩家的在线 / 准备状态（窗口窄于 1024px 时，玩家条与「聊天 / 离开」在顶栏第二行）。
 - 抢签同一名自由选手时，先到服务器的操作成功，后到者会收到「已被玩家某某签下」。其他玩家的公开动态会以「⚡ 快讯」弹出。
 - 玩家对决（对手是另一名玩家）：双方各自选择手动或自动 BP；「快速模拟本场」需要双方都点才会生效。
 - 掉线 / 刷新页面 / 关闭标签页后重新打开：会自动回到原来的座位（同一浏览器）。
@@ -40,7 +40,7 @@
 - 确认朋友打开的是「局域网访问」地址而不是 `localhost`；电脑有多个网卡时终端会列出多个地址，逐个试。
 - 访客 Wi‑Fi、公司网络常开启「客户端隔离」，设备之间无法互访，换到普通家庭网络或手机热点。
 - 端口被占用时服务器会提示，换一个端口：`npm run server -- --port 8787`，朋友的地址也相应改为 `:8787`。
-- 服务器只在局域网内使用：不要把端口映射到公网（没有账号密码，房间内的玩家彼此信任）。
+- 局域网使用时不要把端口映射到公网（没有账号密码，房间内的玩家彼此信任）；要给外网的朋友玩，请部署到公网服务器并使用 `--public`（见文末「部署到公网服务器」与 §14）。
 
 ## 1. 总体架构
 浏览器不能直接监听端口，局域网多人采用 **房主运行的权威服务器**：
@@ -82,7 +82,7 @@
 
 ## 5. 引擎改造要点（座位上下文切换）
 - `GameState.multiplayer?: { humanTeamIds: string[]; seats: Record<teamId, SeatState>; mode: 'build' | 'existing'; ready: Record<teamId, boolean> }`。
-- **座位私有字段**（执行某玩家操作前换入顶层，执行后换出）：`freeTrainingUsed`、`extraTrainingAvailable`、`extraTrainingBoughtThisRound`、`trainingFocus`、`gachaPity`、`pendingDecisions`、`activeMatch`、`finance`、`popups`、`tempSubCandidates`、`beefs`、`history.playerSettlements/honor/gold/seasons/training`、`season.registeredTournamentIds/extraTrainingsBought`、各赛事的 `playerStatus/expectedRank/settlement`。
+- **座位私有字段**（执行某玩家操作前换入顶层，执行后换出）：`freeTrainingUsed`、`extraTrainingAvailable`、`extraTrainingBoughtThisRound`、`trainingFocus`、`gachaPity`、`pendingDecisions`、`activeMatch`、`finance`、`popups`、`tempSubCandidates`、`beefs`、`history.playerSettlements/honor/gold/seasons/training`、`season.registeredTournamentIds/extraTrainingsBought`、各赛事的 `playerStatus/expectedRank/settlement/entryRound`。
 - 全局流程拆分：`enterRound/endRound/startSeason/settleSeason` 中「针对玩家战队」的部分（事件、工资、AI 报价、签证、离队申请、未用训练自动执行、赛季总结……）对**每个座位**各执行一次；AI/赛事等全局部分只执行一次。
 - 所有「跳过玩家战队」的 AI 逻辑改为跳过**全部玩家战队**（`team.isPlayer`）；赛事自动推进在**任一玩家**的系列赛就绪时停下。
 - 单机模式 = 只有一个座位的特例，行为保持不变。
@@ -101,12 +101,18 @@
 
 ## 9. 引擎实现备注（MP1，`src/engine/seat.ts` + `src/engine/multi.ts`）
 - **中性上下文**：没有座位换入时（`multiplayer.activeSeat = null`），`settings.playerTeamId = ''`、顶层私有字段为空白默认值；服务器保存/持有的 state 始终处于中性状态。全局流程（`advanceMultiplayer` → `game.advanceRound` → season.ts）在中性上下文运行，玩家相关部分用 `forEachSeat` 在各座位上下文执行；其他模块写入「另一个座位」的私有数据时用 `inSeatOf` 路由（账目 `addFinance`、荣誉曲线/出局 `applyHonorChange`、欠薪、续约决策、延迟事件）。中性上下文残留的弹窗（如版本更新）在推进后广播给每个座位。
-- **座位私有字段**（`seat.ts` 的 SEAT_* 常量）：顶层 `freeTrainingUsed / extraTrainingAvailable / extraTrainingBoughtThisRound / trainingFocus / gachaPity / pendingDecisions / activeMatch / finance / popups / tempSubCandidates / beefs`；`history.playerSettlements / honor / gold / seasons / training / squadProgress`；`season.registeredTournamentIds / extraTrainingsBought / honorStart / goldStart`（按赛季，换季自动清空）；各赛事 `playerStatus / expectedRank / settlement / playerBeefHonor`；`settings.managerName`；新闻已读状态（按座位保存已读 id）。`lastDigest`、`newsroom`、`transferOffers`、`delayedEvents`、`rookieDraft`（新秀选秀记录与 SSR 保底计数）、`synergies`（羁绊解锁记录与当前激活，第十波 #5；激活按战队计算，图鉴各座位一致）为全局；选秀在中性上下文举行一次，结果弹窗按座位推送，`releaseDraftedRookie` 只能放弃本座位本届选中的新秀。阵容人数规则与单机相同、按各座位战队分别计算（常规上限 8 人只提示、不阻塞准备；绝对上限 12 人只挡签约 / 求购；选秀从不放弃顺位），无新增座位状态。训练赛「每支对手每回合限约 1 次」的预约记在各玩家战队的 `Team.scrimBookings` 上（回合结束统一清除），同样无需座位换入字段。DotaPedia 统计不存逐局个人 K/D/A：旧房间文件在第一次写入统计（格式 v1 → v2）时清除残留的 `GameRecord.box`（含玩家对决与座位私有的进行中比赛）。`gachaPity` 仅为旧存档兼容保留。
+- **座位私有字段**（`seat.ts` 的 SEAT_* 常量）：顶层 `freeTrainingUsed / extraTrainingAvailable / extraTrainingBoughtThisRound / trainingFocus / gachaPity / pendingDecisions / activeMatch / finance / popups / tempSubCandidates / beefs`；`history.playerSettlements / honor / gold / seasons / training / squadProgress`；`season.registeredTournamentIds / extraTrainingsBought / honorStart / goldStart`（按赛季，换季自动清空）；各赛事 `playerStatus / expectedRank / settlement / playerBeefHonor / entryRound`（第十四波：本座位报名 / 接受邀请所在的回合，同一回合内退出不扣荣誉）；`settings.managerName`；新闻已读状态（按座位保存已读 id）。`lastDigest`、`newsroom`、`transferOffers`、`delayedEvents`、`rookieDraft`（新秀选秀记录与 SSR 保底计数）、`synergies`（羁绊解锁记录与当前激活，第十波 #5；激活按战队计算，图鉴各座位一致）为全局；选秀在中性上下文举行一次，结果弹窗按座位推送，`releaseDraftedRookie` 只能放弃本座位本届选中的新秀。阵容人数规则与单机相同、按各座位战队分别计算（常规上限 8 人只提示、不阻塞准备；绝对上限 12 人挡签约 / 求购；新秀抽卡可以超出，但超编的座位不能准备、已准备的被撤销准备（`roster_over_cap`，2026-10-15「十连后本回合内退回到 12 人」）；选秀从不放弃顺位），无新增座位状态。训练赛「每支对手每回合限约 1 次」的预约记在各玩家战队的 `Team.scrimBookings` 上（回合结束统一清除），同样无需座位换入字段。DotaPedia 统计不存逐局个人 K/D/A：旧房间文件在第一次写入统计（格式 v1 → v2）时清除残留的 `GameRecord.box`（含玩家对决与座位私有的进行中比赛）。`gachaPity` 仅为旧存档兼容保留。
+- **新秀抽卡（2026-10-14 取代选秀）**：卡池 `GameState.gacha`、名人堂 `GameState.hallOfFame` 为全局状态（赛季初在中性上下文建池一次，所有座位共享、按 RPC 到达顺序先到先得）；SSR 保底计数、本赛季张数与逐张记录挂在各战队的 `Team.gacha` 上（无需座位换入字段），`seatView` 剥离其他战队的逐张记录（卡池构成与各队阵容公开）。`gachaPull`（单抽 / 十连）与 `gachaDiscard`（只能退回本座位本回合抽到的新秀）在 RPC 白名单中；抽卡结果是该座位的私有新闻，S 级以上另发公开新闻。AI 抽卡在回合推进（第 1 回合开始前、赛季中期）的全局部分执行，跳过全部人类座位。旧房间载入时 `migrateRoomState` 补建名人堂，卡池从下个赛季初开始；补录（2026-10-15「补录」）之前的房间按 `hallOfFame.backfillVersion` 补录一次开局届之前的真实 SS / SSR 与当前在役的 SS / SSR（中性上下文、幂等；版本 2 另按现行口径重算真实成员的巅峰等级，去掉未来数据，DESIGN.md 3.3.4）。
+  抽卡超编（十连 / 单抽总是抽满）：该座位不能准备，须在本回合内退回 / 解约；「下一回合」（`setRoundReady.auto`）与房主托管自动退回本回合抽到的新秀中评分最低者（仍超编再解约替补中代价最低者，DESIGN.md 3.3.2）；
+  已按「下一回合」等待自动准备（`autoReady`）的座位抽卡后超编时，`callAsSeat` 撤销该意图（不立刻替玩家退回刚抽到的新秀），玩家手动处理或再按一次「下一回合」。选秀默认关闭（`CONFIG.draft.enabled`），`releaseDraftedRookie` 保留一个版本供旧房间使用。
 - **出局**：荣誉 < 0 → `team.disbanded` + `seat.eliminated`（不设 `gameOver`）；下一次 RPC/推进后选手全部成为自由选手、教练进入市场、该座位只能观战（RPC 返回失败，弹窗/已读类操作除外）。全部座位出局或到达终点 TI 时 `gameOver`。
   俱乐部全员假赛曝光（`scandal.banClub`，回合开始时在中性上下文执行）同样使该座位出局：选手永久禁赛而不是成为自由选手；全部座位都因假赛出局时 `gameOver.reason = 'banned'`。出局收尾时冻结该座位的生涯档案（`legacy.recordLegacyPartial`）。
   破产（第十波 #1，`bankruptcy.checkBankruptcy`，在 `endRound` 末尾、中性上下文中逐座位检查）：标记 `team.bankrupt` + `disbanded` + `seat.eliminated` 并立即冻结生涯档案（ending = `bankrupt`），选手离队等收尾与荣誉出局相同（`processEliminations`）；破产预警新闻为该座位私有。全部座位都破产时 `gameOver.reason = 'bankrupt'`，混合原因时为 `disbanded`（各座位结算页仍按自己的结局展示）。
   出局收尾在整次推进之后执行：TI 回合结束时（`endRound` 内）荣誉跌破 0 的座位，收尾时已经过了赛季结算并进入下一赛季。因此赛季结算用 `legacy.recordLegacySeasonAll` 为「刚出局、尚未收尾」的座位照常记下这个打完的赛季（含 TI 成绩），收尾时按荣誉曲线最后一点（出局那次荣誉变更写入）确定出局赛季并标记该记录，不会为从未参加的下一赛季补记空记录。
   已出局的座位客户端先显示自己的生涯总结（GameOver，可「继续观战」/「查看生涯总结」来回切换）；终局总结页对比全部人类俱乐部。`clubScandals.plans`（尚未曝光的计划）不下发到座位视图。
+- **赛季中报名 / 退赛、补充邀请与荣誉势头**（第十四波）：退赛扣荣誉（`schedule.withdrawPenaltyOf`）在 RPC 的座位上下文中按该座位的 `entryRound` 计算，扣的是该座位战队的荣誉（曲线经 `applyHonorChange` 路由到座位）；婉拒 / 退赛新闻与原来一样公开。
+  补充邀请（`schedule.refreshSeasonInvites`）在 `endRound` 的中性上下文评估（积分榜、席位、AI 补邀为全局），人类座位的默认接受 / 同回合冲突处理、总览通知与新闻「【补充邀请】…」（私有）在该座位上下文中执行（`inSeatOf`），其他座位看不到。
+  `Tournament.lateInvites / inviteSlots` 与 `Team.momentum`（荣誉势头，人机共用）为全局字段，不需要换入。
 - **玩家对决**：`multiplayer.h2h[seriesId] = { games, draft, mode: {A?, B?}, joined, quickSim, done, summary }`。每局双方各自选择手动/自动 BP（`startDraft`），未选择的一方轮到时等待；BP 完成后任一方 `playGame`，对局记录立即计入 `h2h.games`，双方的 activeMatch 视图各自回放、各自 `commitGame`；决胜局生成即写入系列赛结果并推进赛事。`quickSimSeries` 单方请求只登记，双方都请求才执行。对手出局后退化为普通（对 AI）比赛。
 - **existing 玩法**：接管的真实战队现役选手按新俱乐部初始选手的分布重新生成属性（首发按难度的 S/A/B 构成随机分配，替补 B 级），保留 ID、显示名、天赋及国籍/位置/招牌英雄；荣誉、资金重置为新俱乐部标准（`economy.newClubStartingFunds`：TI1 普通难度 20 万 × 年代系数，与「各自组建」相同，座位之间公平；房间「选择战队」的规则说明旁显示该金额；创立礼包第八波起关闭）；原主教练进入教练市场。AI 战队的资金与单机同一公式（`economy.seedTeamStartingFunds`）。
 - **RPC**：`callAsSeat` 只接受 `RPC_WHITELIST`（实现表用 `satisfies Record<RpcName, …>` 与协议一一对应），`RPC_TEAM_ARG` 指定的参数强制改为调用者战队；不能直接求购其他玩家的选手。`advanceMultiplayer(state, { force })`：默认要求全员准备，各座位的阻塞必须清空。
@@ -114,7 +120,7 @@
 
 ## 10. 集成备注（MP4）
 - **托管离线玩家**：协议新增 `{ t: 'setAutopilot', teamId, on }`（仅房主、仅离线且未出局的玩家）与 `RoundStatus.autopilot`。服务器把托管座位记在房间里（随房间存档），每次操作 / 推进回合后调用 `multi.autopilotSeat`：待决事件按保守默认处理（配合调查 / 低调处理 / 现有替补顶上 / 尝试挽留 / 拒绝报价 / 续约 1 赛季 / 不聘用，其余取第一项）→ 补齐首发后快速模拟本回合比赛；玩家对决里先看完对手开打的一局、登记快速模拟并选择自动 BP（在线对手手动或自动 BP、快速模拟都不会卡住）→ 无阻塞时准备。只有仍有在线、未托管的玩家在比赛时才会自动推进，避免无人时服务器自己打完整局。玩家重连即解除托管。
-- **「下一回合」自动处理（懒人玩法）**：协议 `{ t: 'setRoundReady', ready: true, auto: true }`（客户端主按钮在开启自动处理时发送；缺省 / false 与旧行为相同，只在没有阻塞时准备）。服务器调用 `multi.setSeatReady(state, teamId, true, { auto: true })`：先在该座位上下文中执行 `autoRound.autoHandleRound`（待决事件按 `events.DEFAULT_DECISION_CHOICE` 默认处理，与托管同一张表；首发不合法时自动补位，可出场不足 5 人时招募最便宜的合格临时替补，招不起则接受弃权；快速模拟本方本回合剩余系列赛；玩家对决登记快速模拟并选择自动 BP），再准备。只剩「等待对手 / 其他玩家」类阻塞时返回成功并记下意图 `SeatState.autoReady`（`RoundStatus.autoPending` 下发给客户端）：之后任何玩家的操作 / 托管后 `multi.pumpAutoReady` 继续自动处理，可以时自动准备；取消准备、推进回合、出局都会清除该意图。每次有实质处理时写一条本座位私有新闻「本回合自动处理：…」（标签 `auto_round`）。按钮预览用纯函数 `previewAutoActions(state)`。单机为 `game.advance(state, { auto: true })`，不带选项时行为不变。
+- **「下一回合」自动处理（懒人玩法）**：协议 `{ t: 'setRoundReady', ready: true, auto: true }`（客户端主按钮在开启自动处理时发送；缺省 / false 与旧行为相同，只在没有阻塞时准备）。服务器调用 `multi.setSeatReady(state, teamId, true, { auto: true })`：先在该座位上下文中执行 `autoRound.autoHandleRound`（待决事件按 `events.DEFAULT_DECISION_CHOICE` 默认处理，与托管同一张表；抽卡超编时先退回本回合抽到的新秀 / 解约替补，退回 12 人；转会窗口内正式阵容缺位置或不足 5 人时签下负担得起的自由选手（v0.3，DESIGN.md 3.4.2；与手动签约同样先到先得、照常掷加盟意愿，座位视图没有谈判密钥，客户端预览注明「婉拒则顺延下一人选」）；首发不合法时自动补位，可出场不足 5 人时招募最便宜的合格临时替补，招不起则接受弃权；快速模拟本方本回合剩余系列赛；玩家对决登记快速模拟并选择自动 BP），再准备。只剩「等待对手 / 其他玩家」类阻塞时返回成功并记下意图 `SeatState.autoReady`（`RoundStatus.autoPending` 下发给客户端）：之后任何玩家的操作 / 托管后 `multi.pumpAutoReady` 继续自动处理，可以时自动准备；取消准备、推进回合、出局都会清除该意图。每次有实质处理时写一条本座位私有新闻「本回合自动处理：…」（标签 `auto_round`）。按钮预览用纯函数 `previewAutoActions(state)`。单机为 `game.advance(state, { auto: true })`，不带选项时行为不变。
 - **断线恢复**：客户端在房间内时按身份记下房间码（`d2m:mp:resume[:别名]`，24 小时），刷新或重新打开页面自动回到多人模式；主动「离开房间 / 返回主菜单」时清除。
 - **关闭码**：服务器以 4000（同一身份在其他页面连接）或 4002（协议版本不一致）关闭连接时，客户端不再自动重连（避免两个标签页互相顶替），遮罩提供「在此页面继续」。
 - **快讯归属**：操作产生的新闻优先使用引擎标注的 `actorTeamId`；否则与操作者战队 / 选手相关的记在操作者名下；否则主角（首个相关战队）是某位玩家的记在该玩家名下（如他人打完决赛后结算出的「X 战罢：第 5 名」），其余为世界新闻（不带玩家前缀）。多人模式下每位参赛玩家的「X 开赛」赛前简报为私有，公开动态由「出征 X」承担。
@@ -124,7 +130,7 @@
 ## 11. 服务器审查备注（MP2）
 - **会话 ID 不外泄**：会话 ID 是重连回座位的凭证。（第八波起）房间信息完全不含会话 ID，见 §13 的座位键；游戏视图中其他座位的 `sessionId` 由引擎清空。
 - **房主移交**：房主离线超过宽限期（`hostGraceMs`，默认 30 秒）且有其他在线玩家时，房主移交给第一位在线玩家（大厅与对局中都适用；对局中广播系统快讯）；房主主动离开进行中的对局时立即移交。否则房主掉线后大厅无法开始、对局中无人能托管离线玩家（包括房主自己的座位），回合永远无法推进。
-- **已结束的对局**：hello 不再自动回到 `finished` 房间（游戏结束页只有「返回主菜单」，否则每次进入大厅都会被拉回结束页）；可用 joinRoom 回去查看。房间数达到上限时，先清理最久无活动、无人在线的已结束对局，其次是无人在线的大厅房间（§13）。
+- **已结束的对局**：hello 不再自动回到 `finished` 房间（游戏结束页只有「返回主菜单」，否则每次进入大厅都会被拉回结束页）；可用 joinRoom 回去查看。房间数达到上限时，先清理最久无活动、无人在线的已结束对局，其次是无人在线的大厅房间，最后是连续无人在线超过 1 小时的进行中对局（§13、§15）。
 - **call 总有回复**：被限流或房间队列已满的 `call` 也回复 `callResult`（失败），客户端不必等到超时。
 - **存档**：Ctrl+C 时 `flushSync` 同步写出全部房间；进行中的异步写入若在其快照之后被 `flushSync` 抢先，则放弃 rename，避免旧快照覆盖新快照。房间内无人在线时释放已序列化的视图缓存。
 - **`--host`**：只监听回环 / 指定地址时，启动信息与 welcome 中不再列出无法访问的局域网地址。
@@ -141,9 +147,87 @@
 
 ## 13. 多人收尾（第八波）
 - **座位键（协议 v2）**：`RoomInfo` / `RoomSeat` 不再含任何会话 ID。服务器为每个座位随机生成不透明的 `seatKey`（每个房间独立、随房间存档、与会话 ID 无关，拿它当会话 ID 连接只会得到一个没有座位的新身份）；`hostSeatKey` 指出房主，`yourSeatKey` 指出接收者自己的座位（`room` 消息按接收者生成）。`kick` 按座位键；客户端用 `protocol.ts` 的 `mySeat(room)` / `isRoomHost(room)` 判断自己与房主。服务器内部（`persistence.ts` 的 `StoredRoom` / `StoredSeat`）仍按会话 ID 记录，`roomInfoFor` 逐字段转换后发送。旧存档的座位在载入时补齐座位键。协议版本升为 2：缓存了旧前端的页面会收到「版本不一致，请刷新页面」。
-- **房间清理**（`RoomManager.sweep`，启动时一次、之后每分钟）：无人在线的大厅房间 30 分钟；已结束的对局在所有人离线后保留 `finishedRoomTtlMs`（默认 2 小时，`--keep-finished-hours`）；进行中的对局连续无人在线超过 `idleRoomTtlMs`（默认 14 天，`--keep-idle-days`，0 = 永不删除）。无人在线时长只计服务器运行时间（存档里的 `idleMs`，载入后接着计时），房主关掉服务器过几周再开也能继续。删除房间同时删除存档文件（Ctrl+C 时尚未完成的删除由 `flushSync` 同步执行，已删除的房间不会在重启后复活）。
+- **房间清理**（`RoomManager.sweep`，启动时一次、之后每分钟）：无人在线的大厅房间 30 分钟；已结束的对局在所有人离线后保留 `finishedRoomTtlMs`（默认 2 小时，`--keep-finished-hours`）；进行中的对局连续无人在线超过 `idleRoomTtlMs`（默认 14 天，`--keep-idle-days`，0 = 永不删除）。无人在线时长只计服务器运行时间（存档里的 `idleMs`，载入后接着计时），房主关掉服务器过几周再开也能继续。房间数满时另有按需清理（§15：连续无人在线超过 1 小时的进行中对局也可被清理）。删除房间同时删除存档文件（Ctrl+C 时尚未完成的删除由 `flushSync` 同步执行，已删除的房间不会在重启后复活）。
 - **房间列表**：按接收者生成；已结束的对局只列给原座位玩家（`mine`，大厅显示「查看结算」），进行中的对局对其他人显示为不可加入；自己有座位的房间排在最前。
 - **开始游戏被拒绝**：服务器对 `startGame` 的每种拒绝（未全员准备、非房主、创建失败、限流……）都回复带 `ref: 'startGame'` 的 `error`（读取阵容等意外异常同样如此）；限流时只回这一条（不再另发通用的「操作过于频繁」，避免重复提示）；房间页据此立即复位「正在创建游戏…」按钮并在按钮下显示原因（`net.onRequestError`）。
 - **被移出的玩家**随房间存档（`RoomFile.kicked`），服务器重启后仍不能加入该房间。
 - **单机导入多人存档**：`importSave` 拒绝含 `multiplayer` 的座位视图（提示「这是多人对战（局域网）的对局存档，不能在单机模式中导入……」），避免单机读到无法推进的状态；「继续游戏」读取会话进度时同样跳过多人座位视图（防御性检查，正常流程多人模式不写会话进度）。
 - **前端分包**（`vite.config.ts` manualChunks）：`vendor`（第三方库）/ `data`（静态数据）/ `engine`（引擎 + 共享协议）/ 主包（界面）；均为入口的静态依赖、加载行为不变，阵容 `rosters/ti*.json` 仍按 TI 懒加载。主包约 0.6 MB（此前 1.5 MB）。
+
+## 部署到公网服务器（可选）
+
+服务器只需要 Node.js 20+（可从 npmmirror 下载官方二进制包解压到 /opt 并软链到 /usr/local/bin）。首次准备（以 Ubuntu 为例，root 执行）：
+
+```bash
+useradd --system --home-dir /opt/dota2manager --shell /usr/sbin/nologin d2m
+mkdir -p /opt/dota2manager /opt/dota2manager-data && chown -R d2m:d2m /opt/dota2manager /opt/dota2manager-data
+```
+
+之后每次部署 / 更新都在本机项目目录运行：
+
+```bash
+scripts/deploy.sh root@你的服务器
+```
+
+脚本会用 rsync 同步当前工作目录的源码（不含 node_modules、dist、server-data、本地美术覆盖 `public/local/*`），在服务器上 `npm ci`（npmmirror 源）、`vite build`，把 `deploy/dota2manager.service` 安装为 systemd 服务并重启；默认监听 8686 端口，房间存档在 `/opt/dota2manager-data`，日志用 `journalctl -u dota2manager -f` 查看。云服务器需要在安全组放行该端口；加 `--no-build` 可以只同步重启。
+
+注意：服务器原本按局域网设计，没有账号体系——任何知道地址的人都能创建 / 加入房间（座位有密钥，不会被他人冒用），也没有 TLS（http）。给朋友分享时直接发 `http://<公网 IP>:8686/`。
+同一公网地址的连接数、新建连接速率、等待中的房间与每小时开局次数有上限，房间数满时会清理长时间无人在线的对局（§15）；若在本机用 nginx 等反向代理转发，启动参数加 `--trust-proxy`（按 `X-Forwarded-For` 识别来源），直接对外监听时不要加。
+systemd 单元以 `ProtectSystem=strict` 运行，只有 `/opt/dota2manager-data` 可写（程序目录运行时只读，安装与构建由 `deploy.sh` 在服务之外完成）。
+
+`deploy/dota2manager.service` 以 **`--public`（公网模式）** 启动：服务器不向任何客户端发送、也不在启动信息里列出内网地址，大厅 / 房间里的「邀请朋友打开」显示当前网页地址，界面不再出现「房主电脑运行 npm run server」「局域网地址」等说明；发给玩家的错误信息不含文件路径、调用栈等内部细节（详见 §14）。
+
+### 查看在线人数（服务器上）
+
+```bash
+curl -s http://127.0.0.1:8686/api/status                 # 当前在线、大厅 / 房间 / 对局中人数、房间数、峰值、运行时长、今天的汇总
+journalctl -u dota2manager | grep 在线                     # 每 10 分钟一行（只在有变化时）+ 创新高 + 每天零点的前一天汇总
+journalctl -u dota2manager --since today | grep 在线
+cat /opt/dota2manager-data/stats/online-$(date +%Y-%m).jsonl   # 每日汇总（每天一行；同一日期以最后一行为准）
+```
+
+在本机看也可以先 `ssh -L 8686:127.0.0.1:8686 root@你的服务器` 再打开 `http://127.0.0.1:8686/api/status`（`/api/status` 只有数字，对外开放也不会泄露玩家信息）。
+
+## 14. 公网服务器：在线统计与内网地址（2026-10-14）
+用户需求：「在计划中增加当前在线人数统计，用于远端服务上查看支持了多少玩家在线玩。」「多人模式开始时取消对局域网ip暴露，因为已经上服务器了，不安全。」
+
+### 在线统计（`server/stats.ts`）
+- **口径**（`RoomManager.onlineCounts`，只有数字）：`connections` WebSocket 连接数（含尚未 hello 的）；`online` 在线玩家（不同会话，同一浏览器多标签被顶替时只算一个，`?as=` 测试身份各算一个）；`inLobby` 在大厅；`inRoom` 在房间座位上（等待中 / 进行中 / 已结束的房间）；`inGame` 其中在进行中对局里的；`rooms.total / waiting / playing / active / finished`（`active` = 进行中且至少一名玩家在线的对局，`playing` 含暂时无人在线、仍保留的对局）。
+- **峰值**：自启动以来的同时在线峰值与时间、对局中玩家峰值（`peak`）；当天的峰值见 `today`。
+- **`GET /api/status`**：`{ ok, time, startedAt, uptimeSec, uptimeText, connections, online, inLobby, inRoom, inGame, rooms, peak, today, sinceStart }`，只有人数与时间，不含昵称、会话 ID、IP；`Cache-Control: no-store`。`/healthz` 字段保持不变（向后兼容）；`/api/info` 另附 `online / inGame / playing`。
+- **推送给客户端**：可选消息 `{ t: 'serverStats', online, inGame, rooms, playing }`（`rooms` = 等待中 + 进行中的房间，`playing` = 有人在线的进行中对局）。hello 后立即发一次；之后在人数 / 房间变化时推送给所有已 hello 的连接，**至多每 2 秒一次、内容不变不发**（同一连接收到过相同内容也不再发）。旧客户端忽略该消息，旧服务器不发送时客户端不显示统计，协议版本不变（v2）。
+- **界面**：大厅「服务器」卡片在连接状态下方显示「当前在线 N 人 · 对局中 M 局 · 房间 R 个」（悬停说明口径）；房间页顶栏显示「在线 N 人」（手机宽度 < 640px 时隐藏，保证房间码与连接状态不被挤出；
+  同时「‹ 离开房间」缩为「‹ 离开」、房间码字距收窄。大厅顶栏的按钮 / 标题 / 连接状态不换行，服务器名与「玩家」字样在手机宽度隐藏；公网模式不显示 `?as=` 多开测试提示）。
+- **服务器日志**：每 `--stats-interval-min`（默认 10）分钟一行，只在有变化时输出：`在线 12 人（峰值 30，20:15）· 对局中 3 局 · 房间 5 个`（峰值为自启动以来，非当天时带日期）；同时在线创新高时一行 `在线人数创新高：30 人（自启动以来，20:15）`（5 分钟内至多一行，到期输出届时的最高值）；每天零点后一行前一天的汇总 `在线统计 2026-10-14：峰值 … · 独立玩家 … · 连接 … 次 · 开局 … 局`。
+- **每日汇总文件** `<dataDir>/stats/online-YYYY-MM.jsonl`（服务器本地日期）：每行 `{ date, peakOnline, peakAt, peakInGame, uniquePlayers, totalConnections, gamesStarted }`（`uniquePlayers` 当天至多计到 5 万，见 §15）。换日时追加前一天的最终汇总；正常关闭（Ctrl+C / systemctl stop / 部署重启）时追加一行当天截至目前的汇总（`partial: true`），重启后同一天继续累计，所以**同一日期以最后一行为准**。`uniquePlayers` 按当天出现过的不同会话计数：只保存「每日随机盐 + 会话 ID」的散列，散列与盐只在当天的 `stats/current.json`（跨重启继续去重），换日后丢弃，月度文件里只有数字，任何文件都不保存原始会话 ID、昵称或 IP。跨零点时服务器没有运行的，下次启动时补写那一天的汇总。`--no-save` 不写任何统计文件。
+
+### 不暴露内网地址
+- **公网模式** `--public`（或环境变量 `D2M_PUBLIC=1`，`deploy/dota2manager.service` 已加上）：`welcome.lanUrls` 永远为空并带 `publicServer: true`；启动信息不列内网地址（显示「公网模式下不显示，也不会发给客户端」）；服务器关闭时的提示不提「房主」。
+- **非公网模式**也只把局域网地址发给来自局域网的连接（`server/net.ts` 的 `isPrivateOrigin`）：套接字对端地址必须是回环 / 私有 / 链路本地地址（127/8、10/8、172.16/12、192.168/16、169.254/16、::1、fc00::/7、fe80::/10 及其 IPv4 映射写法），并且请求头声明的每个转发来源（`X-Forwarded-For` / `X-Real-IP` / `Forwarded: for=`）也都是——转发头可被伪造，不能单独把公网连接变成内网；在本机反向代理后面时，代理带上的公网来源会让连接按公网处理。无法识别的来源一律按公网处理。
+- **错误信息**：公网模式下，引擎 / 服务器异常发给客户端前经 `publicSafeErrorText` 过滤（引擎把异常包装成失败结果的情况见 §15）：只有明显是给玩家看的中文提示（如「英雄不可选：帕克」）原样保留；含文件路径、调用栈、`ENOENT:` 等系统错误码、URL、源文件名、多行或不含中文（多为 TypeError 等程序异常）的一律改为「服务器内部错误，请稍后再试」，完整信息只写服务器日志。涉及：消息处理异常、开局失败、RPC 抛出异常、准备 / 推进回合异常、生成视图失败。局域网模式保留详细信息便于房主排查。其他下发内容复核：服务器名称默认「刀塔经理服务器」（不用主机名）；`/healthz` / `/api/info` / `/api/status` 只有计数；静态托管的错误页不含路径；房间信息只含座位键（§13）。
+- **客户端**：`mp.serverMode`（`unknown` / `lan` / `public`，来自 welcome）与 `mp.serverStats`。没有局域网地址时，「邀请朋友打开」显示当前页面地址（`window.location.origin`；手动连接了其他服务器时为该服务器的网页地址）并带复制按钮。公网模式下大厅标题为「多人对战」，服务器卡片、手动地址提示、未连接提示、「怎么开局」改为中性说明（「把本页地址发给朋友，进入「多人对战」后用房间码加入」），房间页「邀请朋友」同样；局域网模式保留原来的房主 / 局域网说明。断线遮罩与「离开对局」对话框在公网模式下不提「房主的服务器」。主菜单入口改为「多人对战」（说明「与朋友在线或在局域网同场竞技」），因为进入大厅前还不知道服务器类型。
+- **验证**：`tests/serverStats.test.ts`（地址判断与转发头、错误过滤、连接 / 加入 / 离开 / 断线 / 开局时的人数与峰值、`/api/status` 不含会话 ID / 昵称 / IP、推送节流与去重、日志、每日汇总文件与重启续计、换日与跨月、公网模式不发局域网地址、局域网来源过滤、公网模式错误过滤）；`tests/mpClient.test.ts`（welcome 区分服务器类型、serverStats 写入 store）；`scripts/mp-e2e.ts` 检查开局后收到对局中人数推送与 `/api/status`。
+
+## 15. 公网服务器的防护（v0.3 审查修复，2026-10-14）
+审查用一次性服务器（`--public --no-save`）实测：单个客户端能占满全部 256 个连接（之后所有人 503）、64 个「开局后立即离开」的对局 3.6 秒占满全部房间位且要 14 天才释放、
+客户端从自己的视图（含 `rngState` 与公开的卡池）算出下一张抽卡 6/6 命中并能「刷」到 SSR、谈判骰子可预先算出、聊天一次刷 80 条。修复：
+- **按来源地址限制**（`server/app.ts` / `rooms.ts`）：来源地址默认取套接字地址（`net.clientAddress`；`--trust-proxy` / `D2M_TRUST_PROXY=1` 时取 `X-Forwarded-For` 第一个地址，只在本机反向代理后使用）。
+  同一地址同时最多 16 个 WebSocket 连接（`maxConnectionsPerAddress`，超出回复 HTTP 429）、每分钟新建至多 60 个（`connectionsPerAddressPerMinute`）、等待中的房间至多 3 个（`maxLobbyRoomsPerAddress`，
+  不含当前所在、建新房时会离开的房间）、每小时开局至多 6 局（`maxGamesPerAddressPerHour`，按房主连接的地址）。**默认只对公网来源生效**（回环 / 局域网地址不受限，局域网聚会与本机测试不受影响；
+  `limitPrivateAddresses` 可打开，测试用）。同一宿舍 / 家庭 NAT 后的朋友共用一个公网地址，上述数值按「一群朋友」留了余量。
+- **房间位清理**：房间数满时（`maxRooms` 64），在已结束的对局、无人在线的大厅房间之后，清理连续无人在线超过 `abandonedRoomEvictMs`（默认 60 分钟，0 = 不清理）的进行中对局——
+  从未推进过（仍在开局届、第 1 回合之前）的优先，其次最久没人的；同时删除存档文件。其余仍由定期清理按 `idleRoomTtlMs`（14 天）处理。
+- **聊天限速**：每个连接单独的令牌桶，连续 5 条之后每秒 1 条，超出回复「发言过于频繁，请稍后再试」并丢弃（通用限流仍是 80 条 / 每秒 40 条）。
+- **限流路径不解析整条消息**：被限流的消息只用正则看开头的类型与请求号（原来最大 128 KB 的消息每条解析两次）。
+- **随机数与谈判骰子只在服务器**：座位视图中 `rngState` 为 0、`multiplayer.secret` 为空、其他座位的 `Team.gacha.pity`（保底进度）与逐张记录不下发（`multi.seatView`）；
+  服务器开局与载入旧房间时写入随机的谈判密钥 `multiplayer.secret`，`market.negotiationRoll` 混入哈希（没有密钥的单机与 `simulate-mp` 结果不变）；每次 `gachaPull` 前把 `rngState` 与一个服务器随机数异或。
+  对局本身仍由服务器权威推进，只是不再可以被客户端预测。
+- **引擎包装的异常**：引擎把内部异常包装成失败结果（「操作失败：…」「推进失败：…」「托管失败：…」）时，公网模式只过滤冒号后的部分（`RoomManager.opText`）；不含中文的失败文字换成通用提示，普通中文提示原样发送。
+  作用于 RPC 结果、准备回合与推进回合的错误。
+- **统计去重上限**：当天独立玩家的散列集合至多 5 万条（原来 100 万时 `current.json` 约 19 MB、内存 100 MB 以上），超出后停止计数，每日汇总日志显示「≥ 50000」。
+- **会话 ID**：不安全上下文（`http://公网 IP`）中没有 `crypto.randomUUID`，改用 `crypto.getRandomValues` 生成 128 位随机 ID（原来退回 `Date.now() + Math.random`，约 41 位）。
+- **部署单元**：`ProtectSystem=strict`、只有数据目录可写。
+- **验证**：`tests/serverLimits.test.ts`（来源地址解析、连接数 429 与断开后恢复、本机默认不受限、等待中房间与每小时开局上限、房间位清理与关闭开关、聊天限速、公网模式过滤包装的异常、
+  谈判密钥写入与视图清空、抽卡前混入随机数）；`tests/gachaReview.test.ts`（引擎：视图不含 `rngState` / 密钥 / 他队保底，谈判骰子随密钥改变）；
+  `scripts/mp-e2e.ts` 检查真实服务器下发的视图不含随机数状态与密钥，抢签用例改用服务器端状态挑「双方都会被接受」的目标（客户端已无法预测）。
+- **仍开放**：房间列表对所有人列出等待中的房间与房间码（陌生人可以加入朋友的房间），是否增加「私密房间」由用户决定（ROADMAP v0.3.0）。

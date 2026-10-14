@@ -2,7 +2,7 @@
 import type { FinanceEntry, GameState, SeedTeam, Team } from './types';
 import { TIERS } from './types';
 import { CONFIG, TI_YEAR } from './config';
-import { yearOf } from './util';
+import { ownEntry, yearOf } from './util';
 import { teamRating } from './team';
 import { standardSalary } from './player';
 import { triggerUnpaidSalary } from './events';
@@ -50,7 +50,7 @@ export function addFinance(
   note: string,
   opts?: { keepZero?: boolean },
 ): void {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || !Number.isFinite(amount)) return;
   const value = Math.round(amount);
   if (value === 0 && !opts?.keepZero) return;
@@ -153,7 +153,7 @@ function aiReinvestSurplus(team: Team, wagePerRound: number): void {
 
 /** 每回合工资总支出（选手 + 教练；UI 显示 / 预估） */
 export function roundWageBill(state: GameState, teamId: string): number {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return 0;
   return playerWages(state, team) + coachWage(state, team);
 }
@@ -179,8 +179,8 @@ export function extraTrainingCostAt(state: GameState, roundBought: number, seaso
 export function scrimCost(state: GameState, targetTeamId: string): number {
   const t = CONFIG.training;
   const me = state.settings?.playerTeamId;
-  const own = me && state.teams[me] ? teamRating(state, me) : 0;
-  const target = state.teams[targetTeamId] ? teamRating(state, targetTeamId) : 0;
+  const own = me && ownEntry(state.teams, me) ? teamRating(state, me) : 0;
+  const target = ownEntry(state.teams, targetTeamId) ? teamRating(state, targetTeamId) : 0;
   const ratio = own > 0 ? target / own : 1;
   const extra = Math.max(0, ratio - t.scrimCostRatioFloor) * t.scrimCostPerStrengthRatio;
   return Math.round((t.scrimBaseCost + extra) * econ(state));

@@ -9,7 +9,7 @@ import { getCoach, lineupPlayers, removePlayerFromTeam, teamPlayers, teamRating 
 import type { Coach, GameState, Player, Position, TournamentSettlement, TournamentTier, TrainingFocus, TrainingGain } from './types';
 import { POSITIONS } from './types';
 import { positionAgeGrowthMult, trendDeclineMult, trendGrowthMult, yearsPastPeak } from './form';
-import { clamp, lerp, round2 } from './util';
+import { clamp, lerp, ownEntry, round2 } from './util';
 import { isHumanTeam } from './seat';
 import { loyaltyEnvironment, prizeShareLoyaltyDelta, recordSalaryGap, updateSalaryTrack } from './salary';
 
@@ -82,7 +82,7 @@ function bumpMmr(p: Player, delta: number): number {
 }
 
 function starterIdSet(state: GameState, teamId: string): Set<string> {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const set = new Set<string>();
   if (!team?.lineup) return set;
   for (const pos of POSITIONS) {
@@ -141,7 +141,7 @@ function bankTraining(p: Player, mmr: number, power: number): void {
  * 返回每名选手的变化（玩家战队用于 UI 报告）。
  */
 export function trainTeam(state: GameState, teamId: string, focus: TrainingFocus, mult?: number, opts?: TrainOptions): TrainingGain[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return [];
   const players = teamPlayers(state, teamId);
   if (players.length === 0) return [];
@@ -262,7 +262,7 @@ export function applyTournamentGrowth(
   tier: TournamentTier,
   seriesPlayed: number,
 ): TournamentSettlement['playerGrowth'] {
-  if (!state.teams[teamId] || !(seriesPlayed > 0)) return [];
+  if (!ownEntry(state.teams, teamId) || !(seriesPlayed > 0)) return [];
   const tg = CONFIG.growth.tournament;
   const rng = rngOf(state);
   const pct = clamp(Number.isFinite(percentile) ? percentile : 1, 0, 1);

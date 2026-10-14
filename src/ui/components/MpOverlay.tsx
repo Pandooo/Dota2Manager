@@ -13,6 +13,7 @@ export default function MpOverlay() {
   const net = useGameStore((s) => s.mp.net);
   const reconnect = useGameStore((s) => s.mpReconnect);
   const exit = useGameStore((s) => s.mpExit);
+  const publicServer = useGameStore((s) => s.mp.serverMode === 'public');
   const show = multi && (screen === 'game' || screen === 'room') && net.status !== 'open';
   useTicker(show && net.status === 'reconnecting');
   if (!show) return null;
@@ -35,7 +36,9 @@ export default function MpOverlay() {
           <p className="text-xs">
             {net.closeCode === 4000
               ? '可以关闭此页面，在另一个页面继续游戏；或点「在此页面继续」把连接切换到这里（另一个页面会断开）。'
-              : '你的座位会一直保留：重连成功后自动回到房间，游戏进度以服务器为准。若房主的服务器已关闭，请等待房主重新启动。'}
+              : publicServer
+                ? '你的座位会一直保留：重连成功后自动回到房间，游戏进度以服务器为准。服务器重启或维护时请稍候，恢复后会自动重连。'
+                : '你的座位会一直保留：重连成功后自动回到房间，游戏进度以服务器为准。若房主的服务器已关闭，请等待房主重新启动。'}
           </p>
         </div>
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3">

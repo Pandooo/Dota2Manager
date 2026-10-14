@@ -260,6 +260,12 @@ export interface Player {
   gachaSeason?: number;
   /** 新秀选秀记录（rookieDraft.ts）：在哪一届、第几轮第几顺位被哪支战队选中（永久保留，用于展示与「赛季初免费放弃」） */
   draft?: PlayerDraftInfo;
+  /**
+   * 玩家从自由市场签下他的时刻（转会回合时钟 listingRules.listingClock；market.signFreeAgent 写入，离队时清除）：
+   * 签下后不满 CONFIG.market.trade.freeAgentHoldRounds 个转会回合（约一个赛季）用于选手交易抵价时，对方按签字费估值（trade.ts）。
+   * 旧存档缺失 = 无记录。
+   */
+  freeAgentSignedClock?: number;
   /** 最近一次加薪的赛季（TI 序号）：每名选手每赛季最多加薪一次（squadOps.raiseSalary） */
   lastRaiseSeason?: number;
   /** 最近一次一对一谈心的回合键（赛季 × 100 + 回合，squadOps.squadRoundKey）：每回合最多一次 */
@@ -287,6 +293,186 @@ export interface Player {
    * 程序生成选手没有副位置（缺省）。position 本身随真实生涯同步（roleSync.syncSeasonRoles），副位置随之更新。
    */
   altPositions?: Position[];
+  /** 新秀抽卡出身（gacha.ts，2026-10-14 起取代选秀）：在哪一届、哪个回合被哪支战队以哪种卡抽中，及出道时的水平（永久保留） */
+  gacha?: PlayerGachaInfo;
+  /**
+   * 请神（gacha.ts / hallOfFame.ts）：与名人堂成员（原型）构建的请神关系。出道时复制原型的出道水平，
+   * 之后每个赛季的自主成长按原型的生涯轨迹（按出道届次平移）走，原型数据结束后按普通选手的年龄 / 潜力规律。
+   */
+  summon?: PlayerSummonInfo;
+}
+
+/** 抽卡卡种：真实新秀 / 请神新秀 / 虚构新秀 */
+export type GachaCardKind = 'real' | 'summon' | 'fictional';
+
+/** 选手的抽卡出身（Player.gacha） */
+export interface PlayerGachaInfo {
+  /** 抽中的赛季（TI 序号）与回合 */
+  ti: number;
+  round: number;
+  /** 抽中他的战队 */
+  teamId: string;
+  /** 卡的等级与卡种 */
+  tier: Tier;
+  kind: GachaCardKind;
+  /** 出道时的天梯 / 战力 / 天赋 / 灵性（名人堂记录本局生涯轨迹用） */
+  mmr: number;
+  power: number;
+  talent: number;
+  insight: number;
+  /** 未被抽走、按真实出道去向加盟（真实新秀；第 1 回合开始前离池或卡池关闭时） */
+  placed?: boolean;
+}
+
+/** 请神关系（Player.summon） */
+export interface PlayerSummonInfo {
+  /** 原型：名人堂成员 id */
+  id: string;
+  /** 原型的显示 ID（原型选手可能已被清理） */
+  handle: string;
+  /** 出道（被抽中）的赛季：生涯第 k 年对应原型生涯第 k 年 */
+  ti: number;
+}
+
+/** 战队的抽卡计数（Team.gacha；随战队保存，多人模式各座位独立） */
+export interface TeamGachaState {
+  /** 距上一张 SSR 已抽的张数（跨赛季；达到 CONFIG.gacha.pityThreshold − 1 后下一抽必出 SSR） */
+  pity: number;
+  /** 累计抽卡张数 */
+  pulls: number;
+  /** 本赛季已抽张数（seasonTi 不是当前赛季时视为 0） */
+  seasonTi?: number;
+  seasonPulls?: number;
+  /** 本赛季的抽卡记录（只记人类玩家战队；新赛季第一次抽卡时清空） */
+  log?: GachaPullRecord[];
+}
+
+/** 一张抽卡记录（TeamGachaState.log） */
+export interface GachaPullRecord {
+  ti: number;
+  round: number;
+  /** 同一次操作（单抽 / 十连）的序号 */
+  batch: number;
+  playerId: string;
+  handle: string;
+  tier: Tier;
+  kind: GachaCardKind;
+  /** 请神原型 id / 显示 ID */
+  proto?: string;
+  protoHandle?: string;
+  /** 保底触发 */
+  pity?: boolean;
+  /** 本回合内退回（返还部分抽卡费用） */
+  discarded?: boolean;
+  /** 实付单价（金币） */
+  cost: number;
+}
+
+/** 本赛季卡池（GachaState.pool；全局世界状态，所有座位共享，先到先得） */
+export interface GachaPool {
+  ti: number;
+  /** 剩余卡：各等级的真实新秀 id / 请神原型 id（同一原型可出现多张）/ 虚构新秀张数 */
+  real: Partial<Record<Tier, string[]>>;
+  summon: Partial<Record<Tier, string[]>>;
+  fictional: Partial<Record<Tier, number>>;
+  /** 本赛季建池的总张数（含补充卡池）与基础卡池张数（真实新秀超出比例时按 20 张一档放大） */
+  size: number;
+  base: number;
+  /** 基础卡池为容纳真实新秀而放大时，超出比例的等级 */
+  enlargedBy?: Tier[];
+  /** 抽空后补充卡池的次数 */
+  refills: number;
+  /** 各等级发出的卡 [真实, 请神, 虚构]（含补充卡池与保底补发） */
+  made: Partial<Record<Tier, [number, number, number]>>;
+  /** 本赛季每个原型已发出的请神卡张数 */
+  protoUsed: Record<string, number>;
+  /** 已抽张数（全部 / AI 战队） */
+  drawn: number;
+  aiDrawn: number;
+  /** 保底触发但卡池中已无 SSR 时补发的卡 */
+  bonus?: number;
+  /** 第 1 回合开始前未被抽走的真实新秀卡已离池（gacha.releaseRealRookieCards；每赛季一次） */
+  realReleased?: boolean;
+  /** 离池时同等级补入的请神 / 虚构卡张数 */
+  backfilled?: number;
+  /** 离池而未被抽走的真实新秀卡（按等级） */
+  realPlaced?: Partial<Record<Tier, number>>;
+  /** 离池的真实新秀：加盟 AI 战队 / 进入自由市场 / 交给出道战队（人类玩家）决定 */
+  realJoined?: number;
+  realFree?: number;
+  realOffered?: number;
+}
+
+/** 一届抽卡的汇总（GachaState.history） */
+export interface GachaSeasonRecord {
+  ti: number;
+  size: number;
+  base: number;
+  refills: number;
+  made: Partial<Record<Tier, [number, number, number]>>;
+  drawn: number;
+  aiDrawn: number;
+  /** 抽出的 SSR / 请神张数 */
+  ssr: number;
+  summons: number;
+  /** 未被抽走的真实新秀（第 1 回合前离池或卡池关闭时）：加盟 AI 战队 / 进入自由市场 / 交给出道战队（人类玩家）决定 */
+  realJoined: number;
+  realFree: number;
+  realOffered?: number;
+}
+
+/** 新秀抽卡（GameState.gacha；全局，非座位私有） */
+export interface GachaState {
+  /** 本赛季卡池（转会窗口开放期间可抽；TI 预选赛转会锁定时关闭 → null） */
+  pool: GachaPool | null;
+  /** 往届汇总（最新在后） */
+  history: GachaSeasonRecord[];
+}
+
+/** 名人堂成员（HallOfFameState.members） */
+export interface HallOfFameMember {
+  id: string;
+  handle: string;
+  /**
+   * seed = 开局即有（DotA1 时代传奇）；inducted = 本局赛季结算时以 SS / SSR 入选；
+   * backfill = 开局补录（2026-10-15 用户决策「补录」：开局届之前的真实数据中达到过 SS / SSR 的真实选手，ti = 首次达到的届次）
+   */
+  source: 'seed' | 'inducted' | 'backfill';
+  era?: 'dota1';
+  /** 入选赛季（TI 序号；种子为 0） */
+  ti: number;
+  debutTier: Tier;
+  peakTier: Tier;
+  position: Position;
+  nationality: string;
+  birthYear: number;
+  /**
+   * 生涯轨迹来源：real = 真实生涯轨迹（trajectories.json）；seed = hallOfFame.json 的合成轨迹；
+   * game = 本局记录（traj）；summon = 请神新秀入选（不能再作为原型，of = 其原型）
+   */
+  src: 'real' | 'seed' | 'game' | 'summon';
+  /** game：本局记录的生涯轨迹 [TI, 天梯, 战力]（出道点 + 入选及之后每个赛季末） */
+  traj?: [number, number, number][];
+  /** game：出道时的天赋 / 灵性 / 招牌英雄 */
+  talent?: number;
+  insight?: number;
+  heroes?: string[];
+  /** summon：原型 id */
+  of?: string;
+}
+
+/** 名人堂（GameState.hallOfFame；全局公开数据） */
+export interface HallOfFameState {
+  members: HallOfFameMember[];
+  /** 旧存档迁移时补录的赛季（新游戏缺省） */
+  migratedTi?: number;
+  /**
+   * 开局补录的版本（hallOfFame.HOF_BACKFILL_VERSION）：新游戏建名人堂时写入；旧存档 / 旧房间缺失或落后时在读档迁移中补录一次
+   * （开局届之前的真实 SS / SSR + 当前在役的 SS / SSR）
+   */
+  backfillVersion?: number;
+  /** 旧存档补录时的赛季（新游戏缺省） */
+  backfilledTi?: number;
 }
 
 /**
@@ -465,6 +651,30 @@ export interface Team {
   negativeFundsWageBill?: number;
   /** 俱乐部破产（第十波 #1，bankruptcy.ts；同时 disbanded = true） */
   bankrupt?: BankruptcyRecord;
+  /**
+   * 荣誉势头（第十四波，momentum.ts）：赛季初按荣誉同比平移全队赛季状态均值；赛季中按荣誉环比（指数平滑）
+   * 小幅调整战队级战力乘子（team.teamRating 读取）。人机共用；旧存档缺失 = 中性（乘子 1）；已解散战队在赛季初清除
+   */
+  momentum?: TeamMomentum;
+  /** 新秀抽卡计数（gacha.ts：SSR 保底、累计 / 本赛季张数、人类玩家本赛季记录）；旧存档缺失 = 未抽过 */
+  gacha?: TeamGachaState;
+}
+
+/**
+ * 战队荣誉势头（Team.momentum；见 momentum.ts）。只存原始量，同比平移（momentum.teamYoyShift）
+ * 与回合乘子（momentum.teamMomentumMult）按 CONFIG.form.honorMomentum 即时推导
+ */
+export interface TeamMomentum {
+  /** 上赛季初荣誉（同比基准；第一个赛季缺失） */
+  prevSeasonStart?: number;
+  /** 本赛季初荣誉 */
+  seasonStart: number;
+  /** 荣誉环比的指数平滑（相对荣誉规模的比例，无单位，保留 4 位小数） */
+  ewma: number;
+  /** 上次回合结算时的荣誉（环比基准） */
+  lastHonor: number;
+  /** 赛季中途建立的记录（旧存档 / 赛季中成立的战队）：seasonStart 不是季初荣誉，下个赛季初不作为同比基准 */
+  partial?: boolean;
 }
 
 /** 破产记录（Team.bankrupt） */
@@ -634,6 +844,11 @@ export interface Tournament {
   placements: TournamentPlacement[];
   /** 玩家对该赛事的报名状态 */
   playerStatus: PlayerEntryStatus;
+  /**
+   * 玩家当前报名 / 接受邀请所在的回合（座位私有，第十四波）：赛季初的邀请缺省（按 0），赛季中补充邀请为收到通知的回合，
+   * 主动报名 / 重新接受为操作时的回合；退出 / 婉拒后清除。在同一回合内退出免扣荣誉（schedule.withdrawPenaltyOf）
+   */
+  entryRound?: number;
   minHonor: number;
   /** 赛前预期名次（玩家，开赛时计算） */
   expectedRank?: number;
@@ -651,6 +866,15 @@ export interface Tournament {
   playerBeefHonor?: number;
   /** 不计巡回赛积分（如补位的线上公开赛；奖金/荣誉/成长照常） */
   noCircuitPoints?: boolean;
+  /**
+   * 模板的直邀名额（第十四波：赛季中补充邀请按本赛季积分榜排名 ≤ 此值评估；旧存档缺失时按赛季初受邀队数）
+   */
+  inviteSlots?: number;
+  /**
+   * 赛季中的补充邀请（第十四波，schedule.refreshSeasonInvites）：teamId → 收到邀请后首个可行动的回合（发出邀请的回合 + 1）。
+   * 补邀的队伍同时追加到 invitedTeamIds（不撤销已有邀请）；人类战队在该回合内婉拒免扣荣誉；AI 自动接受
+   */
+  lateInvites?: Record<string, number>;
 }
 
 export interface TournamentSettlement {
@@ -767,7 +991,7 @@ export interface GameRecord {
 export type EventKind =
   | 'match_fixing' | 'heartbreak' | 'visa' | 'scandal' | 'beef' | 'unpaid_salary'
   | 'hot_streak' | 'sponsor' | 'injury' | 'stream_deal' | 'fan_meeting' | 'leave_request'
-  | 'poach' | 'contract' | 'retire' | 'other';
+  | 'poach' | 'contract' | 'retire' | 'rookie_home' | 'other';
 
 export interface EventChoice {
   id: string;
@@ -1292,11 +1516,15 @@ export interface GameState {
 
   /** 真实新秀待登场队列：id -> 登场 TI 序号 */
   futureRookies: Record<string, number>;
-  /** 旧版抽卡池（第八波取消玩家抽卡后恒为空，仅为旧存档兼容保留） */
+  /** 第八波之前的旧版抽卡池（选手 id 列表；恒为空，仅为旧存档兼容保留；2026-10-14 回归的抽卡见 gacha） */
   gachaPool: string[];
-  gachaPity: number;          // 旧版抽卡保底计数（已废弃）
+  gachaPity: number;          // 旧版抽卡保底计数（已废弃；新版保底计数在 Team.gacha.pity）
   /** 新秀选秀（rookieDraft.ts；全局世界状态；旧存档可能缺失） */
   rookieDraft?: RookieDraftState;
+  /** 新秀抽卡（gacha.ts，2026-10-14 起取代选秀；全局世界状态，卡池所有座位共享；旧存档在下个赛季初建池） */
+  gacha?: GachaState;
+  /** 名人堂（hallOfFame.ts；全局公开数据；旧存档读档时补建） */
+  hallOfFame?: HallOfFameState;
   transferOffers: TransferOffer[];
   /** 当前可选的临时替补（player id） */
   tempSubCandidates: string[];
@@ -1515,6 +1743,11 @@ export interface MultiplayerInfo {
   activeSeat: string | null;
   /** 玩家对玩家系列赛（seriesId → 共享对局） */
   h2h?: Record<string, H2HMatch>;
+  /**
+   * 服务器生成的谈判密钥（server/rooms.ts 开局 / 载入时写入）：混入 market.negotiationRoll 的哈希，座位视图中清空，
+   * 客户端无法预先算出 AI 是否接受报价。无服务器的多人模拟（simulate-mp）没有密钥，与单机相同。
+   */
+  secret?: string;
 }
 
 export type Popup =
@@ -1595,6 +1828,7 @@ export interface SquadProgressPoint {
 
 /** 推进回合的阻塞原因（UI 展示） */
 export interface AdvanceBlocker {
-  code: 'pending_decision' | 'tournament_running' | 'lineup_invalid' | 'game_over' | 'match_in_progress';
+  /** roster_over_cap：正式阵容超出绝对上限（新秀抽卡后超编，须在本回合内退回，team.rosterOverCap） */
+  code: 'pending_decision' | 'tournament_running' | 'lineup_invalid' | 'game_over' | 'match_in_progress' | 'roster_over_cap';
   message: string;
 }

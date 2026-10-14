@@ -9,7 +9,7 @@ import { patchByVersion } from './patches';
 import { teamInsight } from './team';
 import { hashSeed, rngOf, seededRng } from './rng';
 import type { Rng } from './rng';
-import { clamp, round2 } from './util';
+import { clamp, ownEntry, round2 } from './util';
 
 /**
  * BP 顺序（A 为先手方）：禁4 → 选4 → 禁4 → 选4 → 禁2 → 选2
@@ -221,12 +221,12 @@ interface SideCtx {
 }
 
 function teamTag(state: GameState, teamId: string): string {
-  const t = state.teams[teamId];
+  const t = ownEntry(state.teams, teamId);
   return t?.tag || t?.name || teamId;
 }
 
 function buildSide(state: GameState, draft: DraftState, side: 'A' | 'B', teamId: string): SideCtx {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const lineup = { C: null, M: null, O: null, SS: null, HS: null } as Record<Position, Player | null>;
   const signature = new Map<string, Position[]>();
   if (team) {
@@ -265,7 +265,7 @@ function buildCtx(state: GameState, draft: DraftState, teamA: string, teamB: str
 }
 
 function safeInsight(state: GameState, teamId: string): number {
-  if (!state.teams[teamId]) return 50;
+  if (!ownEntry(state.teams, teamId)) return 50;
   const v = teamInsight(state, teamId);
   return Number.isFinite(v) ? v : 50;
 }

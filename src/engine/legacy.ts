@@ -20,7 +20,7 @@ import { CONFIG } from './config';
 import legacyClubsJson from '../data/legacyClubs.json';
 import { overallRating, playerTier } from './player';
 import { rankTeamsByRating } from './team';
-import { formatGold, formatRank } from './util';
+import { formatGold, formatRank, ownEntry } from './util';
 import { humanTeamIds, inSeatOf, isMultiplayer, seatOf } from './seat';
 import { tiYear } from './calendar';
 
@@ -489,7 +489,7 @@ function seasonMoments(
 
 /** 每回合工资总额（选手 + 教练；只用于「大额转会」阈值） */
 function wageBill(state: GameState, teamId: string): number {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return 0;
   let sum = 0;
   for (const id of team.playerIds) {
@@ -505,7 +505,7 @@ function wageBill(state: GameState, teamId: string): number {
 export function buildSeasonRecord(
   state: GameState, teamId: string, opts: { partial?: boolean; ending?: GameOverReason; ti?: number } = {},
 ): LegacySeasonRecord {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const cur = state.season?.ti ?? 0;
   const ti = typeof opts.ti === 'number' && Number.isFinite(opts.ti) ? opts.ti : cur;
   const order = safeRank(state, teamId);
@@ -539,7 +539,7 @@ export function buildSeasonRecord(
 
 function safeRank(state: GameState, teamId: string): string[] {
   try {
-    const team = state.teams[teamId];
+    const team = ownEntry(state.teams, teamId);
     const ids = Object.values(state.teams).filter((t) => !t.disbanded || t.id === teamId)
       .filter((t) => t.id === teamId ? (team?.playerIds?.length ?? 0) > 0 : t.playerIds.length > 0)
       .map((t) => t.id);
@@ -554,7 +554,7 @@ function safeRank(state: GameState, teamId: string): string[] {
  * 同一赛季重复调用会覆盖（幂等）。
  */
 export function recordLegacySeason(state: GameState, teamId: string): void {
-  if (!teamId || !state.teams[teamId]) return;
+  if (!teamId || !ownEntry(state.teams, teamId)) return;
   const log = logOf(state, teamId);
   const rec = buildSeasonRecord(state, teamId);
   const i = log.findIndex((r) => r.ti === rec.ti);
@@ -590,7 +590,7 @@ export function recordLegacySeasonAll(state: GameState): void {
  * 收尾时已进入下一赛季 —— 此时应标记出局赛季的记录，而不是为一个从未参加的赛季补记。
  */
 export function recordLegacyPartial(state: GameState, teamId: string, ending: GameOverReason, atTi?: number): void {
-  if (!teamId || !state.teams[teamId]) return;
+  if (!teamId || !ownEntry(state.teams, teamId)) return;
   const log = logOf(state, teamId);
   if (log.some((r) => r?.ending)) return;
   const cur = state.season?.ti ?? 0;
@@ -610,7 +610,7 @@ export function recordLegacyPartial(state: GameState, teamId: string, ending: Ga
 
 /** 某人类战队的结局 */
 export function legacyEndingOf(state: GameState, teamId: string): GameOverReason {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (team?.banned) return 'banned';
   if (team?.bankrupt) return 'bankrupt'; // 第十波 #1（bankruptcy.ts）
   const log = state.legacyLog?.[teamId];
@@ -641,7 +641,7 @@ export function legacyRecordsOf(state: GameState, teamId: string): LegacySeasonR
   const lastTi = recs.length ? recs[recs.length - 1].ti : -Infinity;
   const eliminated = isMultiplayer(state) && !!seatOf(state, teamId)?.eliminated;
   const startTi = state.settings?.startTi ?? ti;
-  if (!frozen && !eliminated && lastTi < ti && ti >= startTi && state.teams[teamId] && !state.teams[teamId].banned) {
+  if (!frozen && !eliminated && lastTi < ti && ti >= startTi && !ownEntry(state.teams, teamId)?.banned && !!ownEntry(state.teams, teamId)) {
     // 当季尚未结算：有任何比赛成绩或游戏已在本季结束时补记（单机赛季中解散：标记结局）
     const over = !isMultiplayer(state) && state.gameOver && state.gameOver.reason !== 'completed' ? state.gameOver.reason : undefined;
     const live = buildSeasonRecord(state, teamId, { partial: true, ...(over ? { ending: over } : {}) });
@@ -740,7 +740,7 @@ export function teamLegacyStats(state: GameState, teamId: string, recs: LegacySe
   const strength = recs.map((r) => ({ ti: r.ti, rank: r.strengthRank, teams: r.strengthTeams }));
   let honorPeak: number | null = null;
   for (const r of recs) if (Number.isFinite(r.honorEnd)) honorPeak = Math.max(honorPeak ?? -Infinity, r.honorEnd);
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (team && !team.disbanded && Number.isFinite(team.honor)) honorPeak = Math.max(honorPeak ?? -Infinity, team.honor);
   if (teamId === state.settings?.playerTeamId) {
     for (const h of state.history?.honor ?? []) if (Number.isFinite(h.value)) honorPeak = Math.max(honorPeak ?? -Infinity, h.value);
@@ -805,7 +805,7 @@ function epilogueOf(
   state: GameState, teamId: string, ending: GameOverReason, stats: LegacyStats, title: LegacyTitle,
   recs: LegacySeasonRecord[], ban: ClubBanRecord | null, mult: number, rank: number, boardSize: number,
 ): string[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const name = team?.name ?? teamId;
   const trophies = stats.tiTitles.length + stats.majors + stats.premiers + stats.minors;
   const lastTi = recs.length ? recs[recs.length - 1].ti : state.season?.ti ?? 0;
@@ -860,7 +860,7 @@ function epilogueOf(
  * others：同时放进历史排行榜的其他人类战队（多人模式对比）。
  */
 export function computeLegacyReport(state: GameState, teamId: string, others: string[] = []): LegacyReport {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const recs = legacyRecordsOf(state, teamId);
   const ending = legacyEndingOf(state, teamId);
   const stats = teamLegacyStats(state, teamId, recs);

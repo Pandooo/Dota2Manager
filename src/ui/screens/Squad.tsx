@@ -6,13 +6,15 @@ import {
   getCoach, getPlayerTeam, marketValue, overallRating, playerRating, playerTier, rankTeamsByRating,
   rosterRoom, roundWageBill, teamInsight, teamRating, validateLineup, releaseCompensation,
   isTransferWindowOpen, formatGold, activeListing, listingDurationLabel, listingProgress, teamBuildingCost,
-  teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood, ROLE_FIT_LABEL, roleFit, roleFitFactor,
+  teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood, ROLE_FIT_LABEL, roleFit, roleFitFactor, gachaResaleLockLeft,
 } from '../../engine';
 import type { GameState, Player, Position, RoleFit, SalaryMood, Team, Tournament } from '../../engine';
 import {
   Button, Card, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TierBadge, cx,
 } from '../components/common';
 import { ConfirmButton } from '../components/ConfirmPopover';
+import NewBadge from '../components/NewBadge';
+import { MOMENTUM_TEXT_CLASS, momentumTitle, momentumViewOf } from '../components/MomentumBadge';
 import { SquadSynergyStrip } from '../components/SynergyKit';
 import { ScreenHeader } from '../layout/HubKit';
 import {
@@ -113,6 +115,9 @@ export default function Squad() {
 
   const rating = safe(() => teamRating(game, team.id), 0);
   const insight = safe(() => teamInsight(game, team.id), 0);
+  // 荣誉势头（第十四波）：同比平移赛季状态均值、环比调整战队评分
+  const momentum = momentumViewOf(game, team.id);
+  const honorStart = game.season?.honorStart;
   const ranking = safe(() => rankTeamsByRating(game), [] as string[]);
   const rank = ranking.indexOf(team.id) + 1;
   const coach = safe(() => getCoach(game, team.id), null);
@@ -181,7 +186,9 @@ export default function Squad() {
     });
 
   // ---- 批量挂牌（标价 = 身价）----
-  const listable = selectedPlayers.filter((p) => !safe(() => activeListing(game, p), null));
+  // 已在挂牌中的、抽卡新秀转售冷却期内的（入队不满一个赛季）不能挂牌
+  const resaleLocked = selectedPlayers.filter((p) => safe(() => gachaResaleLockLeft(game, p), 0) > 0);
+  const listable = selectedPlayers.filter((p) => !safe(() => activeListing(game, p), null) && !resaleLocked.includes(p));
 
   // ---- 团建 ----
   const tbCost = safe(() => teamBuildingCost(game), CONFIG.squadOps.teamBuildingCost);
@@ -264,10 +271,10 @@ export default function Squad() {
         }
       >
         {active.length === 0 ? (
-          <EmptyState text="阵容中没有可上场的选手。去转会市场签约自由选手，或在赛季初的新秀选秀中挑选新人。">
+          <EmptyState text="阵容中没有可上场的选手。去转会市场签约自由选手，或在新秀抽卡中抽取新人。">
             <div className="flex gap-2">
               <Button size="sm" onClick={() => setView('market')}>前往转会市场</Button>
-              <Button size="sm" variant="gold" onClick={() => setView('draft')}>新秀选秀</Button>
+              <Button size="sm" variant="gold" onClick={() => setView('gacha')}>新秀抽卡</Button>
             </div>
           </EmptyState>
         ) : (
@@ -288,12 +295,28 @@ export default function Squad() {
             </div>
 
             <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 <Stat
                   label="战队评分"
                   value={<span className="text-gold">{fmt1(rating)}</span>}
                   hint={rank > 0 ? `全联盟第 ${rank} / ${ranking.length}` : '五名首发评分之和 + 教练加成'}
                 />
+                <Stat
+                  label="荣誉"
+                  value={Math.round(team.honor)}
+                  hint={honorStart !== undefined && Number.isFinite(honorStart)
+                    ? `本赛季 ${team.honor - honorStart >= 0 ? '+' : ''}${Math.round(team.honor - honorStart)}`
+                    : '荣誉低于 0 战队解散'}
+                />
+                {momentum && CONFIG.form.honorMomentum.enabled ? (
+                  <div title={momentumTitle(momentum)}>
+                    <Stat
+                      label={<>荣誉势头 <NewBadge feature="momentum" dismissOn="view" className="normal-case" /></>}
+                      value={<span className={MOMENTUM_TEXT_CLASS[momentum.label]}>{momentum.label}</span>}
+                      hint={`状态均值 ${momentum.yoy >= 0 ? '+' : ''}${(momentum.yoy * 100).toFixed(1)}% · 评分 ×${momentum.roundMult.toFixed(3)}`}
+                    />
+                  </div>
+                ) : null}
                 <Stat label="战队灵性" value={fmt1(insight)} hint={coach ? `含教练权重 ${Math.round(CONFIG.coach.insightWeightInDraft * 100)}%` : '首发灵性均值（无教练）'} />
                 <Stat label="教练加成" value={coach ? `+${fmt1(coachBonus)}` : '—'} hint={coach ? coach.name : '教练岗位空缺'} />
                 <Stat label="首发均战力" value={filled.length ? fmt1(avgPower) : '—'} hint="有效战力" />
@@ -380,7 +403,9 @@ export default function Squad() {
                     !windowOpen
                       ? '转会窗口已锁定（TI 阶段），无法挂牌'
                       : listable.length === 0
-                        ? '选中的选手均已在挂牌中'
+                        ? resaleLocked.length
+                          ? `选中的选手已在挂牌中，或是入队不满 ${CONFIG.gacha.resaleHoldRounds} 个转会回合的抽卡新秀（${resaleLocked.map((p) => p.handle).join('、')}），暂不能挂牌`
+                          : '选中的选手均已在挂牌中'
                         : `将选中的选手按身价挂牌出售（挂牌期为${safe(() => listingDurationLabel(), '一整个赛季')}，整个挂牌期没有收到任何报价则自动解约，无补偿）`
                   }
                   confirm={{
@@ -409,6 +434,7 @@ export default function Squad() {
                   }}
                 >
                   批量挂牌（{listable.length}）
+                  <NewBadge feature="listing" />
                 </ConfirmButton>
                 <ConfirmButton
                   size="xs"
@@ -475,7 +501,9 @@ export default function Squad() {
                   </th>
                   <SortTh k="lineup" sort={sort} defaultDir="asc" title="按首发位置 → 替补排序">阵位</SortTh>
                   <SortTh k="handle" sort={sort} defaultDir="asc">选手</SortTh>
-                  <SortTh k="pos" sort={sort} defaultDir="asc">位置</SortTh>
+                  <SortTh k="pos" sort={sort} defaultDir="asc">
+                    位置 <NewBadge feature="altPositions" dismissOn="view" />
+                  </SortTh>
                   <SortTh k="age" sort={sort} className="num" defaultDir="asc">年龄</SortTh>
                   <SortTh k="mmr" sort={sort}>天梯</SortTh>
                   <SortTh k="power" sort={sort} className="num" title="基础 → 有效（存在临时状态时）">战力</SortTh>

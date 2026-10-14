@@ -106,6 +106,7 @@ export const EVENT_KIND_LABEL: Record<EventKind, string> = {
   poach: '挖角报价',
   contract: '合同到期',
   retire: '退役',
+  rookie_home: '真实新秀',
   other: '其他',
 };
 

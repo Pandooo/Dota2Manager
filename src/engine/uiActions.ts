@@ -9,6 +9,7 @@ import { POSITION_LABEL } from './config';
 import { dismissPopup, h2hDraftPending, playGame, startDraft } from './game';
 import { autoLineup, setLineupSlot, teamRating } from './team';
 import { talkToPlayer } from './squadOps';
+import { ownEntry } from './util';
 
 /** 标记一条新闻为已读 */
 export function markNewsRead(state: GameState, newsId: string): void {
@@ -25,7 +26,7 @@ export function dismissPopups(state: GameState, count: number): void {
 /** 把本队选手设为其本位置首发（与该位置原首发互换） */
 export function setPlayerAsStarter(state: GameState, playerId: string): OpResult {
   const me = state.settings.playerTeamId;
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p) return { ok: false, message: '找不到该选手' };
   setLineupSlot(state, me, p.position, p.id);
   const done = state.teams[me]?.lineup?.[p.position] === p.id;

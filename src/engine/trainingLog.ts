@@ -7,6 +7,7 @@ import type {
 import { CONFIG } from './config';
 import { extraTrainingCostAt } from './economy';
 import { teamPlayers } from './team';
+import { ownEntry } from './util';
 
 const FOCUSES: TrainingFocus[] = ['power', 'mmr', 'insight', 'balanced'];
 const KINDS: TrainingRecordKind[] = ['free', 'extra', 'scrim', 'auto'];
@@ -116,7 +117,7 @@ function scrimLimit(): number {
  */
 export function scrimBookedIds(state: GameState, teamId?: string): string[] {
   const id = teamId ?? state.settings?.playerTeamId;
-  const b = id ? state.teams?.[id]?.scrimBookings : undefined;
+  const b = ownEntry(state.teams, id)?.scrimBookings;
   if (!b || b.key !== scrimRoundKey(state) || !Array.isArray(b.teamIds)) return [];
   return b.teamIds.filter((x): x is string => typeof x === 'string');
 }
@@ -131,7 +132,7 @@ export function isScrimBooked(state: GameState, targetTeamId: string, teamId?: s
 /** 记下一次约练（旧回合的记录先清空）。不消耗随机数 */
 export function bookScrim(state: GameState, targetTeamId: string, teamId?: string): void {
   const id = teamId ?? state.settings?.playerTeamId;
-  const team = id ? state.teams?.[id] : undefined;
+  const team = ownEntry(state.teams, id);
   if (!team) return;
   const key = scrimRoundKey(state);
   const ids = scrimBookedIds(state, id);
@@ -165,7 +166,7 @@ export function squadProgressOf(state: GameState, playerId: string): SquadProgre
  */
 export function snapshotSquad(state: GameState): void {
   const teamId = state.settings?.playerTeamId;
-  const team = teamId ? state.teams?.[teamId] : undefined;
+  const team = ownEntry(state.teams, teamId);
   if (!team || !state.history) return;
   const h = state.history;
   if (!h.squadProgress || typeof h.squadProgress !== 'object' || Array.isArray(h.squadProgress)) h.squadProgress = {};

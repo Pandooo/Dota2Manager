@@ -7,7 +7,7 @@ import { CONFIG, POSITION_SHORT } from './config';
 import { heroName } from './heroes';
 import { rngOf, seededRng } from './rng';
 import type { Rng } from './rng';
-import { clamp } from './util';
+import { clamp, ownEntry } from './util';
 import { apportion } from './stats';
 
 export interface LiveContext {
@@ -457,13 +457,13 @@ function fmtGold(g: number): string {
 }
 
 function teamLabel(state: GameState, teamId: string): string {
-  const t = state.teams[teamId];
+  const t = ownEntry(state.teams, teamId);
   return t?.tag || t?.name || teamId;
 }
 
 function buildActors(state: GameState, ctx: LiveContext, side: Side): Actor[] {
   const teamId = side === 'A' ? ctx.teamA : ctx.teamB;
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const tag = teamLabel(state, teamId);
   const picks = (ctx.draft ?? []).filter((a) => a.type === 'pick' && a.side === side);
   const byPos = new Map<Position, DraftAction>();

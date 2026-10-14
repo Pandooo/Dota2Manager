@@ -1,5 +1,6 @@
 // 选手详情弹窗（全局）：useGameStore.selectedPlayerId 不为空时打开，openPlayer(null) 关闭
 import { useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useGameStore } from '../../store/gameStore';
 import {
   CONFIG, POSITIONS, POSITION_LABEL, ageOf, effectiveAttr, effectivePower, formatGold, heroById, heroName,
@@ -7,7 +8,8 @@ import {
   rosterSigningBlock, rosterSigningNote, suggestedFee,
   activeListing, listingBidOutlook, listingDurationLabel, listingListedAtLabel, listingOffers, listingProgress, listingRoundStatus, raiseSalaryPreview,
   talkSuccessChance, talkedThisRound,
-  SALARY_MOOD_LABEL, playerMoodSummary, renewalAsk, draftedRookieReleaseBlock,
+  SALARY_MOOD_LABEL, playerMoodSummary, renewalAsk, draftedRookieReleaseBlock, gachaDiscardBlock, gachaDiscardRefund, GACHA_KIND_LABEL,
+  gachaResaleLockText,
   developmentOutlook, GROWTH_OUTLOOK_HINT, ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
 import type { GameState, GrowthOutlook, OverallMood, Player, RoleFit, SalaryMood, Team } from '../../engine';
@@ -15,12 +17,15 @@ import {
   AttrRow, Badge, Button, EmptyState, Gold, Modal, PosBadge, RegionBadge, StatBar, TeamLink, TeamTag, TierBadge, cx,
 } from './common';
 import ErrorBoundary from './ErrorBoundary';
+import NewBadge from './NewBadge';
 import {
   Chip, Flag, MOD_ATTR_LABEL, countryName, fmt1, modifierDuration, modifierPositive,
   modifierText, pct, safe, tierProgress, type ChipTone,
 } from './SquadShared';
 import { ConfirmButton } from './ConfirmPopover';
+import { gachaDiscardConfirm } from './gachaDiscard';
 import { roundFee } from './MarketKit';
+import MarketBidModal from './MarketBidModal';
 import { PediaEntryButton } from './PediaKit';
 
 const WINDOW_LOCKED = '转会窗口已锁定（TI 预选与正赛阶段）';
@@ -82,6 +87,19 @@ function PlayerModalInner({ id, onClose }: { id: string; onClose: () => void }) 
           {p.draft && (
             <Chip title={`TI${p.draft.ti} 新秀选秀第 ${p.draft.round} 轮第 ${p.draft.pick} 顺位，被 ${game.teams[p.draft.teamId]?.name ?? p.draft.teamId} 选中`}>
               TI{p.draft.ti} 选秀 · 第 {p.draft.pick} 顺位
+            </Chip>
+          )}
+          {p.gacha && (
+            <Chip
+              title={`TI${p.gacha.ti} 新秀抽卡：${p.gacha.tier} 级${GACHA_KIND_LABEL[p.gacha.kind]}`
+                + `${p.gacha.placed ? '（未被抽走，按真实出道去向加盟）' : `，被 ${game.teams[p.gacha.teamId]?.name ?? p.gacha.teamId} 抽中`}`}
+            >
+              TI{p.gacha.ti} 抽卡 · {p.gacha.tier}
+            </Chip>
+          )}
+          {p.summon && (
+            <Chip tone="info" title={`请神新秀：出道能力与之后的成长走势复制名人堂成员 ${p.summon.handle}（TI${p.summon.ti} 出道）`}>
+              请神 · {p.summon.handle}
             </Chip>
           )}
           {p.tempSubUntilTournament && <Chip tone="info">临时替补</Chip>}
@@ -173,7 +191,7 @@ function PlayerDetail({ game, p, onClose }: { game: GameState; p: Player; onClos
                   </span>
                 )}
               </Info>
-              <Info label="位置" wrap>
+              <Info label={<>位置 <NewBadge feature="altPositions" dismissOn="view" /></>} wrap>
                 <PosBadge pos={p.position} full alt={p.altPositions} />
               </Info>
               <Info label="身份">
@@ -451,7 +469,10 @@ function OwnActions({ game, p, myTeam }: { game: GameState; p: Player; myTeam: T
   const remaining = Math.max(1, p.contractUntil - ti + 1);
   // 本届选秀选中的新秀：赛季初可免费放弃（引擎 releasePlayer 同样转为免费放弃）
   const freeRookie = !!p.draft && safe(() => draftedRookieReleaseBlock(game, p) === null, false);
-  const comp = freeRookie ? 0 : Math.round(Math.max(0, p.salary || 0) * CONFIG.market.releaseCompRoundsPerSeason * remaining);
+  // 本回合抽到的新秀：可退回（返还部分抽卡费用；引擎 releasePlayer 同样转为退回）
+  const gachaFresh = !freeRookie && !!p.gacha && safe(() => gachaDiscardBlock(game, p) === null, false);
+  const refund = gachaFresh ? safe(() => gachaDiscardRefund(game), 0) : 0;
+  const comp = freeRookie || gachaFresh ? 0 : Math.round(Math.max(0, p.salary || 0) * CONFIG.market.releaseCompRoundsPerSeason * remaining);
   const offers = (game.transferOffers ?? []).filter((o) => o.playerId === p.id && o.status === 'pending');
   const temp = !!p.tempSubUntilTournament;
   // 续约：默认满足选手要价（≥ 隐藏的预期薪资）；也可尝试维持现薪（低于他的心理预期会被拒绝）
@@ -553,6 +574,19 @@ function OwnActions({ game, p, myTeam }: { game: GameState; p: Player; myTeam: T
               onConfirm={() => void call('releaseDraftedRookie', p.id)}
             >
               放弃新秀
+            </ConfirmButton>
+          </div>
+        ) : gachaFresh ? (
+          <div className="space-y-1">
+            <div className="text-[11px] text-faint">本回合抽到的新秀 · 可退回（返还 <Gold value={refund} />，无补偿、不扣荣誉）</div>
+            <ConfirmButton
+              size="sm"
+              variant="danger"
+              title={`本回合抽到的新秀可退回：返还 ${formatGold(refund)}，他将以自由选手身份寻找新东家`}
+              confirm={gachaDiscardConfirm({ handle: p.handle, refund, kind: p.gacha?.kind, protoHandle: p.summon?.handle })}
+              onConfirm={() => void call('gachaDiscard', p.id)}
+            >
+              退回新秀
             </ConfirmButton>
           </div>
         ) : (
@@ -839,7 +873,8 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
   }
 
   const [minM, maxM] = S.listingPriceRange;
-  const reason = !windowOpen ? WINDOW_LOCKED : !(price > 0) ? '身价数据异常，无法挂牌' : '';
+  const resale = safe<string | null>(() => gachaResaleLockText(game, p), null);
+  const reason = !windowOpen ? WINDOW_LOCKED : resale ? resale : !(price > 0) ? '身价数据异常，无法挂牌' : '';
   return (
     <Panel title="挂牌转会">
       <div className="flex items-baseline justify-between gap-2 text-sm">
@@ -891,6 +926,7 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
           onClick={() => void call('listPlayerForTransfer', p.id, price)}
         >
           挂牌出售
+          <NewBadge feature="listing" />
         </Button>
       </div>
       {rule}
@@ -898,33 +934,27 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
   );
 }
 
-/** 其他战队选手：报价求购 */
+/**
+ * 其他战队选手：报价求购。打开与「转会市场 → 转会求购」相同的报价弹窗（MarketBidModal：现金，或现金 + 本队选手抵价），
+ * 两个入口行为一致。弹窗经 portal 挂到 body（本弹窗的动画容器带 transform，fixed 定位的子弹窗会被限制在容器内）。
+ */
 function BidActions({ game, p, seller, myTeam }: { game: GameState; p: Player; seller: Team; myTeam: Team }) {
-  const call = useGameStore((s) => s.call);
+  const [bidOpen, setBidOpen] = useState(false);
   const value = safe(() => marketValue(game, p), 0);
   const suggested = safe(() => suggestedFee(game, p.id), Math.round(value * CONFIG.market.suggestedFeeBase));
-  const [fee, setFee] = useState<number>(suggested || value);
   const windowOpen = safe(() => isTransferWindowOpen(game), false);
-  // 只有达到绝对上限才不能报价；超出常规上限只做提示
-  const rosterBlock = safe<string | null>(() => rosterSigningBlock(game, myTeam.id), null);
+  // 超出常规阵容上限只做提示（纯现金报价时；抵价交易阵容人数不增加）
   const overNote = safe<string | null>(() => rosterSigningNote(game, myTeam.id), null);
   const will = safe(() => playerWillingness(game, p.id, myTeam.id), NaN);
-  const step = CONFIG.market.feeRounding;
   const wild = !!p.tempSubUntilTournament || !!p.isWildSub;
-
-  const reason = !windowOpen
-    ? WINDOW_LOCKED
-    : seller.disbanded
-      ? '原战队已解散'
-      : wild
-        ? '临时替补无法转会'
-        : !(fee > 0)
-          ? '请输入有效的报价金额'
-          : myTeam.gold < fee
-            ? `金币不足（账上 ${formatGold(myTeam.gold)}）`
-            : rosterBlock ?? '';
-
-  const setRounded = (v: number) => setFee(Math.max(0, Math.round(v / step) * step));
+  // 这几种情况不打开报价弹窗；窗口锁定时仍可打开查看报价参考（与转会市场一致）
+  const reason = seller.disbanded
+    ? '原战队已解散'
+    : wild
+      ? '临时替补无法转会'
+      : seller.isPlayer
+        ? `${seller.name} 由其他玩家执教，暂不支持直接求购其选手`
+        : '';
 
   return (
     <Panel title={`向 ${seller.name} 报价求购`}>
@@ -944,40 +974,27 @@ function BidActions({ game, p, seller, myTeam }: { game: GameState; p: Player; s
           </Info>
         </div>
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              step={step}
-              value={Number.isFinite(fee) ? fee : 0}
-              onChange={(e) => setFee(Math.max(0, Number(e.target.value) || 0))}
-              className="w-36 rounded-md border border-line bg-panel-2 px-2 py-1 text-sm tabular text-ink [color-scheme:dark] focus:border-dota focus:outline-none"
-              aria-label="报价金额"
-            />
-            <span className="text-xs text-mute">≈ {formatGold(fee)}</span>
-            <Button
-              variant="gold"
-              size="sm"
-              disabled={!!reason}
-              title={reason || `出价 ${formatGold(fee)} 求购 ${p.handle}${overNote ? `\n${overNote}` : ''}`}
-              onClick={() => void call('bidForPlayer', p.id, fee)}
-            >
-              发出报价
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Button size="xs" onClick={() => setRounded(value)}>身价</Button>
-            <Button size="xs" onClick={() => setRounded(suggested)}>建议价</Button>
-            <Button size="xs" onClick={() => setRounded(suggested * 1.2)}>建议价 ×1.2</Button>
-            <Button size="xs" onClick={() => setRounded(fee * 0.9)}>−10%</Button>
-            <Button size="xs" onClick={() => setRounded(fee * 1.1)}>+10%</Button>
-          </div>
+          <Button
+            variant={windowOpen && !reason ? 'gold' : 'secondary'}
+            size="sm"
+            disabled={!!reason}
+            title={reason || (windowOpen
+              ? `向 ${seller.name} 报价求购 ${p.handle}（建议 ${formatGold(suggested)}）：现金，或现金 + 本队选手抵价`
+              : `${WINDOW_LOCKED}：可查看报价参考，但无法提交`)}
+            onClick={() => setBidOpen(true)}
+          >
+            报价求购…
+          </Button>
           <div className="text-[11px] leading-relaxed text-faint">
-            报价越高于身价、选手在原队越不重要、归属感越低，对方越可能放人；之后还需选手本人愿意加盟。同一回合内重复谈判结果相同。
+            可以出纯现金，也可以用「现金 + 本队选手抵价」凑够报价（选手按身价 × 对方估值系数折算）。报价越高于身价、选手在原队越不重要、归属感越低，对方越可能放人；之后还需选手本人愿意加盟。同一回合内重复谈判结果相同。
           </div>
-          {!reason && overNote && <div className="text-[11px] leading-relaxed text-gold">{overNote}。</div>}
+          {!reason && windowOpen && overNote && <div className="text-[11px] leading-relaxed text-gold">纯现金引进：{overNote}。</div>}
         </div>
       </div>
+      {bidOpen && !reason && createPortal(
+        <MarketBidModal key={p.id} playerId={p.id} onClose={() => setBidOpen(false)} windowOpen={windowOpen} />,
+        document.body,
+      )}
     </Panel>
   );
 }

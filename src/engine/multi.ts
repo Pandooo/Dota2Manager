@@ -15,7 +15,7 @@ import { CONFIG, MAX_TI } from './config';
 import { RPC_TEAM_ARG, RPC_WHITELIST, type RpcName } from '../shared/protocol';
 import { loadRoster, getPlayerIndex } from '../data/index';
 import { hashSeed, rngOf } from './rng';
-import { formatGold } from './util';
+import { formatGold, ownEntry } from './util';
 import { addNews, newsIsMine } from './news';
 import {
   activeHumanIds, ensureNeutral, forEachSeat, humanTeamIds, isMultiplayer, seatInPlay, withSeat,
@@ -33,7 +33,7 @@ import { finalizePlayerTournamentIfDone, initPatchBaseline, multiplayerCareerSum
 import { advanceTournamentUntilPlayer, readySeries } from './tournament';
 import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './generation';
 import { aiEnsureRosters } from './ai';
-import { autoLineup, setLineupSlot } from './team';
+import { autoLineup, rosterOverCap, setLineupSlot } from './team';
 import { ROLE_DATA_VERSION } from './roles';
 import { migrateRealRoles } from './roleSync';
 import { computeSalary } from './player';
@@ -46,7 +46,10 @@ import {
 import {
   listPlayerForTransfer, listPlayersForTransfer, raiseSalary, talkToPlayer, teamBuilding, unlistPlayer,
 } from './squadOps';
+import { tradeForPlayer } from './trade';
 import { releaseDraftedRookie } from './rookieDraft';
+import { gachaDiscard, gachaPull } from './gacha';
+import { hallOfFameNeedsMigration, migrateHallOfFame } from './hallOfFame';
 import { setPrizeShare } from './prizeShare';
 import { resolveDecision } from './events';
 import { autoHandleRound, type AutoRoundReport } from './autoRound';
@@ -91,7 +94,7 @@ function deepClone<T>(v: T): T {
 }
 
 function seatName(state: GameState, teamId: string): string {
-  return state.multiplayer?.seats[teamId]?.name || state.teams[teamId]?.name || teamId;
+  return state.multiplayer?.seats[teamId]?.name || ownEntry(state.teams, teamId)?.name || teamId;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ function validateOptions(opts: MpNewGameOptions): string | null {
  * 国籍/赛区/位置/招牌英雄作为选手身份保留。俱乐部荣誉、资金重置为新俱乐部标准；主教练离队进入教练市场（保证公平）。
  */
 function resetToNewClubLevel(state: GameState, teamId: string, difficulty: string): void {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return;
   team.isPlayer = true;
   team.honor = CONFIG.team.newClubHonor;
@@ -465,6 +468,17 @@ export function seatView(state: GameState, teamId: string): GameState {
     syncViewWithH2H(view, teamId);
   }
   view.news = (view.news ?? []).filter((n) => n.visibility !== 'private' || newsIsMine(view, n, teamId));
+  // 新秀抽卡（gacha.ts）：其他战队的逐张抽卡记录与保底进度是私有的（卡池与各队阵容本身公开）
+  for (const id of Object.keys(view.teams ?? {})) {
+    const g = view.teams[id]?.gacha;
+    if (id === teamId || !g) continue;
+    delete g.log;
+    delete (g as Partial<typeof g>).pity;
+  }
+  // 随机数状态与谈判密钥只留在服务器：客户端拿到 rngState 就能用自带的引擎算出下一张卡（卡池公开），
+  // 拿到密钥就能算出谈判骰子（2026-10-14 审查）。客户端界面不使用这两个值
+  view.rngState = 0;
+  if (vmp.secret !== undefined) vmp.secret = '';
   // 尚未曝光的全员假赛计划不下发（只保留已曝光的历史档案）
   if (view.clubScandals) view.clubScandals = { plans: [], history: view.clubScandals.history ?? [] };
   view.delayedEvents = (view.delayedEvents ?? []).filter((d) => d.ctx?.teamId === teamId);
@@ -618,13 +632,19 @@ export function allSeatsReady(state: GameState): boolean {
 
 /**
  * 多人房间的存档迁移（服务器载入房间时由 server/rooms.ts 经 MpEngine.migrate 调用；回合推进与 RPC 前再兜底一次——幂等，
- * 已是最新版本时只做一次版本比较）。当前只有真实生涯位置（第十三波，roleSync.migrateRealRoles：旧房间的真实选手同步到当届
- * 真实位置、补齐副位置，各人类玩家战队收到一条私有的修正汇总）。在中性上下文中执行。返回是否执行了迁移。
+ * 已是最新版本时只做一次版本比较）。真实生涯位置（第十三波，roleSync.migrateRealRoles：旧房间的真实选手同步到当届
+ * 真实位置、补齐副位置，各人类玩家战队收到一条私有的修正汇总）；名人堂与开局补录（hallOfFame.migrateHallOfFame）。在中性上下文中执行。返回是否执行了迁移。
  */
 export function migrateRoomState(state: GameState): boolean {
-  if (!state?.multiplayer || Number(state.roleDataVersion) >= ROLE_DATA_VERSION) return false;
+  if (!state?.multiplayer) return false;
+  const roles = !(Number(state.roleDataVersion) >= ROLE_DATA_VERSION);
+  // 名人堂（2026-10-14 抽卡回归，hallOfFame.migrateHallOfFame）：旧房间没有名人堂 → 以初始成员 + 开局补录创建并补录当前 SS / SSR；
+  // 有名人堂但没有开局补录（2026-10-15「补录」之前的房间）→ 补录开局届之前的真实 SS / SSR 与当前 SS / SSR（按 backfillVersion 一次）
+  const hof = hallOfFameNeedsMigration(state);
+  if (!roles && !hof) return false;
   ensureNeutral(state);
-  migrateRealRoles(state);
+  if (roles) migrateRealRoles(state);
+  if (hof) migrateHallOfFame(state);
   return true;
 }
 
@@ -687,9 +707,11 @@ const RPC_IMPL = {
   signFreeAgent, bidForPlayer, respondToOffer, releasePlayer, releasePlayers, renewContract,
   generateTempSubCandidates, hireTempSub,
   listPlayerForTransfer, unlistPlayer,
+  tradeForPlayer,
   raiseSalary, talkToPlayer, teamBuilding,
   setPrizeShare,
   releaseDraftedRookie,
+  gachaPull, gachaDiscard,
   resolveDecision, dismissPopup, markAllNewsRead, markNewsRead,
   dismissPopups, setPlayerAsStarter, talkWithPlayer, autoDraftAndPlay, autoArrangeLineup,
   listPlayersForTransfer,
@@ -699,6 +721,7 @@ const RPC_IMPL = {
 const RPC_ARRAY_ARG: Partial<Record<RpcName, number>> = {
   releasePlayers: 0,
   listPlayersForTransfer: 0,
+  tradeForPlayer: 2,
 };
 
 /** 游戏结束 / 观战时仍允许的 RPC（只影响本座位的显示状态） */
@@ -733,7 +756,7 @@ export function callAsSeat(state: GameState, teamId: string, fn: string, args: u
   }
   if (!PASSIVE_RPC.has(fn)) {
     if (state.gameOver) return fail('游戏已结束');
-    if (seat.eliminated || state.teams[teamId]?.disbanded) return fail('战队已解散，当前为观战模式');
+    if (seat.eliminated || ownEntry(state.teams, teamId)?.disbanded) return fail('战队已解散，当前为观战模式');
   }
   migrateRoomState(state); // 旧房间（服务器载入时未迁移）兜底；已迁移时只是一次版本比较
   let result: unknown;
@@ -746,6 +769,9 @@ export function callAsSeat(state: GameState, teamId: string, fn: string, args: u
   try {
     processEliminations(state);
     refreshReadiness(state);
+    // 抽卡后超编（2026-10-15「十连后本回合内退回到 12 人」）：撤销本座位「下一回合」自动准备的意图——否则下面的自动处理会立刻
+    // 退回刚抽到的新秀。玩家手动退回 / 解约，或再按「下一回合」（自动退回评分最低的新秀）
+    if (name === 'gachaPull' && seat.autoReady && rosterOverCap(state, teamId) > 0) delete seat.autoReady;
     // 以自动处理请求准备、仍在等待的座位：本次操作可能让它们可以继续（如对手同意快速模拟、下一场对手已确定）
     if (!SELF_ONLY_RPC.has(fn)) pumpAutoReady(state);
   } catch (e) {

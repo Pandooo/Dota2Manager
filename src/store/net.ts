@@ -1,5 +1,5 @@
 // ============================================================================
-// 多人对战（局域网）WebSocket 客户端
+// 多人对战（局域网 / 公网服务器）WebSocket 客户端
 // - 身份：匿名会话 ID（store/session.getSession）；URL 参数 ?as=<名字> 时改用独立身份
 //   （localStorage 键 d2m:session:<名字>），便于同一浏览器多标签模拟多名玩家（docs/MULTIPLAYER.md §7）。
 // - 服务器地址：默认当前页面同源 + WS_PATH；可手动填写 ip:端口（记在 localStorage）。
@@ -43,9 +43,21 @@ function pageLocation(): { search: string; protocol: string; host: string } | nu
   return loc && typeof loc.protocol === 'string' ? { search: loc.search ?? '', protocol: loc.protocol, host: loc.host ?? '' } : null;
 }
 
+/**
+ * 随机 ID（会话 ID 是重连回座位的凭证）：优先 crypto.randomUUID；不安全上下文（如 http://公网 IP）中没有 randomUUID，
+ * 改用同样不可预测的 crypto.getRandomValues（128 位）；两者都不可用时才退回 Math.random。
+ */
 function randomId(): string {
   try {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const b = crypto.getRandomValues(new Uint8Array(16));
+      return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    }
   } catch {
     /* ignore */
   }
@@ -201,6 +213,19 @@ export function setManualServer(addr: string | null): void {
 export function resolveServerUrl(): string {
   const manual = getManualServer();
   return (manual && normalizeServerAddress(manual)) || defaultServerUrl();
+}
+
+/**
+ * 邀请朋友打开的网页地址（不含任何服务器下发的内网地址）：使用默认服务器（本页同源）时为当前页面的 origin；
+ * 手动填写了其他服务器时为该服务器的网页地址。
+ */
+export function invitePageUrl(): string {
+  const manual = getManualServer();
+  const manualWs = manual ? normalizeServerAddress(manual) : null;
+  if (manualWs) return httpUrlOf(manualWs);
+  const loc = pageLocation();
+  if (loc && /^https?:$/.test(loc.protocol) && loc.host) return `${loc.protocol}//${loc.host}`;
+  return httpUrlOf(defaultServerUrl());
 }
 
 /** 由 ws URL 推出给朋友打开的网页地址（http://host:port） */

@@ -30,6 +30,7 @@ import { draftHeroDate } from './draft';
 import { patchByVersion } from './patches';
 import { overallRating, playerTier, tierIndex } from './player';
 import { rankTeamsByRating } from './team';
+import { ownEntry } from './util';
 
 /** 统计格式版本（PediaState.v）。2：不再存逐局个人数据（GameRecord.box），升级时清除旧存档残留 */
 export const PEDIA_VERSION = 2;
@@ -213,7 +214,7 @@ function seasonRow(e: PediaPlayer, ti: number, teamId: string): PediaPlayerSeaso
 
 /** 战队档案（缺失时创建；同步名称快照） */
 function teamEntry(state: GameState, ps: PediaState, teamId: string): PediaTeam {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   let e = ps.teams[teamId];
   if (!isObj(e) || !Array.isArray(e.s)) {
     e = { n: team?.name ?? teamId, tag: team?.tag ?? '', s: [], scs: 0, sbs: 0, gcs: 0, gbs: 0 };
@@ -729,7 +730,7 @@ type LineRef = [playerId: string, heroId: string];
 
 /** 当前首发（与 match.lineupOf 同口径：禁赛 / 退役视为空缺） */
 function lineupIds(state: GameState, teamId: string): string[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return [];
   const out: string[] = [];
   for (const pos of POSITIONS) {
@@ -888,7 +889,7 @@ function recordSeasonEnd(state: GameState): void {
     order = ids.slice();
   }
   order.forEach((teamId, i) => {
-    const team = state.teams[teamId];
+    const team = ownEntry(state.teams, teamId);
     if (!team) return;
     const row = teamSeason(teamEntry(state, ps, teamId), ti);
     row.h = Math.round(team.honor ?? 0);

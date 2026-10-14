@@ -9,7 +9,7 @@
 | 目录 | 内容 |
 |---|---|
 | `src/engine/` | 纯 TypeScript 模拟引擎（无 React/DOM 依赖，可在 Node 运行） |
-| `src/data/` | 静态数据：`tis.json`、`rosters/ti{n}.json`、`patches.json`、`heroes.json`、`tournaments/season{n}.json`、`legacyClubs.json`、由脚本生成的 `playerIndex.json` / `trajectories.json` / `coachIndex.json` |
+| `src/data/` | 静态数据：`tis.json`、`rosters/ti{n}.json`、`patches.json`、`heroes.json`、`tournaments/season{n}.json`、`legacyClubs.json`、`hallOfFame.json`（名人堂初始成员）、由脚本生成的 `playerIndex.json` / `trajectories.json` / `coachIndex.json` |
 | `src/store/` | Zustand 状态（`gameStore.ts`）、匿名会话存档（`session.ts`，IndexedDB）、联机客户端（`net.ts`） |
 | `src/ui/` | React 19 + Tailwind v4 页面与组件（全中文界面） |
 | `src/shared/protocol.ts` | 多人 WebSocket 协议与 RPC 白名单（服务器与客户端共用） |
@@ -72,8 +72,10 @@ npx vite build --outDir <临时目录>
 - 修改**已经打过的届次**的选手位置（或副位置口径）时，把 `src/engine/roles.ts` 的 `ROLE_DATA_VERSION` 加 1：已有存档只在版本落后时重新同步位置（赛季同步只应用当届数据）。
 - 选手 id 为跨届一致的规范 slug（最知名 ID 的小写字母数字，如 `miracle`、`n0tail`）；同一人在各届文件中的 id、出生年份、国籍必须一致。
 - 英雄 id 以 `src/data/heroes.json` 为准。
+- 名人堂初始成员 `src/data/hallOfFame.json`（DotA1 时代传奇，用户确认的名单，不要自行增删）：`source: "roster"` 的 id 必须是有生涯轨迹的真实选手（handle 与 playerIndex 一致，原型 = 真实生涯，出道等级 = 首届 TI 的等级）；`source: "seed"` 的 id 不能与真实选手重名（可以与教练同名），需给出 debutTier / peakTier / position / nationality / birthYear / power{debut, peak, peakYear, declineFromYear} 等数值（合成轨迹参数见 `CONFIG.gacha.seedTrajectory`）。修改后运行 `npm run data:validate`（校验 id、英雄、等级、合成轨迹数值、重复）。改动 roster 的出道届等级会改变原型的出道等级（请神卡按此匹配）。
 
 ## 5. 提交
 
 - 提交信息使用简洁的中文或英文，说明改了什么、为什么。
 - 不要提交 `node_modules/`、`dist/`、`server-data/`（多人房间存档）等本地产物（见 `.gitignore`）。
+- **发版（升级版本号）时**：① 升级 `package.json` 的 `version`（界面右上角与主菜单页脚的版本号由 `vite.config.ts` 注入，不要在代码里写死）；② 在 `src/ui/changelog.ts` 的 `CHANGELOG` 顶部增加该版本条目（版本、日期 `YYYY-MM-DD`、面向玩家的平实条目）；③ 需要在界面上标「New」的新功能加进 `FEATURES`（`{ key, version, label }`，条目用 `feature: key` 引用），并在对应入口放 `<NewBadge feature="key" />`（接入方式见 `docs/UI.md`「更新说明与 New 徽标」）；④ README「更新日志」同步同一内容。`tests/changelog.test.ts` 会校验版本倒序、日期格式、功能引用，以及最新版本 = `package.json` 的 `version`。

@@ -11,6 +11,7 @@ import * as engine from '../engine';
 import { clearProgress, flushSave, getProgressMeta, loadProgress, saveProgressNow, scheduleSave, type ProgressMeta } from './session';
 import {
   RPC_WHITELIST, type ClientMsg, type FeedItem, type RoomInfo, type RoomSummary, type RoundStatus, type RpcName, type ServerMsg,
+  type ServerStatsSummary,
 } from '../shared/protocol';
 import {
   getMpResume, getNetIdentity, getPlayerName, net, resolveServerUrl, savePlayerName, setManualServer, setMpResume, trimArgs,
@@ -21,9 +22,9 @@ import { tourCardAutoExpand, tourModalFocus, tourRoundKeyOf, type TourModalFocus
 
 // ---------------------------------------------------------------------------
 // 导航（信息架构）：侧栏 6 个中心页 + 独立的比赛页；中心页内用标签页切换。
-//   总览 dashboard · 战队 team（阵容 | 训练 | 教练）· 转会 transfer（转会市场 | 新秀选秀）·
+//   总览 dashboard · 战队 team（阵容 | 训练 | 教练）· 转会 transfer（转会市场 | 新秀抽卡 | 新秀选秀：只在选秀开启或旧存档有选秀记录时显示）·
 //   赛事 events（赛事中心 | 赛程报名 | 排名 | 版本）· 俱乐部 club（财务 | 荣誉史）· 消息 inbox；比赛 match
-//   DotaPedia pedia（总览 | 战队 | 选手 | 赛事 | 英雄；只读百科，词条页的选中状态见 ui/components/PediaKit usePediaNav）
+//   DotaPedia pedia（总览 | 战队 | 选手 | 名人堂 | 赛事 | 英雄 | 羁绊图鉴；只读百科，词条页的选中状态见 ui/components/PediaKit usePediaNav）
 // 旧页面键（'training'、'draft'、'schedule'…）仍可直接传给 setView：映射到「中心页 + 标签」，既有调用无需修改。
 // 导航是纯 UI 状态（不进存档）；多人模式下每个席位各自的客户端持有自己的导航状态。
 // ---------------------------------------------------------------------------
@@ -31,11 +32,11 @@ import { tourCardAutoExpand, tourModalFocus, tourRoundKeyOf, type TourModalFocus
 /** 中心页（store.view 的取值） */
 export type HubKey = 'dashboard' | 'team' | 'transfer' | 'events' | 'club' | 'inbox' | 'match' | 'pedia';
 export type TeamTab = 'squad' | 'training' | 'coach';
-export type TransferTab = 'market' | 'draft';
+export type TransferTab = 'market' | 'gacha' | 'draft';
 export type EventsTab = 'tournament' | 'schedule' | 'rankings' | 'patches';
 export type ClubTab = 'finance' | 'honors';
-/** DotaPedia 百科：总览 | 战队 | 选手 | 赛事 | 英雄 | 羁绊图鉴（键名带 pedia 前缀，避免与其他中心页的标签重名） */
-export type PediaTab = 'pediaHome' | 'pediaTeams' | 'pediaPlayers' | 'pediaTours' | 'pediaHeroes' | 'pediaSynergies';
+/** DotaPedia 百科：总览 | 战队 | 选手 | 名人堂 | 赛事 | 英雄 | 羁绊图鉴（键名带 pedia 前缀，避免与其他中心页的标签重名） */
+export type PediaTab = 'pediaHome' | 'pediaTeams' | 'pediaPlayers' | 'pediaHall' | 'pediaTours' | 'pediaHeroes' | 'pediaSynergies';
 /** 中心页内的标签（store.tab 的取值；旧页面键即标签键，荣誉史为 'honors'） */
 export type HubTab = TeamTab | TransferTab | EventsTab | ClubTab | PediaTab;
 /**
@@ -47,18 +48,18 @@ export type ViewKey = HubKey | HubTab;
 /** 各中心页的标签（第一项为默认标签） */
 export const HUB_TABS: Readonly<Partial<Record<HubKey, readonly HubTab[]>>> = {
   team: ['squad', 'training', 'coach'],
-  transfer: ['market', 'draft'],
+  transfer: ['market', 'gacha', 'draft'],
   events: ['tournament', 'schedule', 'rankings', 'patches'],
   club: ['finance', 'honors'],
-  pedia: ['pediaHome', 'pediaTeams', 'pediaPlayers', 'pediaTours', 'pediaHeroes', 'pediaSynergies'],
+  pedia: ['pediaHome', 'pediaTeams', 'pediaPlayers', 'pediaHall', 'pediaTours', 'pediaHeroes', 'pediaSynergies'],
 };
 
 const TAB_HUB: Readonly<Record<HubTab, HubKey>> = {
   squad: 'team', training: 'team', coach: 'team',
-  market: 'transfer', draft: 'transfer',
+  market: 'transfer', gacha: 'transfer', draft: 'transfer',
   tournament: 'events', schedule: 'events', rankings: 'events', patches: 'events',
   finance: 'club', honors: 'club',
-  pediaHome: 'pedia', pediaTeams: 'pedia', pediaPlayers: 'pedia', pediaTours: 'pedia', pediaHeroes: 'pedia', pediaSynergies: 'pedia',
+  pediaHome: 'pedia', pediaTeams: 'pedia', pediaPlayers: 'pedia', pediaHall: 'pedia', pediaTours: 'pedia', pediaHeroes: 'pedia', pediaSynergies: 'pedia',
 };
 
 const HUB_KEYS: readonly HubKey[] = ['dashboard', 'team', 'transfer', 'events', 'club', 'inbox', 'match', 'pedia'];
@@ -112,7 +113,7 @@ export interface HubEntryContext {
  * 侧栏点击中心页时应打开的标签（纯函数）：入口挂着「需处理」徽标时直接打开徽标所指的标签
  * （阵容问题 → 阵容、报价 → 转会市场、进行中的赛事 → 赛事中心、资金为负 → 财务）；
  * 赛季初的「赛事」默认打开赛程报名（赛事中心此时还没有对阵），除非上次停留的是其他标签。
- * 返回 null = 按 openHub 恢复上次停留的标签。只看提醒类徽标，常驻信息（教练空缺、新秀选秀、窗口锁定）不改变去向。
+ * 返回 null = 按 openHub 恢复上次停留的标签。只看提醒类徽标，常驻信息（教练空缺、新秀抽卡、窗口锁定）不改变去向。
  */
 export function hubEntryTab(hub: HubKey, ctx: HubEntryContext, remembered?: Partial<Record<HubKey, HubTab>>): HubTab | null {
   switch (hub) {
@@ -174,12 +175,22 @@ export interface ChatLine {
   at: string;
 }
 
+export type MpServerMode = 'unknown' | 'lan' | 'public';
+
 export interface MpState {
   /** 连接状态（net.ts） */
   net: NetState;
   /** 服务器信息（welcome） */
   serverName: string;
+  /** 服务器的局域网地址（只有局域网内的连接会收到；公网模式为空） */
   lanUrls: string[];
+  /**
+   * 服务器类型：unknown = 尚未收到 welcome（或刚切换服务器）；lan = 局域网服务器（房主运行）；
+   * public = 公网服务器（welcome.publicServer，界面不显示局域网相关说明）
+   */
+  serverMode: MpServerMode;
+  /** 服务器在线统计（serverStats 推送；旧服务器不发送时为 null） */
+  serverStats: ServerStatsSummary | null;
   /** 本机身份（会话 ID）与昵称 */
   sessionId: string;
   playerName: string;
@@ -215,6 +226,8 @@ function initialMp(): MpState {
     net: { ...net.state },
     serverName: '',
     lanUrls: [],
+    serverMode: 'unknown',
+    serverStats: null,
     sessionId: '',
     playerName: '',
     rooms: [],
@@ -647,7 +660,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     mpConnect: (address) => {
       if (address !== undefined) setManualServer(address);
       const name = get().mp.playerName || getPlayerName();
-      net.connect(resolveServerUrl(), name);
+      const url = resolveServerUrl();
+      // 换了服务器：上一台服务器的信息作废，等新服务器的 welcome
+      if (url !== net.state.url) setMp({ serverName: '', lanUrls: [], serverMode: 'unknown', serverStats: null });
+      net.connect(url, name);
     },
 
     mpReconnect: () => {
@@ -742,8 +758,20 @@ function handleServerMsg(msg: ServerMsg): void {
 
   switch (msg.t) {
     case 'welcome': {
-      setMp({ serverName: msg.serverName, lanUrls: msg.lanUrls ?? [], sessionId: msg.sessionId || st.mp.sessionId });
+      const pub = msg.publicServer === true;
+      setMp({
+        serverName: msg.serverName,
+        // 公网服务器不会发送内网地址；即使发了也不显示
+        lanUrls: pub ? [] : (Array.isArray(msg.lanUrls) ? msg.lanUrls.filter((u) => typeof u === 'string') : []),
+        serverMode: pub ? 'public' : 'lan',
+        sessionId: msg.sessionId || st.mp.sessionId,
+      });
       net.send({ t: 'listRooms' });
+      return;
+    }
+    case 'serverStats': {
+      const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+      setMp({ serverStats: { online: n(msg.online), inGame: n(msg.inGame), rooms: n(msg.rooms), playing: n(msg.playing) } });
       return;
     }
     case 'roomList':

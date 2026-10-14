@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+
+/** 应用版本号 = package.json 的 version，经 define 注入为全局常量 __APP_VERSION__（声明见 src/vite-env.d.ts；Vitest 同样生效） */
+const APP_VERSION = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 /**
  * 生产构建分包（不改变加载行为：这些块都是入口的静态依赖，与原先一样在首屏一并加载，只是拆成多个文件便于缓存与并行下载）：
@@ -25,8 +29,11 @@ function manualChunks(id: string): string | undefined {
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   build: {
-    // 分包后主包约 0.6 MB（界面为主，中文文案多）；超过 800 kB 时再提示
+    // 分包后主包约 0.79 MB（界面为主，中文文案多；DotaPedia、新秀抽卡、选秀、生涯总结按需加载）；超过 800 kB 时再提示，优先把低频页面改为按需加载
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: { manualChunks },

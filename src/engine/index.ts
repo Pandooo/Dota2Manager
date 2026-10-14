@@ -7,7 +7,7 @@ export * from './game';
 export * from './save';
 export {
   tierOf, tierIndex, ladderMult, ageOf, effectiveAttr, effectivePower, playerTier, playerRating, overallRating,
-  marketValue, isAvailable,
+  marketValue, isAvailable, regionOfNationality,
 } from './player';
 // 位置（第十三波：副位置 / 四五号位互换 / 真实生涯位置；只读查询，位置同步由引擎在赛季初与读档时自动完成）
 export {
@@ -17,7 +17,7 @@ export {
 export type { RoleFit } from './roles';
 export {
   getPlayerTeam, teamPlayers, lineupPlayers, benchPlayers, autoLineup, validateLineup, setLineupSlot,
-  teamRating, teamInsight, rosterRoom, rosterSize, rosterHardRoom, rosterSigningBlock, rosterOverflowNotice, rosterSigningNote,
+  teamRating, teamInsight, rosterRoom, rosterSize, rosterHardRoom, rosterSigningBlock, rosterOverflowNotice, rosterSigningNote, rosterOverCap, rosterOverCapNotice,
   rankTeamsByRating, getCoach, activeTeams,
 } from './team';
 export { scrimMultiplier, overRosterBenchPenalty } from './growth';
@@ -29,8 +29,9 @@ export type { DraftSuggestion } from './draft';
 export { honorLuck, expectedRank } from './honor';
 export {
   registerForTournament, unregisterFromTournament, computePlayerEntryStatus, playerTournamentInRound, roundCounts,
-  seasonStandings, isFillerCup,
+  seasonStandings, isFillerCup, withdrawPenaltyOf,
 } from './schedule';
+export type { WithdrawPenalty } from './schedule';
 export { readySeries, playerNextSeries, isTeamEliminated, prizeForPlacement } from './tournament';
 export { econIndex, econ, roundWageBill, extraTrainingCost, scrimCost } from './economy';
 export {
@@ -47,10 +48,24 @@ export {
   releasePlayer, releasePlayers, releaseCompensation, renewContract, generateTempSubCandidates, tempSubCost, hireTempSub,
   signingFee, aiAcceptChance, importanceInTeam,
 } from './market';
+// 选手交易（现金 + 本队选手抵价求购；玩家操作 tradeForPlayer 为白名单 RPC，tradeValuation / tradeQuote 为界面只读估值）
+export { tradeForPlayer, tradeValuation, tradeQuote, tradeOfferBlock } from './trade';
+export type { TradeItem, TradeValuation, TradeQuote } from './trade';
+// 新秀选秀（2026-10-14 起默认关闭：CONFIG.draft.enabled；保留一个版本供旧存档查看往届选秀）
 export {
   rookieDraftRecord, rookieDraftHistory, rookieTierProbabilities, nextRookieSsrChance, lotteryOddsTable, rookieSlotSalary,
   rookieContractSeasons, postDraftRosterLimit, draftedRookiesOf, draftedRookieReleaseBlock, releaseDraftedRookie,
 } from './rookieDraft';
+// 新秀抽卡（2026-10-14 取代选秀）：玩家操作 gachaPull / gachaDiscard（白名单 RPC）+ UI 只读查询
+export {
+  gachaPull, gachaDiscard, gachaPullBlock, gachaDiscardBlock, gachaDiscardRefund, gachaPrice, gachaPriceForTi, gachaCost, gachaView, gachaLog,
+  gachaHistory, gachaTierProbabilities, gachaPityThreshold, currentGachaPool, teamSeasonPulls, pullLabel, GACHA_KIND_LABEL,
+  gachaRookieWageCap, gachaRookieSalary, gachaOverCapAfter,
+} from './gacha';
+export type { GachaView, GachaTierView, GachaPullResult } from './gacha';
+// 名人堂（请神原型；只读查询：DotaPedia 名人堂页、选手页的请神关系。入选由引擎在赛季结算时自动完成）
+export { HOF_SOURCE_LABEL, hallOfFameRows, hofMember, livingSummonsOf, isSummonable } from './hallOfFame';
+export type { HallOfFameRow } from './hallOfFame';
 export { resolveDecision } from './events';
 export { allPatches, patchByVersion, patchAt } from './patches';
 export { tiYear, currentRound, regularRoundCount, roundKindForPlayer } from './calendar';
@@ -60,7 +75,8 @@ export {
   teamBuildingCost, teamBuildingDoneThisRound, activeListing, listedPlayers, listingPriceRange, listingOffers,
   listPlayerForTransfer, listPlayersForTransfer, unlistPlayer, listingBidOutlook, processTransferListings,
   LISTING_RULE_VERSION, listingRoundsPerSeason, listingDurationRounds, listingDurationLabel, listingProgress, migrateListing,
-  migrateTransferListings, listingStaleFactor, listingRoundStatus, listingClock, listingListedAtLabel,
+  migrateTransferListings, listingStaleFactor, listingRoundStatus, listingClock, listingListedAtLabel, gachaResaleLockLeft,
+  gachaResaleLockText,
 } from './squadOps';
 export type { RaisePreview, ListingBidOutlook, ListingProgress, ListingRoundStatus } from './squadOps';
 // 薪资情绪（只导出定性信息；隐藏的预期薪资数值不在界面展示）
@@ -84,6 +100,9 @@ export type {
 } from './trainingLog';
 export { FORM_SOURCE, FORM_LABELS, formLabel, seasonFormOf, seasonFormModifier, peakWindow } from './form';
 export type { FormLabel } from './form';
+// 荣誉势头（第十四波；只读查询，回合结算由 season.ts 自动完成）
+export { MOMENTUM_LABELS, momentumLabel, teamMomentumMult, teamMomentumView, teamYoyShift } from './momentum';
+export type { MomentumLabel, TeamMomentumView } from './momentum';
 // 赛季自主成长（第九波：只导出定性的成长趋势，隐藏的潜力上限不在界面展示）
 export { developmentOutlook, GROWTH_OUTLOOKS, GROWTH_OUTLOOK_HINT } from './development';
 export type { GrowthOutlook } from './development';
@@ -103,7 +122,7 @@ export type {
 } from './legacy';
 // DotaPedia 百科（stats.ts 记录 / pedia.ts 查询；纯只读查询，UI 在渲染时调用；数据为全局公开数据，多人模式各座位视图一致）
 export {
-  pediaDashboard, pediaTeamPage, pediaPlayerPage, pediaTournaments, pediaTournament, pediaHeroStats, pediaHeroTrend,
+  pediaDashboard, pediaTeamPage, pediaPlayerPage, pediaHasPlayer, pediaTournaments, pediaTournament, pediaHeroStats, pediaHeroTrend,
   pediaSearch, pediaLegacyBoard, pediaTeamLegacy, pediaPlayerStanding, pediaPlayerStandingBoard, pediaTiChampions,
   pediaRecords, pediaSeasons, pediaPreGameOf, majorSeasonOf, PEDIA_RECORD_LABEL, PEDIA_TIERS,
 } from './pedia';

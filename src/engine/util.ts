@@ -9,6 +9,14 @@ export const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 export const avg = (arr: number[]) => (arr.length ? sum(arr) / arr.length : 0);
 export const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 
+/**
+ * 按 id 取记录（只认自有属性）：RPC 参数可能是 '__proto__'、'constructor' 等原型上的键，
+ * 直接 state.players[id] 会拿到内置对象并绕过「找不到」的判断。
+ */
+export function ownEntry<T>(rec: Record<string, T> | null | undefined, id: unknown): T | undefined {
+  return rec && typeof id === 'string' && Object.prototype.hasOwnProperty.call(rec, id) ? rec[id] : undefined;
+}
+
 /** 生成状态内唯一 id */
 export function nextId(state: GameState, prefix: string): string {
   state.idCounter += 1;

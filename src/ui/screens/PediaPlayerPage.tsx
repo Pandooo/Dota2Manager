@@ -1,14 +1,14 @@
-// DotaPedia · 选手词条（仿 Liquipedia）：左侧章节（概述 / 历史地位 / 生涯数据 / 成就 / 战队履历 / 赛季数据 / 常用英雄），
-// 右侧信息框（ID、本名、国籍、出生年份 / 年龄、位置、当前战队、等级与巅峰、状态、奖金）。只读。
+// DotaPedia · 选手词条（仿 Liquipedia）：左侧章节（概述 / 名人堂与请神 / 历史地位 / 生涯数据 / 成就 / 战队履历 / 赛季数据 / 常用英雄），
+// 右侧信息框（ID、本名、国籍、出生年份 / 年龄、位置、当前战队、等级与巅峰、状态、抽卡出身 / 请神原型 / 名人堂、奖金）。只读。
 import { useMemo, type ReactNode } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
-import { POSITION_LABEL, POSITION_SHORT, TOURNAMENT_TIER_LABEL, pediaPlayerPage, tiYear } from '../../engine';
+import { GACHA_KIND_LABEL, HOF_SOURCE_LABEL, POSITION_LABEL, POSITION_SHORT, TOURNAMENT_TIER_LABEL, pediaPlayerPage, tiYear } from '../../engine';
 import type { PediaPlayerPage as PlayerPage, TournamentTier } from '../../engine';
-import { Card, EmptyState, Gold, PosBadge, TierBadge, altPositionsText, cx } from '../components/common';
+import { Badge, Card, EmptyState, Gold, PosBadge, TierBadge, altPositionsText, cx } from '../components/common';
 import { Chip, Flag, countryName } from '../components/SquadShared';
 import { TourTierBadge } from '../components/TourShared';
 import {
-  InfoHead, InfoRow, Infobox, PHero, PSection, PStat, PTeam, PTour, PediaCrumbs, PediaPageLayout, PediaTitle, PediaToc,
+  InfoHead, InfoRow, Infobox, PHero, PPlayer, PSection, PStat, PTeam, PTour, PediaCrumbs, PediaPageLayout, PediaTitle, PediaToc,
   fmt1, fmtKda, fmtPct, placeCellClass, placeClass, safe, wdl,
 } from '../components/PediaKit';
 import { CareerTimeline, MeterBar, PLineChart, PartBars, type ChartDatum } from '../components/PediaCharts';
@@ -27,8 +27,10 @@ export default function PediaPlayerPage({ id }: { id: string }) {
       </div>
     );
   }
+  const hof = !!(page.summon || page.hallOfFame);
   const toc = [
     { id: 'pp-overview', label: '概述' },
+    ...(hof ? [{ id: 'pp-hof', label: '名人堂与请神' }] : []),
     { id: 'pp-standing', label: '历史地位' },
     { id: 'pp-career', label: '生涯数据' },
     { id: 'pp-achievements', label: '成就' },
@@ -67,6 +69,11 @@ export default function PediaPlayerPage({ id }: { id: string }) {
             <PSection id="pp-overview" title="概述">
               <Overview page={page} />
             </PSection>
+            {hof && (
+              <PSection id="pp-hof" title="名人堂与请神">
+                <HallOfFameSection page={page} />
+              </PSection>
+            )}
             <PSection id="pp-standing" title="历史地位" right={<span>含开局前的现实 TI 履历</span>}>
               <Standing page={page} />
             </PSection>
@@ -108,7 +115,7 @@ function Overview({ page }: { page: PlayerPage }) {
   bits.push(
     <span key="a">
       <b className="text-ink">{page.handle}</b>
-      {page.name ? `（${page.name}）` : ''}是一名{page.nationality ? `来自${countryName(page.nationality)}的` : ''}
+      {page.name ? `（${page.name}）` : ' '}是一名{page.nationality ? `来自${countryName(page.nationality)}的` : ''}
       {page.position ? POSITION_LABEL[page.position].replace(/^\d号位 /, '') : ''}选手，
       {page.teamName && page.status === 'active' ? `现效力于 ${page.teamName}${page.statusLabel !== '现役' ? `（${page.statusLabel}）` : ''}` : page.statusLabel}。
     </span>,
@@ -515,7 +522,7 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
         )}
       </InfoRow>
       <InfoRow label="出生">
-        {sp?.birthYear ? `${sp.birthYear} 年` : '—'}
+        {page.birthYear ? `${page.birthYear} 年` : '—'}
         {page.age !== null && <span className="ml-1 text-xs text-mute">（{page.age} 岁）</span>}
       </InfoRow>
       <InfoRow label="位置">
@@ -544,7 +551,38 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
         {page.rating !== null ? fmt1(page.rating) : '—'}
         {page.peakRating !== null && page.peakRating > 0 && <span className="ml-2 text-xs text-mute">巅峰 {fmt1(page.peakRating)}</span>}
       </InfoRow>
-      <InfoRow label="来源">{page.isReal === null ? '—' : page.isReal ? '现实选手' : '程序生成'}</InfoRow>
+      <InfoRow label="来源">{page.isReal === null ? '—' : page.isReal ? '现实选手' : page.summon ? '程序生成（请神新秀）' : '程序生成'}</InfoRow>
+      {page.gacha && (
+        <InfoRow label="抽卡出身">
+          <span className="inline-flex flex-wrap items-center gap-1 text-xs">
+            TI{page.gacha.ti} <TierBadge tier={page.gacha.tier} /> {GACHA_KIND_LABEL[page.gacha.kind]}
+            {page.gacha.placed ? (
+              <span className="text-mute">
+                （未被抽走，按真实出道去向{page.gacha.teamId ? <>加盟 <PTeam id={page.gacha.teamId} name={page.gacha.teamName ?? undefined} tag /></> : '进入自由市场'}）
+              </span>
+            ) : (
+              page.gacha.teamId && <span className="text-mute">· <PTeam id={page.gacha.teamId} name={page.gacha.teamName ?? undefined} tag /></span>
+            )}
+          </span>
+        </InfoRow>
+      )}
+      {page.summon && (
+        <InfoRow label="请神原型">
+          {page.summon.protoHasPage
+            ? <PPlayer id={page.summon.protoId} handle={page.summon.protoHandle} className="text-[#c39cff]" />
+            : <span className="text-[#c39cff]">{page.summon.protoHandle}</span>}
+        </InfoRow>
+      )}
+      {page.hallOfFame && (
+        <InfoRow label="名人堂">
+          {page.hallOfFame.source === 'seed'
+            ? <span className="text-gold">{HOF_SOURCE_LABEL.seed}</span>
+            : page.hallOfFame.source === 'backfill'
+              ? <span title="开局时补录：开局届之前的真实数据中达到过 SS / SSR">TI{page.hallOfFame.ti} · {HOF_SOURCE_LABEL.backfill}</span>
+              : <span title={`本局 TI${page.hallOfFame.ti} 赛季结算时为 SS / SSR`}>TI{page.hallOfFame.ti} {HOF_SOURCE_LABEL.inducted}</span>}
+          {page.hallOfFame.summons.length > 0 && <span className="ml-1 text-xs text-[#c39cff]">· 请神新秀 {page.hallOfFame.summons.length}</span>}
+        </InfoRow>
+      )}
       <InfoHead>生涯</InfoHead>
       <InfoRow label="出场">
         {page.totals.games} 局<span className="ml-1 text-xs text-mute">（{page.totals.seasonsActive} 季）</span>
@@ -568,5 +606,66 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
         <Gold value={page.totals.prize} />
       </InfoRow>
     </Infobox>
+  );
+}
+
+/** 名人堂与请神：请神新秀 → 原型；名人堂成员 → 入选信息与在役的请神新秀 */
+function HallOfFameSection({ page }: { page: PlayerPage }) {
+  const s = page.summon;
+  const h = page.hallOfFame;
+  return (
+    <div className="space-y-3 text-sm">
+      {s && (
+        <div className="rounded-lg border border-[#7a4fb5]/40 bg-[#7a4fb5]/10 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge className="bg-[#7a4fb5]/25 text-[#c39cff]">请神新秀</Badge>
+            <span>原型：</span>
+            {s.protoHasPage
+              ? <PPlayer id={s.protoId} handle={s.protoHandle} className="text-[#c39cff]" />
+              : <span className="font-medium text-[#c39cff]">{s.protoHandle}</span>}
+            <span className="text-xs text-mute">· TI{s.ti} 出道</span>
+          </div>
+          <div className="mt-1 text-xs leading-relaxed text-mute">
+            出道时复制原型的出道能力、天赋与位置；之后每个赛季的成长走势复制原型的生涯（生涯第 k 年对应原型生涯第 k 年），原型的数据结束后按普通选手的年龄 / 潜力规律。
+          </div>
+        </div>
+      )}
+      {h && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {h.source === 'seed'
+              ? <Badge className="bg-gold/15 text-gold">DotA1 时代传奇</Badge>
+              : h.source === 'backfill'
+                ? (
+                  <Badge className="bg-info/15 text-[#b9d9ff]" title="开局时补录：开局届之前的真实数据中达到过 SS / SSR 的真实选手，登记首次达到的届次">
+                    真实数据补录 · TI{h.ti} 达到 SS / SSR
+                  </Badge>
+                )
+                : <Badge className="bg-panel-3 text-ink" title={`本局 TI${h.ti} 赛季结算时为 SS / SSR`}>TI{h.ti} {HOF_SOURCE_LABEL.inducted}</Badge>}
+            <span
+              className="inline-flex items-center gap-1 text-xs text-mute"
+              title="名人堂按其生涯轨迹登记的等级（真实选手按真实历史、巅峰只取开局届 / 入选届及之前的数据，在役时随本局等级更新；伍声（2009）按登记数据），请神卡按其中的出道等级匹配；与右侧信息框中本局的天梯等级、巅峰等级是两套口径，可能不同"
+            >
+              名人堂登记：出道 <TierBadge tier={h.debutTier} /> · 生涯巅峰 <TierBadge tier={h.peakTier} />
+            </span>
+            <span className="text-xs text-mute">{h.summonable ? `可作为 ${h.debutTier} 级请神卡的原型` : '请神新秀入选，不再作为原型'}</span>
+          </div>
+          {h.summonable && h.summons.length === 0 && <div className="text-xs text-faint">目前联赛中没有他的请神新秀。</div>}
+          {h.summonable && h.summons.length > 0 && (
+            <div>
+              <div className="mb-1 text-xs text-mute">在役的请神新秀（{h.summons.length}）</div>
+              <div className="flex flex-wrap gap-1.5">
+                {h.summons.map((x) => (
+                  <span key={x.id} className="inline-flex items-center gap-1 rounded border border-[#7a4fb5]/40 bg-[#7a4fb5]/10 px-1.5 py-0.5 text-xs">
+                    <PPlayer id={x.id} handle={x.handle} />
+                    {x.teamId ? <PTeam id={x.teamId} name={x.teamName ?? undefined} tag /> : <span className="text-faint">自由选手</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

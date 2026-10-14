@@ -8,8 +8,10 @@ import {
 } from './calendar';
 import { allPatches, applyPatch, mapPatchesToRounds, patchAt, patchByVersion } from './patches';
 import { generateHeroMeta } from './heroes';
-import { buildSeasonTournaments, setupTiPhase, startRoundTournaments } from './schedule';
+import { buildSeasonTournaments, refreshSeasonInvites, setupTiPhase, startRoundTournaments } from './schedule';
 import { runRookieDraft } from './rookieDraft';
+import { aiGachaPulls, closeGachaPool, gachaHoldsRealRookie, releaseRealRookieCards, startGachaSeason } from './gacha';
+import { ensureHallOfFame, inductHallOfFame } from './hallOfFame';
 import { expireOffers, generateAiOffers, isTransferWindowOpen, processContractExpiry, refreshFreeAgents } from './market';
 import { processTransferListings } from './squadOps';
 import { aiEnsureRosters, aiTrainRound, aiTransferWindow } from './ai';
@@ -27,12 +29,13 @@ import { prizePoolLabel } from './revenue';
 import { ageOf, isAvailable, playerRating, playerTier, tickModifiers, tierIndex } from './player';
 import { adjustLoyalty, agePlayersAtSeasonEnd, processRetirements, roundLoyaltyUpdate, sessionTrainOptions, trainTeam } from './growth';
 import { rollSeasonForm } from './form';
+import { rollTeamMomentum, updateTeamMomentumRound } from './momentum';
 import { runSeasonDevelopment } from './development';
 import { syncSeasonRoles } from './roleSync';
 import { playsNaturally } from './roles';
 import { expectedRank } from './honor';
 import { addNews, pushPopup } from './news';
-import { formatGold, formatRank, nextId, placementPercentile } from './util';
+import { formatGold, formatRank, nextId, ownEntry, placementPercentile } from './util';
 import { pendingExtraSessionCost, recordTraining, snapshotSquad } from './trainingLog';
 import { newsroomRoundEnd, newsroomRoundStart } from './newsroom';
 import { fireDueClubScandals, rollClubScandals } from './scandal';
@@ -88,7 +91,7 @@ export function snapshotHistory(state: GameState): void {
  * 无法参加该赛事的首发（签证/伤病、其他赛事的临时替补）也视为空位。
  */
 export function fillEmptyLineupSlots(state: GameState, teamId: string, tournamentId?: string | null): void {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return;
   team.lineup ??= { C: null, M: null, O: null, SS: null, HS: null };
   const seen = new Set<string>();
@@ -404,9 +407,10 @@ function preparePlayerTournament(state: GameState, idx: number): void {
  * season = {ti, year, startDate, tiStartDate, rounds(calendar.buildRounds), registeredTournamentIds: [], extraTrainingsBought: 0}；
  * roundIndex=0, phase='preseason', currentDate=startDate；
  * 版本映射到回合（round.patchVersions），应用赛季开始前（含当天）应生效的版本；
- * 所有战队 points=0；新秀选秀（rookieDraft.runRookieDraft：本赛季登场的真实新秀 + 程序生成新秀，所有战队按顺位自动选人，
- * 落选者进入自由市场；新游戏第一个赛季同样举行）；market.refreshFreeAgents；
- * shuffle.offseasonShuffle（休赛期转会潮，第二个赛季起）；ai.aiTransferWindow('preseason')；ai.aiEnsureRosters；form.rollSeasonForm（赛季状态 + 隐藏趋势）；schedule.buildSeasonTournaments；
+ * 所有战队 points=0；新秀卡池（gacha.startGachaSeason：本届真实新秀 + 请神 + 虚构新秀，2026-10-14 起取代选秀；
+ * CONFIG.draft.enabled 时改为举行选秀 rookieDraft.runRookieDraft）；market.refreshFreeAgents；
+ * shuffle.offseasonShuffle（休赛期转会潮，第二个赛季起）；ai.aiTransferWindow('preseason')；ai.aiEnsureRosters；
+ * momentum.rollTeamMomentum（荣誉势头：本季初荣誉与同比，第十四波）；form.rollSeasonForm（赛季状态 + 隐藏趋势）；schedule.buildSeasonTournaments；
  * 免费训练状态重置；新闻（赛季开始、赛程公布、受邀赛事）；
  * 回合 0 同样滚动随机事件 / AI 报价 / 离队申请（与 enterRound 一致；honorStart/goldStart 取事件之前的值，
  * 因此赛季初事件计入本赛季的荣誉/资金变化）。事件可能导致解散（state.gameOver）。
@@ -455,13 +459,21 @@ export function startSeason(state: GameState, ti: number): void {
   syncSeasonRoles(state);
   // 新俱乐部涌现（第十波 #2，clubs.ts）：现实中在本届首次出现的真实俱乐部（及偶尔的虚构新组织）在选秀与转会潮之前成立并签回当届真实选手
   foundSeasonClubs(state);
-  // 新秀选秀（退役/年龄/合同已在 TI 结算中处理；多人模式全局一次，弹窗按座位）→ 自由选手 → AI 转会 → 补齐阵容 → 赛程
-  runRookieDraft(state);
-  for (const [id, debut] of Object.entries(state.futureRookies)) if (debut < ti) delete state.futureRookies[id];
+  // 新秀（退役/年龄/合同已在 TI 结算中处理；多人模式全局一次）→ 自由选手 → AI 转会 → 补齐阵容 → 赛程。
+  // 2026-10-14 起新秀只经由抽卡进入联赛（gacha.ts）：建本赛季卡池（本届真实新秀 + 请神 + 虚构新秀，名人堂为请神原型），
+  // 人类玩家在赛季初即可抽卡，AI 战队在第 1 回合开始前（enterRound）抽；选秀保留一个版本（CONFIG.draft.enabled，默认关闭）
+  ensureHallOfFame(state);
+  if (CONFIG.draft.enabled) runRookieDraft(state);
+  else startGachaSeason(state);
+  // 错过登场时机的真实新秀条目清理（仍在本赛季卡池中待抽的除外：抽中或卡池关闭时才进入本局）
+  for (const [id, debut] of Object.entries(state.futureRookies)) {
+    if (debut < ti && !gachaHoldsRealRookie(state, id)) delete state.futureRookies[id];
+  }
   // 教练供给（第九波 #3，coaches.ts）：随选秀向教练市场引入一批教练并保证可签约数量（在 AI 季前转会之前）
   seasonCoachSupply(state);
   refreshFreeAgents(state);
-  // 本赛季成立的真实俱乐部：签回本届登场、被 AI 选中或落选的真实新秀（第十波 #2）
+  // 本赛季成立的真实俱乐部：签回本届登场、被 AI 选中或落选的真实新秀（第十波 #2；抽卡模式下真实新秀第 1 回合前才离池，
+  // 届时 enterRound 再调用一次）
   signFoundedClubRookies(state);
   // 休赛期转会潮（shuffle.ts；新游戏第一个赛季不触发）：大规模换人在前，AI 季前窗口只做补员/还债/教练等收尾
   const shuffled = offseasonShuffle(state) !== null;
@@ -471,6 +483,8 @@ export function startSeason(state: GameState, ti: number): void {
   aiEnsureRosters(state);
   // AI 转会窗口会挑走自由市场上的大部分可用选手：再补一次，保证玩家赛季初也有可签的自由选手
   refreshFreeAgents(state);
+  // 荣誉势头（第十四波，momentum.ts）：记录本季初荣誉、按同比计算全队赛季状态均值的平移（须在 rollSeasonForm 之前）
+  rollTeamMomentum(state);
   // 赛季状态（form.ts）：隐藏趋势更新 + 全员赛季状态修正（持续到 TI 回合结束）。放在 AI 季前转会之后，季前转会不受本季状态影响
   rollSeasonForm(state);
   buildSeasonTournaments(state);
@@ -506,7 +520,10 @@ function seasonStartNews(state: GameState): void {
     'season',
     `TI${s.ti} 赛季开始`,
     `${s.startDate} 起，新赛季正式打响，终点是 ${s.tiStartDate} 开幕的 ${tiName}。`
-      + `本赛季共 ${s.rounds.length - 1} 个大回合（含 TI 预选与 TI 正赛）。新秀选秀已结束，转会窗口现已开放。`,
+      + `本赛季共 ${s.rounds.length - 1} 个大回合（含 TI 预选与 TI 正赛）。`
+      + (CONFIG.draft.enabled
+        ? '新秀选秀已结束，转会窗口现已开放。'
+        : '转会窗口现已开放，本赛季新秀卡池同时开放（真实新秀、请神新秀与虚构新秀；真实新秀只能在第 1 回合开始前抽，之后按真实出道去向加盟；转会窗口锁定时卡池关闭）。'),
     true,
   );
   const ts = (state.seasonTournamentIds ?? [])
@@ -560,7 +577,18 @@ export function enterRound(state: GameState, idx: number): void {
 
   for (const v of round.patchVersions) applyPatch(state, v);
 
-  if (round.phase === 'regular' && idx === midseasonRoundIndex(state)) aiTransferWindow(state, 'midseason');
+  // 新秀抽卡（gacha.ts）：第 1 回合开始前，赛季初（人类玩家可先抽）没有被抽走的真实新秀卡离池、按真实出道去向加盟（出道战队为人类玩家时
+  // 发待决事件；卡池同等级补入请神 / 虚构卡），本赛季成立的真实俱乐部签回其余本届登场的新秀，然后 AI 战队按空位与资金自动抽卡；
+  // 赛季中期再抽一次（中期转会窗口之前）；进入 TI 预选赛（转会锁定）时卡池关闭
+  if (round.phase === 'regular' && idx === 1) {
+    if (releaseRealRookieCards(state) > 0) signFoundedClubRookies(state);
+    aiGachaPulls(state, 'opening');
+  }
+  if (round.phase === 'regular' && idx === midseasonRoundIndex(state)) {
+    if (idx !== 1) aiGachaPulls(state, 'midseason');
+    aiTransferWindow(state, 'midseason');
+  }
+  if (round.phase === 'ti_qualifier') closeGachaPool(state);
 
   // 俱乐部全员假赛曝光（scandal.ts）：随机事件之前；单机玩家俱乐部被禁赛 → 游戏结束
   if (round.phase === 'regular') {
@@ -582,7 +610,8 @@ export function enterRound(state: GameState, idx: number): void {
 /**
  * 结束当前回合：玩家赛事必须已结束（由 getAdvanceBlockers 保证）；本回合所有未结束赛事 simulateTournamentToEnd + finishTournament；
  * 未使用的免费训练自动按当前焦点执行（休赛回合）；ai.aiTrainRound；economy.payRoundSalaries；player.tickModifiers；
- * growth.roundLoyaltyUpdate；market.expireOffers；history.honor/gold 快照。
+ * growth.roundLoyaltyUpdate；market.expireOffers；momentum.updateTeamMomentumRound（荣誉环比，第十四波）；
+ * schedule.refreshSeasonInvites（赛季中补充邀请，第十四波）；history.honor/gold 快照。
  */
 export function endRound(state: GameState): void {
   const idx = state.roundIndex;
@@ -642,6 +671,10 @@ export function endRound(state: GameState): void {
     const t = state.tournaments[id];
     if (t && t.roundIndex < idx) compactTournament(state, t, true);
   }
+  // 荣誉势头（第十四波）：本回合全部荣誉变化之后更新环比（全部战队）
+  updateTeamMomentumRound(state);
+  // 赛季中补充邀请（第十四波）：按本赛季积分榜 / 荣誉为尚未开赛的常规赛事补邀（人类战队收到总览通知 + 新闻）
+  if (!state.gameOver) refreshSeasonInvites(state);
   forEachSeat(state, () => {
     snapshotHistory(state);
     snapshotSquad(state);
@@ -800,6 +833,8 @@ export function settleSeason(state: GameState): void {
   recordLegacySeasonAll(state);
   // DotaPedia（stats.ts）：全部战队的赛季末快照（荣誉 / 排名 / 阵容 / 教练）与选手巅峰，退役之前
   recordPediaSeasonEnd(state);
+  // 名人堂（hallOfFame.ts，2026-10-14）：本赛季结算时为 SS / SSR 的在役选手入选（退役之前），下个赛季起可作为请神原型
+  inductHallOfFame(state, ti);
   // 俱乐部使命（第十波 #3，missions.ts）：集齐巅峰阵容的俱乐部夺得 TI → 记录与新闻（退役之前）
   missionSeasonEnd(state, tiT);
 

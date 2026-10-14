@@ -7,6 +7,7 @@ import heroesJson from './heroes.json';
 import playerIndexJson from './playerIndex.json';
 import trajectoriesJson from './trajectories.json';
 import coachIndexJson from './coachIndex.json';
+import hallOfFameJson from './hallOfFame.json';
 import s1 from './tournaments/season1.json';
 import s2 from './tournaments/season2.json';
 import s3 from './tournaments/season3.json';
@@ -79,6 +80,38 @@ export function getTrajectories(): Record<string, PlayerTrajectory> {
 /** 某名真实选手的生涯轨迹（无数据返回 undefined） */
 export function getTrajectory(playerId: string): PlayerTrajectory | undefined {
   return Object.prototype.hasOwnProperty.call(TRAJECTORIES, playerId) ? TRAJECTORIES[playerId] : undefined;
+}
+
+/**
+ * 名人堂初始成员（src/data/hallOfFame.json，2026-10-14 用户确认的 DotA1 时代传奇）：
+ * source = roster：真实阵容数据中的选手（id 为规范 slug），以其真实生涯轨迹为请神原型；
+ * source = seed：不在任何阵容数据中的传奇，带合成轨迹所需的数值。
+ */
+export interface HallOfFameSeed {
+  id: string;
+  handle: string;
+  era: 'dota1';
+  source: 'roster' | 'seed';
+  name?: string;
+  nationality?: string;
+  birthYear?: number;
+  position?: string;
+  debutTier?: string;
+  peakTier?: string;
+  /** 合成轨迹：出道战力 → 生涯第 peakYear 年巅峰 → 生涯第 declineFromYear 年起衰退 */
+  power?: { debut: number; peak: number; peakYear: number; declineFromYear: number };
+  talent?: number;
+  insight?: number;
+  resilience?: number;
+  signatureHeroes?: string[];
+  /** 出道年龄（缺省 CONFIG.gacha.seedTrajectory.seedDebutAge） */
+  debutAge?: number;
+}
+const HALL_OF_FAME_SEEDS = ((hallOfFameJson as unknown as { seeds?: HallOfFameSeed[] }).seeds ?? []) as HallOfFameSeed[];
+
+/** 名人堂初始成员（只读） */
+export function getHallOfFameSeeds(): HallOfFameSeed[] {
+  return HALL_OF_FAME_SEEDS;
 }
 
 /** 真实教练索引条目（第九波教练供给；scripts/build-coach-index.ts 由 rosters/ti*.json 生成） */

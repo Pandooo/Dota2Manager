@@ -6,7 +6,9 @@
 //   2. 赛季状态：战斗力 × N(1 + 趋势 × trendWeight, σ) 夹在 [0.93, 1.07]，σ 随韧性降低、对年轻选手放大；
 //      以 Modifier（source「赛季状态」，roundsLeft = 本赛季大回合数）存储，TI 回合结束时自然到期。
 // 赛季状态只影响有效战斗力（effectivePower），不改变基础属性。
+// 荣誉势头（第十四波，momentum.ts）：战队的荣誉同比平移全队赛季状态的均值（teamYoyShift），环比乘子在 team.teamRating 读取。
 import { CONFIG } from './config';
+import { teamMomentumView, teamYoyShift } from './momentum';
 import { addNews } from './news';
 import { addModifier, ageOf, effectiveAttr } from './player';
 import type { Rng } from './rng';
@@ -140,11 +142,14 @@ export function clearSeasonForm(p: Player): void {
   p.modifiers = p.modifiers.filter((m) => m.source !== FORM_SOURCE);
 }
 
-/** 为一名选手掷本赛季状态（替换旧的赛季状态修正器），返回倍数 */
+/**
+ * 为一名选手掷本赛季状态（替换旧的赛季状态修正器），返回倍数。
+ * 均值 = 1 + 趋势 × trendWeight + 所属战队的荣誉同比平移（momentum.teamYoyShift；自由选手 / 无记录 = 0），随机数用量不变。
+ */
 export function applySeasonForm(state: GameState, p: Player, rng: Rng, rounds = seasonFormRounds(state)): number {
   const F = CONFIG.form;
   clearSeasonForm(p);
-  const mean = 1 + formTrendOf(p) * F.trendWeight;
+  const mean = 1 + formTrendOf(p) * F.trendWeight + teamYoyShift(p.teamId ? state.teams[p.teamId] : null);
   const raw = rng.normal(mean, formSigma(state, p));
   const value = round3(clamp(Number.isFinite(raw) ? raw : 1, F.range[0], F.range[1]));
   addModifier(state, p, { source: FORM_SOURCE, attr: 'power', kind: 'mul', value, roundsLeft: Math.max(1, Math.round(rounds)) });
@@ -198,9 +203,15 @@ function seasonFormNews(state: GameState): void {
       else continue;
       mentioned.push(p.id);
     }
+    const mv = teamMomentumView(state, team.id);
+    const momentumText = mv.prevSeasonStart !== null
+      ? `荣誉势头：上季初 ${Math.round(mv.prevSeasonStart)} → 本季初 ${Math.round(mv.seasonStart ?? team.honor)}，全队状态均值 ${pctText(1 + mv.yoy)}；`
+        + '赛季中荣誉的升降还会小幅影响战队评分。'
+      : '荣誉势头：首个赛季暂无同比，赛季中荣誉的升降会小幅影响战队评分。';
     const body = (good.length ? `状态向好：${good.join('、')}。` : '')
       + (bad.length ? `状态不佳：${bad.join('、')}。` : '')
       + (!good.length && !bad.length ? '全队状态平稳。' : '')
+      + momentumText
       + '赛季状态作用于本赛季的有效战斗力，TI 结束后重新评估。';
     // 本队内部简报：显式关联战队/选手；多人模式下只对该座位可见（避免 N 个座位互相刷屏）
     addNews(state, 'season', `${team.name} 新赛季状态`, body, false, {

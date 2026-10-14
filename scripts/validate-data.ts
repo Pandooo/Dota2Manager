@@ -166,6 +166,61 @@ for (const ti of rosterTis) {
   for (const org of brandOrgs()) for (const id of org.teamIds) if (!known.has(id)) err(`branding ${org.id}: 战队 id ${id} 不在任何 roster 中`);
 }
 
+// 名人堂初始成员（src/data/hallOfFame.json，2026-10-14 抽卡回归）：id 不重复；source = roster 的 id 必须是真实选手且有生涯轨迹
+// （handle 与 playerIndex 一致）；source = seed 的 id 不能与任何真实选手重名（可以是真实教练：如 2009 在阵容数据中是教练，
+// 选手与教练是不同的命名空间），等级合法、合成轨迹数值完整、招牌英雄存在
+{
+  type HofSeed = {
+    id?: string; handle?: string; era?: string; source?: string; name?: string; nationality?: string; birthYear?: number;
+    position?: string; debutTier?: string; peakTier?: string; talent?: number; insight?: number; resilience?: number;
+    power?: { debut?: number; peak?: number; peakYear?: number; declineFromYear?: number }; signatureHeroes?: string[];
+  };
+  const TIER_LIST = ['C', 'B', 'A', 'S', 'SS', 'SSR'];
+  const hof = read<{ seeds?: HofSeed[] }>('hallOfFame.json');
+  const seeds = Array.isArray(hof.seeds) ? hof.seeds : [];
+  if (!seeds.length) err('hallOfFame.json: seeds 为空');
+  const index = read<PlayerIndexEntry[]>('playerIndex.json');
+  const byId = new Map(index.map((e) => [e.id, e]));
+  const traj = read<Record<string, PlayerTrajectory>>('trajectories.json');
+  const seen = new Set<string>();
+  for (const s of seeds) {
+    const tag = `hallOfFame ${s?.id ?? '?'}`;
+    if (!s?.id || typeof s.id !== 'string') { err(`${tag}: 缺少 id`); continue; }
+    if (seen.has(s.id)) err(`${tag}: id 重复`);
+    seen.add(s.id);
+    if (!s.handle) err(`${tag}: 缺少 handle`);
+    if (s.era !== 'dota1') err(`${tag}: era 应为 dota1`);
+    if (s.source === 'roster') {
+      const e = byId.get(s.id);
+      if (!e) err(`${tag}: source=roster 但不是真实选手（playerIndex 中没有）`);
+      else if (e.handle !== s.handle) warn(`${tag}: handle ${s.handle} 与 playerIndex 的 ${e.handle} 不一致`);
+      if (!traj[s.id] || !Object.keys(traj[s.id]).length) err(`${tag}: 没有真实生涯轨迹（trajectories.json）`);
+    } else if (s.source === 'seed') {
+      if (byId.has(s.id)) err(`${tag}: source=seed 但与真实选手 id 重名`);
+      if (!s.debutTier || !TIER_LIST.includes(s.debutTier)) err(`${tag}: debutTier 无效`);
+      if (!s.peakTier || !TIER_LIST.includes(s.peakTier)) err(`${tag}: peakTier 无效`);
+      else if (s.debutTier && TIER_LIST.indexOf(s.peakTier) < TIER_LIST.indexOf(s.debutTier)) err(`${tag}: peakTier 低于 debutTier`);
+      if (!s.position || !(POSITIONS as string[]).includes(s.position)) err(`${tag}: position 无效`);
+      if (!s.nationality || !/^[A-Z]{2}$/.test(s.nationality)) err(`${tag}: nationality 应为两位大写国家代码`);
+      if (!Number.isFinite(s.birthYear) || s.birthYear! < 1970 || s.birthYear! > 2010) err(`${tag}: birthYear 无效`);
+      const pw = s.power;
+      if (!pw || ![pw.debut, pw.peak, pw.peakYear, pw.declineFromYear].every((v) => Number.isFinite(v))) err(`${tag}: power 需要 debut / peak / peakYear / declineFromYear`);
+      else {
+        if (pw.peak! < pw.debut!) err(`${tag}: power.peak 低于 debut`);
+        if (pw.peakYear! < 1 || pw.declineFromYear! <= pw.peakYear!) err(`${tag}: 需要 1 ≤ peakYear < declineFromYear`);
+      }
+      for (const k of ['talent', 'insight', 'resilience'] as const) {
+        const v = s[k];
+        if (v !== undefined && (!Number.isFinite(v) || v < 0 || v > 100)) err(`${tag}: ${k} 应在 0..100`);
+      }
+      for (const h of s.signatureHeroes ?? []) if (!heroIds.has(h)) err(`${tag}: 招牌英雄 ${h} 不在 heroes.json 中`);
+    } else {
+      err(`${tag}: source 应为 roster 或 seed`);
+    }
+  }
+  console.log(`名人堂初始成员：${seeds.length} 人`);
+}
+
 console.log(`heroes ${heroes.length}, patches ${patches.length}, tis ${tis.length}, rosters ${rosterTis.join(',')}`);
 if (warns.length) console.log(`\nWARN (${warns.length}):\n` + warns.slice(0, 80).map((w) => '  ' + w).join('\n'));
 if (errors.length) {

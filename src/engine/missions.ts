@@ -12,7 +12,7 @@
 import type { GameState, Player, Position, Team, Tournament } from './types';
 import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, type Rng } from './rng';
-import { clamp, formatGold } from './util';
+import { clamp, formatGold, ownEntry } from './util';
 import { addNews } from './news';
 import { activeTeams, autoLineup, benchPlayers, teamPlayers } from './team';
 import { computeSalary, effectiveAttr, marketValue, overallRating, playerTier } from './player';
@@ -42,7 +42,7 @@ export function missionsEnabled(): boolean {
 /** 战队的使命：非玩家、未解散、有巅峰阵容数据的真实俱乐部；否则 null */
 export function missionOf(state: GameState, teamId: string | null | undefined): ClubMission | null {
   if (!teamId || !missionsEnabled()) return null;
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded || team.isPlayer || isHumanTeam(state, teamId)) return null;
   const org = realOrgOf(state, teamId);
   if (!org?.peak) return null;
@@ -51,7 +51,7 @@ export function missionOf(state: GameState, teamId: string | null | undefined): 
 
 /** 使命已完成：以巅峰阵容夺得过 TI（Team.mission.tiTitles 非空） */
 export function missionFulfilled(state: GameState, teamId: string | null | undefined): boolean {
-  return !!teamId && (state.teams[teamId]?.mission?.tiTitles?.length ?? 0) > 0;
+  return !!teamId && (ownEntry(state.teams, teamId)?.mission?.tiTitles?.length ?? 0) > 0;
 }
 
 /** 生效中的使命（尚未完成）：引进优先与留人加成只对它生效；已完成的使命返回 null */
@@ -162,7 +162,7 @@ export function missionClubs(state: GameState): Team[] {
  * （使命成员最后才放；market.trimRoster 只看替补评分、不区分）。只对 AI 战队生效（人类玩家战队直接返回）。返回被放走的选手。
  */
 export function missionAwareTrim(state: GameState, teamId: string, max: number = CONFIG.ai.maxRoster): Player[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded || team.isPlayer || isHumanTeam(state, teamId)) return [];
   const peak = new Set(missionInEffect(state, teamId)?.peak.players ?? []);
   const released: Player[] = [];
@@ -424,7 +424,7 @@ function resultText(result: string): string {
 
 /** DotaPedia 战队页「使命」（只读；虚构 / 程序化战队、无巅峰数据的组织返回 null） */
 export function clubMissionView(state: GameState, teamId: string): ClubMissionView | null {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return null;
   const org = realOrgOf(state, teamId);
   const peak = org?.peak;

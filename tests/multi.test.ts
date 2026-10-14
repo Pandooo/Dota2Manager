@@ -12,6 +12,7 @@ import { initTournamentStages, playerNextSeries, readySeries } from '../src/engi
 import { currentStep } from '../src/engine/draft';
 import { addFinance } from '../src/engine/economy';
 import { multiplayerCareerSummary } from '../src/engine/season';
+import { gachaDiscardRefund, gachaPrice, poolRemaining } from '../src/engine/gacha';
 
 beforeAll(() => {
   registerNodeRosterLoader();
@@ -71,14 +72,18 @@ describe('multi · 创建对局', () => {
       expect(t.isPlayer).toBe(true);
       expect(t.honor).toBe(CONFIG.team.newClubHonor);
       expect(t.playerIds.length).toBeGreaterThanOrEqual(5);
-      // 欢迎弹窗、选秀结果弹窗都在各自座位（第八波取消抽卡：不再有创立礼包账目）
+      // 欢迎弹窗在各自座位；2026-10-14 起新秀改由抽卡进入联赛：没有选秀结果弹窗，也没有创立礼包账目
       inSeat(g, id, () => {
         expect(g.settings.playerTeamId).toBe(id);
         expect(g.popups.some((p) => p.kind === 'message' && p.title.includes('多人'))).toBe(true);
-        expect(g.popups.some((p) => p.kind === 'rookie_draft' && p.ti === g.season.ti)).toBe(true);
+        expect(g.popups.some((p) => p.kind === 'rookie_draft')).toBe(false);
         expect(g.finance.some((f) => f.note.includes('创立礼包'))).toBe(false);
       });
     }
+    // 本赛季卡池全局一份（所有座位共享），名人堂已建立
+    expect(g.gacha?.pool?.ti).toBe(g.season.ti);
+    expect(poolRemaining(g.gacha!.pool)).toBe(g.gacha!.pool!.size);
+    expect(g.hallOfFame?.members.length).toBeGreaterThan(0);
     expect(Object.values(g.teams).filter((t) => t.isPlayer).map((t) => t.id).sort()).toEqual([...ids(g)].sort());
   });
 
@@ -186,29 +191,47 @@ describe('multi · 座位上下文切换', () => {
 });
 
 describe('multi · 座位隔离与 RPC', () => {
-  it('训练、账目、选秀弹窗只影响调用者座位；选秀全局一次、放弃新秀只限本队', async () => {
+  it('训练、账目、抽卡只影响调用者座位；卡池全局共享、退回新秀只限本队本回合', async () => {
     const g = await buildGame(2);
     const [A, B] = ids(g);
-    // 赛季初：新秀选秀全局只举行一次，每个座位各一个结果弹窗；两支新俱乐部（5 人，排名靠后）都选到了新秀
-    expect((g.rookieDraft?.history ?? []).filter((r) => r.ti === g.season.ti)).toHaveLength(1);
-    for (const id of [A, B]) {
-      expect(inSeat(g, id, () => g.popups.filter((p) => p.kind === 'rookie_draft').length)).toBe(1);
-      expect(g.teams[id].playerIds.filter((pid) => g.players[pid]?.draft?.ti === g.season.ti).length).toBeGreaterThanOrEqual(1);
-    }
+    // 赛季初：卡池全局一份；没有选秀与选秀弹窗
+    expect(g.gacha?.pool?.ti).toBe(g.season.ti);
+    expect(g.rookieDraft?.history ?? []).toHaveLength(0);
+    for (const id of [A, B]) expect(inSeat(g, id, () => g.popups.filter((p) => p.kind === 'rookie_draft').length)).toBe(0);
     expect(g.popups).toEqual([]); // 中性上下文不残留弹窗
-    const rookieA = g.teams[A].playerIds.find((pid) => g.players[pid]?.draft?.teamId === A)!;
-    const finA = inSeat(g, A, () => g.finance.length);
+    const price = gachaPrice(g).single;
+    const left0 = poolRemaining(g.gacha!.pool);
+    const goldA = g.teams[A].gold;
+    const goldB = g.teams[B].gold;
     const finB = inSeat(g, B, () => g.finance.length);
-    // B 不能放弃 A 的新秀；A 免费放弃（无账目、无荣誉变化）
-    expect(call(g, B, 'releaseDraftedRookie', rookieA).ok).toBe(false);
+    // A 单抽：共享卡池少一张，A 付费、新秀入队；B 的资金 / 账目 / 抽卡计数不变
+    const r1 = call(g, A, 'gachaPull', 1) as OpResult & { results?: { playerId: string }[] };
+    expect(r1.ok).toBe(true);
+    const rookieA = r1.results![0].playerId;
+    expect(g.players[rookieA].teamId).toBe(A);
+    expect(g.players[rookieA].gacha?.teamId).toBe(A);
+    expect(poolRemaining(g.gacha!.pool)).toBe(left0 - 1);
+    expect(g.teams[A].gold).toBe(goldA - price);
+    expect(g.teams[B].gold).toBe(goldB);
+    expect(inSeat(g, A, () => g.finance.some((f) => f.category === 'gacha' && f.amount === -price))).toBe(true);
+    expect(inSeat(g, B, () => g.finance.length)).toBe(finB);
+    expect(g.teams[A].gacha?.pulls).toBe(1);
+    expect(g.teams[B].gacha?.pulls ?? 0).toBe(0);
+    // 视图隐私：逐张抽卡记录只下发给本人（卡池与阵容公开）
+    expect(M.seatView(g, A).teams[A].gacha?.log).toHaveLength(1);
+    expect(M.seatView(g, B).teams[A].gacha?.log).toBeUndefined();
+    expect(M.seatView(g, B).gacha?.pool?.drawn).toBe(1);
+    // B 不能退回 A 的新秀；A 本回合退回：离队进入自由市场、返还部分费用、不扣荣誉
+    expect(call(g, B, 'gachaDiscard', rookieA).ok).toBe(false);
     const honorA = g.teams[A].honor;
-    const r = call(g, A, 'releaseDraftedRookie', rookieA);
+    const r = call(g, A, 'gachaDiscard', rookieA);
     expect(r.ok).toBe(true);
     expect(g.players[rookieA].teamId).toBeNull();
     expect(g.teams[A].honor).toBe(honorA);
-    expect(inSeat(g, A, () => g.finance.length)).toBe(finA);
+    expect(g.teams[A].gold).toBe(goldA - price + gachaDiscardRefund(g));
     expect(inSeat(g, B, () => g.finance.length)).toBe(finB);
     expect(freeAgents(g).some((p) => p.id === rookieA)).toBe(true);
+    expect(call(g, A, 'gachaDiscard', rookieA).ok).toBe(false); // 不能重复退回
     // 推进到休赛回合：A 训练，B 的训练次数不受影响
     expect(advanceAll(g).ok).toBe(true);
     const kindRest = inSeat(g, A, () => doTrainingAllowed(g)) && inSeat(g, B, () => doTrainingAllowed(g));
@@ -766,11 +789,19 @@ describe('multi · 出局 × 赛事推进', () => {
     const aSemi = readySeries(g, t.id).find((s) => s.teamA === A || s.teamB === A)!;
     const opp = aSemi.teamA === A ? aSemi.teamB! : aSemi.teamA!;
     expect(opp).not.toBe(B);
-    // A 的半决赛对手无人可上（A 必胜）
+    // A 的半决赛对手无人可上（实力为 0）。胜率 = BP 权重 × 大老师胜率 + 实力权重 × 实力份额，夹在 [finalMin, finalMax]，
+    // 实力为 0 的一方仍有小概率赢下单局——本用例只验证「等待对手」的推进逻辑，临时让胜率只取决于实力，A 必胜（不依赖随机分叉）
     for (const pid of g.teams[opp].playerIds) g.players[pid].teamId = null;
     g.teams[opp].playerIds = [];
     g.teams[opp].lineup = { C: null, M: null, O: null, SS: null, HS: null };
-    expect(call(g, A, 'quickSimSeries').ok).toBe(true);
+    const mc = CONFIG.match as { wDraft: number; wStrength: number; finalMin: number; finalMax: number };
+    const saved = { ...mc };
+    Object.assign(mc, { wDraft: 0, wStrength: 1, finalMin: 0, finalMax: 1 });
+    try {
+      expect(call(g, A, 'quickSimSeries').ok).toBe(true);
+    } finally {
+      Object.assign(mc, { wDraft: saved.wDraft, wStrength: saved.wStrength, finalMin: saved.finalMin, finalMax: saved.finalMax });
+    }
     // A 的决赛取决于 B 的半决赛（玩家比赛，赛事自动推进停在这里）
     expect(M.seatBlockers(g, A).some((b) => b.message.includes('尚未确定'))).toBe(true);
     applyHonorChange(g, B, -(g.teams[B].honor + 10), '测试', true);

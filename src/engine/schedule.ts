@@ -4,19 +4,21 @@ import type {
   TournamentTier,
 } from './types';
 import { REGIONS } from './types';
-import { CONFIG, REGION_LABEL, TI_YEAR } from './config';
+import { CONFIG, REGION_LABEL, TI_YEAR, TOURNAMENT_TIER_LABEL } from './config';
 import { getTiInfo, getTournamentTemplates, lastTournamentDataSeason } from '../data/index';
 import { regularRoundCount, roundIndexForDate } from './calendar';
 import { econIndex } from './economy';
 import { awardedPrizePool, prizePoolLabel, tournamentAppearanceFee } from './revenue';
 import { teamRating } from './team';
 import { initTournamentStages } from './tournament';
-import { computeExpectedRanks } from './honor';
-import { addNews } from './news';
+import { applyHonorChange, computeExpectedRanks } from './honor';
+import { addNews, pushPopup } from './news';
 import { releaseTempSubs } from './market';
 import { rngOf } from './rng';
-import { addDays, clamp, daysBetween, formatGold } from './util';
-import { activeHumanIds, forEachSeat, humanTeamIds, isMultiplayer, seatTournamentField, withSeat } from './seat';
+import { addDays, clamp, daysBetween, formatGold, ownEntry } from './util';
+import {
+  activeHumanIds, forEachSeat, humanTeamIds, inSeatOf, isHumanTeam, isMultiplayer, seatTournamentField, withSeat,
+} from './seat';
 
 // ===========================================================================
 // 常量 & 小工具
@@ -339,6 +341,7 @@ function tournamentFromTemplate(state: GameState, tpl: TournamentTemplate, withI
     format: FORMATS.includes(tpl.format) ? tpl.format : 'de8',
     teamIds: [],
     invitedTeamIds: withInvites ? computeInvites(state, tier, tpl.invites, size, tpl.regionLocked) : [],
+    inviteSlots: withInvites ? clamp(Math.floor(tpl.invites) || 0, 0, size) : 0,
     qualifierTeamIds: [],
     regionLocked: tpl.regionLocked,
     stages: [],
@@ -636,7 +639,7 @@ function clashMessage(clash: Tournament): string {
  * TI / TI 预选无需报名；赛事已开始 → 失败；同回合已受邀/已报名其他赛事 → 失败（需先婉拒/取消那一项）。
  */
 export function registerForTournament(state: GameState, tournamentId: string): OpResult {
-  const t = state.tournaments[tournamentId];
+  const t = ownEntry(state.tournaments, tournamentId);
   if (!t || !state.season || t.season !== state.season.ti) return { ok: false, message: '赛事不存在或不属于本赛季' };
   if (isTiPhaseEvent(t)) return { ok: false, message: 'TI 与 TI 预选赛按积分榜自动安排，无需报名' };
   const team = state.teams[playerTeamId(state)];
@@ -656,6 +659,8 @@ export function registerForTournament(state: GameState, tournamentId: string): O
   const clash = sameRoundEntry(state, t);
   if (clash) return { ok: false, message: clashMessage(clash) };
   if (!state.season.registeredTournamentIds.includes(t.id)) state.season.registeredTournamentIds.push(t.id);
+  // 报名 / 重新接受所在的回合：同一回合内反悔不扣荣誉（withdrawPenaltyOf）
+  t.entryRound = state.roundIndex;
   if (status === 'invited') {
     t.playerStatus = 'invited';
     addNews(state, 'tournament', `【接受邀请】${team.name} 将出战 ${t.name}`,
@@ -667,11 +672,13 @@ export function registerForTournament(state: GameState, tournamentId: string): O
 }
 
 /**
- * 取消报名（'registered' → open/locked），或婉拒邀请（'invited' → 'declined'，无荣誉惩罚，空出的席位开赛时由 AI 递补）。
+ * 取消报名（'registered' → open/locked），或婉拒邀请（'invited' → 'declined'，空出的席位开赛时由 AI 递补）。
+ * 第十四波：开赛前退出要扣荣誉（withdrawPenaltyOf：按赛事等级，报名 / 接受邀请的同一回合内不扣，距开赛 ≥ 3 回合减半，
+ * 低荣誉减损；扣分后荣誉会跌破 0 时不允许退出），新闻写明原因。
  * TI 与 TI 赛区预选为赛季收官，必须参加；赛事已开始不可修改。
  */
 export function unregisterFromTournament(state: GameState, tournamentId: string): OpResult {
-  const t = state.tournaments[tournamentId];
+  const t = ownEntry(state.tournaments, tournamentId);
   if (!t || !state.season) return { ok: false, message: '赛事不存在' };
   const pid = playerTeamId(state);
   if (isTiPhaseEvent(t)) {
@@ -691,17 +698,297 @@ export function unregisterFromTournament(state: GameState, tournamentId: string)
   }
   if (!invited && t.playerStatus !== 'registered') return { ok: false, message: `尚未报名 ${t.name}` };
   if (closed) return { ok: false, message: `${t.name} ${closedText}，无法${invited ? '婉拒' : '退出'}` };
+  const pen = withdrawPenaltyOf(state, t.id);
+  if (pen?.blocked) return { ok: false, message: pen.blocked };
+  const cost = pen && pen.honor < 0 ? pen.honor : 0;
+  const name = state.teams[pid]?.name ?? '我们';
   state.season.registeredTournamentIds = state.season.registeredTournamentIds.filter((id) => id !== t.id);
+  delete t.entryRound;
+  if (cost < 0) applyHonorChange(state, pid, cost, `退出 ${t.name}（${pen!.reason}）`, false);
+  const costText = cost < 0 ? `俱乐部荣誉 −${-cost}（${pen!.reason}）。` : pen?.free ? `${pen.reason}。` : '';
+  // 扣过的荣誉不因重新接受 / 重新报名而退还（重新接受后同一回合内再退出不扣，但已扣的不返还）
+  const noRefund = cost < 0 ? '，已扣的荣誉不退还' : '';
+  const important = -cost >= CONFIG.honor.withdrawNewsImportant;
   if (invited) {
     t.playerStatus = 'declined';
-    const name = state.teams[pid]?.name ?? '我们';
     addNews(state, 'tournament', `【婉拒邀请】${name} 婉拒 ${t.name}`,
-      `${name} 婉拒了 ${t.name}（第 ${t.roundIndex} 回合）的邀请，空出的正赛席位将由其他战队递补。`
-        + '开赛前仍可在「赛事 › 赛程报名」中重新接受。');
-    return { ok: true, message: `已婉拒 ${t.name} 的邀请（开赛前可重新接受；如无其他安排，该回合为休赛回合）` };
+      `${name} 婉拒了 ${t.name}（第 ${t.roundIndex} 回合）的邀请，空出的正赛席位将由其他战队递补。${costText}`
+        + `开赛前仍可在「赛事 › 赛程报名」中重新接受${noRefund}。`, important);
+    return {
+      ok: true,
+      message: `已婉拒 ${t.name} 的邀请${cost < 0 ? `，荣誉 −${-cost}` : '（不扣荣誉）'}（开赛前可重新接受${noRefund}；如无其他安排，该回合为休赛回合）`,
+    };
   }
   t.playerStatus = computePlayerEntryStatus(state, t);
-  return { ok: true, message: `已取消报名 ${t.name}，该回合将作为休赛回合` };
+  if (cost < 0) {
+    addNews(state, 'tournament', `【退赛】${name} 退出 ${t.name}`,
+      `${name} 取消了 ${t.name}（第 ${t.roundIndex} 回合）的报名。${costText}开赛前仍可重新报名${noRefund}。`, important);
+  }
+  return { ok: true, message: `已取消报名 ${t.name}${cost < 0 ? `，荣誉 −${-cost}（重新报名不退还）` : '（不扣荣誉）'}，该回合将作为休赛回合` };
+}
+
+// ===========================================================================
+// 退赛扣荣誉（第十四波，CONFIG.honor.withdraw*）
+// ===========================================================================
+
+export interface WithdrawPenalty {
+  /** 实际扣除的荣誉（≤ 0；0 = 不扣） */
+  honor: number;
+  /** 等级基础扣分（≤ 0；未减半、未做低荣誉减损） */
+  base: number;
+  /** 报名 / 接受邀请的同一回合内退出 → 不扣 */
+  free: boolean;
+  /** 距开赛 ≥ withdrawFarRounds 回合 → 减半 */
+  far: boolean;
+  /** 说明（新闻 / 确认气泡 / 按钮提示） */
+  reason: string;
+  /** 不能退出的原因（扣分后荣誉会跌破 0） */
+  blocked?: string;
+}
+
+/**
+ * 当前玩家（座位）现在退出某项赛事的荣誉代价（只读，界面确认气泡与 unregisterFromTournament 共用）。
+ * 未受邀 / 未报名、TI 阶段赛事、已开赛或不属于本赛季 → null。
+ * - 报名 / 接受邀请所在的回合（entryRound；赛季初的邀请缺省按 0）内退出不扣：赛季初随意调整，补充邀请在收到通知的回合内可免费婉拒；
+ * - 否则按等级扣 CONFIG.honor.withdraw[等级]（线上公开赛 withdrawOpenCup）；距开赛 ≥ withdrawFarRounds 回合 × withdrawFarMult；
+ *   低荣誉减损与赛事扣分同口径：× lerp(lowHonorLossMinMult, 1, 荣誉 / lowHonorLossRef)；
+ * - 扣分后荣誉 < 0 → blocked（不允许退出）。
+ */
+export function withdrawPenaltyOf(state: GameState, tournamentId: string): WithdrawPenalty | null {
+  const t = state.tournaments[tournamentId];
+  if (!t || !state.season || isTiPhaseEvent(t) || !entryEditable(state, t)) return null;
+  if (t.playerStatus !== 'invited' && t.playerStatus !== 'registered') return null;
+  const pid = playerTeamId(state);
+  const team = state.teams[pid];
+  if (!team) return null;
+  const h = CONFIG.honor;
+  const filler = isFillerCup(t);
+  const base = Math.min(0, Math.round(filler ? h.withdrawOpenCup : (h.withdraw[t.tier] ?? 0)));
+  const entry = typeof t.entryRound === 'number' && Number.isFinite(t.entryRound) ? t.entryRound : 0;
+  const ahead = t.roundIndex - state.roundIndex;
+  const farRounds = Math.max(1, Math.floor(h.withdrawFarRounds));
+  const far = ahead >= farRounds;
+  if (base === 0 || entry === state.roundIndex) {
+    const late = t.lateInvites?.[pid] === state.roundIndex;
+    const reason = base === 0
+      ? '该赛事退出不扣荣誉'
+      : state.roundIndex === 0
+        ? '赛季初调整报名不扣荣誉'
+        : late
+          ? '收到补充邀请的回合内婉拒不扣荣誉'
+          : '报名 / 接受邀请的同一回合内退出不扣荣誉';
+    return { honor: 0, base, free: true, far, reason };
+  }
+  const honorNow = Number.isFinite(team.honor) ? Math.max(0, team.honor) : 0;
+  const k = h.lowHonorLossRef > 0
+    ? clamp(h.lowHonorLossMinMult + (1 - h.lowHonorLossMinMult) * clamp(honorNow / h.lowHonorLossRef, 0, 1), 0, 1)
+    : 1;
+  const mult = (far ? clamp(h.withdrawFarMult, 0, 1) : 1) * k;
+  const honor = -Math.max(1, Math.round(-base * mult));
+  const label = filler ? '线上公开赛' : TOURNAMENT_TIER_LABEL[t.tier] ?? t.tier;
+  let reason = `${label} 退赛扣 ${-base} 荣誉`;
+  reason += far ? `，距开赛 ${ahead} 个回合（≥ ${farRounds}）减半` : `，距开赛不足 ${farRounds} 个回合不减半`;
+  if (k < 1) reason += `，低荣誉减损 ×${k.toFixed(2)}`;
+  const out: WithdrawPenalty = { honor, base, free: false, far, reason };
+  if ((Number.isFinite(team.honor) ? team.honor : 0) + honor < 0) {
+    out.blocked = `退出 ${t.name} 需扣除 ${-honor} 荣誉，当前荣誉 ${Math.round(team.honor)}，扣除后将跌破 0（俱乐部解散），不能退出`;
+  }
+  return out;
+}
+
+// ===========================================================================
+// 赛季中补充邀请（第十四波，CONFIG.tournament.lateInvite）
+// ===========================================================================
+
+/** 赛季初的受邀队数（受邀名单去掉补充邀请） */
+function initialInviteCount(t: Tournament): number {
+  return Math.max(0, (t.invitedTeamIds?.length ?? 0) - Object.keys(t.lateInvites ?? {}).length);
+}
+
+type LateInviteOutcome = 'accepted' | 'upgraded' | 'declined_clash' | 'kept_declined';
+
+interface LateInviteNote {
+  t: Tournament;
+  outcome: LateInviteOutcome;
+  /** 受邀依据：积分榜名次（赛区锁定赛事为赛区内名次）；null = 凭荣誉 */
+  rank: number | null;
+  /** 同回合已有的同级或更高等级安排（outcome = declined_clash） */
+  clash?: Tournament;
+  /** 让位的低等级安排（outcome = accepted） */
+  displaced?: Tournament;
+}
+
+/**
+ * 人类战队（当前座位上下文）收到补充邀请：默认接受；同回合已有同级或更高等级的安排 → 记为已婉拒；
+ * 已有低等级安排或线上公开赛 → 自动让位（不扣荣誉）；已报名的同一赛事 → 升级为受邀；此前已放弃 → 保持已婉拒（可重新接受）。
+ */
+function acceptLateInvite(state: GameState, t: Tournament, firstRound: number, rank: number | null): LateInviteNote {
+  const st = t.playerStatus;
+  if (st === 'declined') return { t, outcome: 'kept_declined', rank };
+  if (st === 'registered') {
+    // 自己报名的赛事升级为受邀（免打封闭预选）；退出仍按原报名回合计算
+    t.playerStatus = 'invited';
+    return { t, outcome: 'upgraded', rank };
+  }
+  const clash = sameRoundEntry(state, t);
+  if (clash && !isFillerCup(clash) && TIER_ORDER[clash.tier] <= TIER_ORDER[t.tier]) {
+    t.playerStatus = 'declined';
+    return { t, outcome: 'declined_clash', rank, clash };
+  }
+  if (clash) {
+    // 低等级的已有安排（或线上公开赛）让位：不扣荣誉
+    state.season.registeredTournamentIds = state.season.registeredTournamentIds.filter((id) => id !== clash.id);
+    delete clash.entryRound;
+    if (clash.playerStatus === 'invited') clash.playerStatus = 'declined';
+    else clash.playerStatus = computePlayerEntryStatus(state, clash);
+  }
+  if (!state.season.registeredTournamentIds.includes(t.id)) state.season.registeredTournamentIds.push(t.id);
+  t.playerStatus = 'invited';
+  t.entryRound = firstRound;
+  return { t, outcome: 'accepted', rank, displaced: clash ?? undefined };
+}
+
+/** 补充邀请的总览通知 + 新闻（当前座位上下文；多人模式只对该座位可见） */
+function announceLateInvites(state: GameState, teamId: string, notes: LateInviteNote[], firstRound: number): void {
+  const team = ownEntry(state.teams, teamId);
+  if (!team || !notes.length) return;
+  const reasonOf = (n: LateInviteNote) => {
+    if (n.rank === null) {
+      return `荣誉 ${Math.round(team.honor)} 达到${TOURNAMENT_TIER_LABEL[n.t.tier] ?? ''}受邀线 ${CONFIG.tournament.inviteHonor[n.t.tier]}`;
+    }
+    return n.t.regionLocked ? `本赛季积分${REGION_LABEL[n.t.regionLocked]}赛区第 ${n.rank} 名` : `本赛季积分榜第 ${n.rank} 名`;
+  };
+  const lines = notes.map((n) => {
+    const head = `${n.t.name}（${TOURNAMENT_TIER_LABEL[n.t.tier] ?? n.t.tier}，第 ${n.t.roundIndex} 回合，${reasonOf(n)}）`;
+    switch (n.outcome) {
+      case 'accepted':
+        return `${head}：已自动接受，直接进入正赛${n.displaced ? `；同回合原安排的 ${n.displaced.name} 已让位（不扣荣誉）` : ''}`;
+      case 'upgraded':
+        return `${head}：已报名的赛事升级为受邀，免打封闭预选`;
+      case 'declined_clash':
+        return `${head}：与已安排的 ${n.clash?.name ?? '同回合赛事'} 同期，先记为已婉拒；`
+          + `如想改打，需先退出 ${n.clash?.name ?? '该赛事'}（按退赛规则扣荣誉）再重新接受`;
+      default:
+        return `${head}：此前已放弃本赛事，邀请保留，开赛前可重新接受`;
+    }
+  });
+  const title = notes.length === 1
+    ? `【补充邀请】${notes[0].t.name} 向 ${team.name} 发出邀请`
+    : `【补充邀请】${team.name} 收到 ${notes.length} 项赛事的邀请`;
+  const body = `凭借本赛季的表现，${team.name} 收到赛季中补充邀请：${lines.join('；')}。`
+    + `第 ${firstRound} 回合内婉拒补充邀请不扣荣誉，之后退出按退赛规则扣荣誉；可在「赛事 › 赛程报名」或总览的「赛事报名」卡片中调整。`;
+  addNews(state, 'tournament', title, body, true, {
+    teamIds: [teamId],
+    scope: 'mine',
+    visibility: 'private',
+    actorTeamId: teamId,
+    noInfer: true,
+  });
+  pushPopup(state, { kind: 'message', title, body });
+}
+
+/**
+ * 每回合结束时（season.endRound，本回合赛事结算之后）：按本赛季表现为未来 horizonRounds 个回合内开赛的常规赛事补发直邀
+ * （CONFIG.tournament.lateInvite）。
+ * - 候选：本赛季积分榜（需已有积分）排名 ≤ 该赛事的直邀规模（模板直邀名额 inviteSlots 与赛季初受邀队数取大；
+ *   赛区锁定赛事按赛区内排名），或荣誉 ≥ inviteHonor[等级]，且不在受邀名单中；按积分榜顺序补；
+ * - 名额：受邀名单中仍有效的队伍（未解散、人类未婉拒）≤ min(正赛规模, 赛季初受邀队数 + extraSlots)，
+ *   即婉拒 / 解散腾出的席位 + 追加席位；已有邀请从不撤销；
+ * - AI 自动接受（同回合已受邀同级或更高等级赛事的 AI 不补邀，避免空占席位）；
+ * - 人类战队：赛事至少在 humanNoticeRounds 个回合之后开赛才补邀（留出婉拒窗口），默认接受（acceptLateInvite），
+ *   收到通知的回合内婉拒不扣荣誉；总览通知 + 新闻「【补充邀请】…」（多人模式座位私有）。
+ * 线上公开赛、TI 与 TI 预选不参与。不消耗随机数；O(赛事 × 战队)。返回本次补邀的数量。
+ */
+export function refreshSeasonInvites(state: GameState): number {
+  const cfg = CONFIG.tournament.lateInvite;
+  const season = state.season;
+  if (!cfg?.enabled || !season?.rounds?.length) return 0;
+  const ti = season.ti;
+  const firstRound = state.roundIndex + 1;
+  const humanFirst = firstRound + Math.max(0, Math.floor(cfg.humanNoticeRounds));
+  const lastRound = firstRound + Math.max(1, Math.floor(cfg.horizonRounds)) - 1;
+  const pending = (state.seasonTournamentIds ?? [])
+    .map((id) => state.tournaments[id])
+    .filter((t): t is Tournament => !!t && t.season === ti && t.status === 'scheduled' && t.roundIndex >= firstRound);
+  const events = pending
+    .filter((t) => t.roundIndex <= lastRound && !isTiPhaseEvent(t) && !isFillerCup(t))
+    .sort((a, b) => a.roundIndex - b.roundIndex || TIER_ORDER[a.tier] - TIER_ORDER[b.tier] || b.prizePool - a.prizePool
+      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  if (!events.length) return 0;
+
+  const standings = seasonStandings(state).filter((tm) => canCompete(tm));
+  const ranked = cfg.requirePoints ? standings.filter((tm) => (tm.points || 0) > 0) : standings;
+  const globalRank = new Map<string, number>();
+  const regionRank = new Map<string, number>();
+  const regionCount = new Map<Region, number>();
+  ranked.forEach((tm, i) => {
+    globalRank.set(tm.id, i + 1);
+    const n = (regionCount.get(tm.region) ?? 0) + 1;
+    regionCount.set(tm.region, n);
+    regionRank.set(tm.id, n);
+  });
+  const activeHumans = new Set(humansOf(state).filter((h) => !!state.teams[h] && !state.teams[h].disbanded));
+  // 各回合 AI 已受邀赛事的最高等级（TIER_ORDER 越小越高）
+  const busy = new Map<number, Map<string, number>>();
+  const markBusy = (round: number, id: string, tier: number) => {
+    let m = busy.get(round);
+    if (!m) {
+      m = new Map();
+      busy.set(round, m);
+    }
+    const cur = m.get(id);
+    if (cur === undefined || tier < cur) m.set(id, tier);
+  };
+  for (const t of pending) for (const id of t.invitedTeamIds) if (!isHumanTeam(state, id)) markBusy(t.roundIndex, id, TIER_ORDER[t.tier]);
+
+  const extra = Math.max(0, Math.floor(cfg.extraSlots));
+  const notes = new Map<string, LateInviteNote[]>();
+  let added = 0;
+  for (const t of events) {
+    const size = clamp(Math.floor(t.size ?? 8) || 8, 2, MAX_EVENT_TEAMS);
+    const cap = Math.min(size, initialInviteCount(t) + extra);
+    const stillIn = t.invitedTeamIds.filter((id) => canCompete(state.teams[id])
+      && !(isHumanTeam(state, id) && statusOf(state, id, t) === 'declined')).length;
+    let free = cap - stillIn;
+    if (free <= 0) continue;
+    // 直邀规模：模板直邀名额与赛季初实际受邀队数取大（如 TI9 赛季的 Major 模板直邀为 0，实际按荣誉邀请 7 队）
+    const slots = Math.max(
+      typeof t.inviteSlots === 'number' && Number.isFinite(t.inviteSlots) ? t.inviteSlots : 0,
+      initialInviteCount(t),
+    );
+    const honorBar = CONFIG.tournament.inviteHonor[t.tier] ?? Number.MAX_SAFE_INTEGER;
+    const tierIdx = TIER_ORDER[t.tier];
+    const invited = new Set(t.invitedTeamIds);
+    for (const tm of standings) {
+      if (free <= 0) break;
+      if (invited.has(tm.id) || (t.regionLocked && tm.region !== t.regionLocked)) continue;
+      const rank = (t.regionLocked ? regionRank : globalRank).get(tm.id);
+      const byRank = rank !== undefined && rank <= slots;
+      if (!byRank && !(tm.honor >= honorBar)) continue;
+      const human = isHumanTeam(state, tm.id);
+      if (human) {
+        if (!activeHumans.has(tm.id) || t.roundIndex < humanFirst) continue;
+      } else {
+        const b = busy.get(t.roundIndex)?.get(tm.id);
+        if (b !== undefined && b <= tierIdx) continue;
+      }
+      t.invitedTeamIds.push(tm.id);
+      (t.lateInvites ??= {})[tm.id] = firstRound;
+      invited.add(tm.id);
+      free--;
+      added++;
+      if (human) {
+        const note = inSeatOf(state, tm.id, () => acceptLateInvite(state, t, firstRound, byRank ? rank! : null));
+        const list = notes.get(tm.id) ?? [];
+        list.push(note);
+        notes.set(tm.id, list);
+      } else {
+        markBusy(t.roundIndex, tm.id, tierIdx);
+      }
+    }
+  }
+  for (const [h, list] of notes) inSeatOf(state, h, () => announceLateInvites(state, h, list, firstRound));
+  return added;
 }
 
 /** 玩家在指定回合参加的赛事（invited/registered，含 TI 预选与 TI），无则 null */

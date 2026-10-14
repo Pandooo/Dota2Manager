@@ -16,6 +16,7 @@
 // 只修改选手的基础 mmr / power 与隐藏记录 Player.development；随机数一律来自 rngOf(state)。
 import { CONFIG } from './config';
 import { getTrajectory } from '../data/index';
+import { summonTrajectory } from './hallOfFame';
 import { peakWindow, trendGrowthMult } from './form';
 import { addNews } from './news';
 import { ageOf, tierIndex, tierOf } from './player';
@@ -23,7 +24,7 @@ import type { Rng } from './rng';
 import { rngOf } from './rng';
 import { humanTeamIds, isHumanTeam } from './seat';
 import type { GameState, Player, PlayerTrajectory, Position, Tier } from './types';
-import { clamp, lerp, round2 } from './util';
+import { clamp, lerp, ownEntry, round2 } from './util';
 
 // ---------------------------------------------------------------------------
 // 真实生涯轨迹
@@ -55,9 +56,16 @@ export function parseTrajectory(raw: PlayerTrajectory | null | undefined): Traje
   return out.sort((a, b) => a.ti - b.ti);
 }
 
-/** 选手参照的真实轨迹：仅真实选手、未被重置（development.noTrajectory）且有数据时返回 */
-export function trajectoryOf(p: Player | null | undefined): TrajectoryStep[] | null {
-  if (!p || !p.isReal || p.development?.noTrajectory) return null;
+/**
+ * 选手参照的生涯轨迹：
+ * - 请神新秀（Player.summon，2026-10-14 抽卡回归）：名人堂原型的生涯轨迹按出道届次平移（生涯第 k 年 ↔ 原型生涯第 k 年，
+ *   hallOfFame.summonTrajectory）——与真实选手走同一条「真实轨迹」成长通道；需要 state（原型可能是本局记录的生涯），缺省时不参照；
+ * - 真实选手：未被重置（development.noTrajectory）且有数据时返回真实生涯轨迹。
+ */
+export function trajectoryOf(p: Player | null | undefined, state?: GameState | null): TrajectoryStep[] | null {
+  if (!p) return null;
+  if (p.summon) return state ? summonTrajectory(state, p) : null;
+  if (!p.isReal || p.development?.noTrajectory) return null;
   if (trajectoryCache.has(p.id)) return trajectoryCache.get(p.id) ?? null;
   let steps: TrajectoryStep[] | null = null;
   try {
@@ -213,7 +221,7 @@ export interface DevelopmentTarget {
 
 /** 计算本赛季参照水平（可能首次评估并保存潜力上限，消耗随机数） */
 export function developmentTarget(state: GameState, p: Player, rng: Rng, ti: number = state.season?.ti ?? 0): DevelopmentTarget {
-  const steps = trajectoryOf(p);
+  const steps = trajectoryOf(p, state);
   const cap = trajectoryCap(steps);
   if (steps) {
     const at = trajectoryValueAt(steps, ti);
@@ -420,9 +428,9 @@ function rosteredPlayers(state: GameState): Player[] {
   return out;
 }
 
-/** 本届是否有真实参照（有当届真实轨迹的真实选手不参与校准） */
-function hasTrajectoryAt(p: Player, ti: number): boolean {
-  const steps = trajectoryOf(p);
+/** 本届是否有真实参照（有当届真实轨迹的真实选手、原型轨迹覆盖本届的请神新秀不参与校准） */
+function hasTrajectoryAt(state: GameState, p: Player, ti: number): boolean {
+  const steps = trajectoryOf(p, state);
   return !!steps && trajectoryValueAt(steps, ti) !== null;
 }
 
@@ -463,7 +471,7 @@ export function calibrateLadder(state: GameState, changes?: DevelopmentChange[],
     // 没有训练投入的选手先回落（按预期天梯从低到高）；人类玩家战队花钱练出来的选手排在最后，仍计入名额（联赛整体公平；
     // 被卖到 AI 战队的选手不再优先保护）
     const eligible = above
-      .filter((p) => !hasTrajectoryAt(p, ti))
+      .filter((p) => !hasTrajectoryAt(state, p, ti))
       .map((p) => ({ p, proj: projected(p), invested: hasTrainingInvestment(p) && isHumanTeam(state, p.teamId) ? 1 : 0 }))
       .sort((a, b) => a.invested - b.invested || a.proj - b.proj || (a.p.id < b.p.id ? -1 : a.p.id > b.p.id ? 1 : 0));
     for (const { p } of eligible) {
@@ -532,7 +540,7 @@ function developmentNews(state: GameState, changes: DevelopmentChange[]): void {
   if (!changes.length) return;
   const byId = new Map(changes.map((c) => [c.playerId, c]));
   for (const teamId of humanTeamIds(state)) {
-    const team = state.teams[teamId];
+    const team = ownEntry(state.teams, teamId);
     if (!team || team.disbanded) continue;
     const mine = (team.playerIds ?? [])
       .map((pid) => byId.get(pid))
@@ -578,7 +586,7 @@ export function developmentOutlook(state: GameState, p: Player): GrowthOutlook {
   const [, peakEnd] = peakWindow(p.position);
   const mmr = num(p.mmr, CONFIG.ladder.thresholds.C);
   const power = num(p.power, 50);
-  const steps = trajectoryOf(p);
+  const steps = trajectoryOf(p, state);
   const cap = trajectoryCap(steps);
 
   let ceilMmr = mmr;

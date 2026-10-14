@@ -13,6 +13,7 @@ import type { GameState, Team, TeamBrandChange } from './types';
 import { CONFIG } from './config';
 import brandingJson from '../data/branding.json';
 import { addNews } from './news';
+import { ownEntry } from './util';
 
 /** 一个品牌时期（branding.json orgs[].eras[]） */
 export interface BrandEra {
@@ -260,6 +261,6 @@ function recordBrandChange(team: Team, change: TeamBrandChange): void {
 
 /** 某支战队在本局中的品牌沿革（按时间升序；只读，DotaPedia 战队页使用） */
 export function brandHistoryOf(state: GameState, teamId: string): TeamBrandChange[] {
-  const list = state.teams?.[teamId]?.brandHistory;
+  const list = ownEntry(state.teams, teamId)?.brandHistory;
   return Array.isArray(list) ? list.filter((c) => !!c && typeof c === 'object' && !!c.from && !!c.to) : [];
 }

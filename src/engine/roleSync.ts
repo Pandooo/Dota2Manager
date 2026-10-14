@@ -18,6 +18,7 @@ import { humanTeamIds, inSeatOf, isHumanTeam } from './seat';
 import { autoLineup } from './team';
 import type { GameState, Player, Position } from './types';
 import { POSITIONS } from './types';
+import { ownEntry } from './util';
 
 /** 一次位置变化 */
 export interface RoleChange {
@@ -109,7 +110,7 @@ function changeText(state: GameState, c: RoleChange, verb = '转型为'): string
 
 /** 人类玩家战队中位置变化后不在本位置首发的队员：「Miposhka 目前首发四号位（四五号位互换 ×0.93）」 */
 function lineupHints(state: GameState, teamId: string, ids: string[]): string[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team?.lineup) return [];
   const out: string[] = [];
   for (const pos of POSITIONS) {
@@ -126,7 +127,7 @@ function lineupHints(state: GameState, teamId: string, ids: string[]): string[] 
 function humanRoleNews(state: GameState, changes: RoleChange[], kind: 'season' | 'migration'): Set<string> {
   const covered = new Set<string>();
   for (const teamId of humanTeamIds(state)) {
-    const team = state.teams[teamId];
+    const team = ownEntry(state.teams, teamId);
     if (!team || team.disbanded) continue;
     const mine = changes.filter((c) => {
       const p = state.players[c.playerId];

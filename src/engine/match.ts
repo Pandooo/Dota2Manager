@@ -7,7 +7,7 @@ import { POSITIONS } from './types';
 import { CONFIG } from './config';
 import { rngOf } from './rng';
 import type { Rng } from './rng';
-import { clamp, round2 } from './util';
+import { clamp, ownEntry, round2 } from './util';
 import { autoLineup, teamInsight, teamRating, validateLineup } from './team';
 import { eventImpactScale, playerRating } from './player';
 import { createDraft, draftLean, evaluateDraft, runDraftUntil } from './draft';
@@ -58,7 +58,7 @@ const INCIDENT_TEXTS: Record<'severe' | 'mild' | 'good' | 'great', IncidentText[
 };
 
 function lineupOf(state: GameState, teamId: string): { pos: Position; player: Player }[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return [];
   const res: { pos: Position; player: Player }[] = [];
   for (const pos of POSITIONS) {
@@ -116,13 +116,13 @@ export function rollIncidents(state: GameState, teamA: string, teamB: string): I
 // 胜率
 // ---------------------------------------------------------------------------
 function safeRating(state: GameState, teamId: string, incidents: InMatchEvent[]): number {
-  if (!state.teams[teamId]) return 0;
+  if (!ownEntry(state.teams, teamId)) return 0;
   const v = teamRating(state, teamId, incidents);
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
 function safeInsight(state: GameState, teamId: string): number {
-  if (!state.teams[teamId]) return 50;
+  if (!ownEntry(state.teams, teamId)) return 50;
   const v = teamInsight(state, teamId);
   return Number.isFinite(v) ? v : 50;
 }
@@ -397,7 +397,7 @@ export function seriesOutcome(bestOf: number, winsA: number, winsB: number): 'A'
  * 仍凑不齐 5 人 → false（系列赛弃权判负，见 simulateSeries / game.quickSimSeries）。
  */
 export function canFieldLineup(state: GameState, teamId: string, tournamentId?: string | null): boolean {
-  if (!state.teams[teamId]) return false;
+  if (!ownEntry(state.teams, teamId)) return false;
   if (!validateLineup(state, teamId, tournamentId).length) return true;
   autoLineup(state, teamId, tournamentId);
   return validateLineup(state, teamId, tournamentId).length === 0;

@@ -3,9 +3,9 @@ import type { GameState, OpResult, PendingDecision, Player, Position, Team, Tier
 import { POSITIONS, TIERS } from './types';
 import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, seededRng, hashSeed, type Rng } from './rng';
-import { clamp, formatGold, lerp, nextId, sigmoid } from './util';
+import { clamp, formatGold, lerp, nextId, ownEntry, sigmoid } from './util';
 import { addNews } from './news';
-import { listingProgress } from './listingRules';
+import { gachaResaleLockLeft, listingClock, listingProgress } from './listingRules';
 import {
   computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex,
 } from './player';
@@ -17,10 +17,11 @@ import { changeHonor, honorLuck } from './honor';
 import { generatePlayer } from './generation';
 import { adjustLoyalty } from './growth';
 import { addFinance, econ, roundWageBill } from './economy';
-import { luckAdjustedWeights } from './gacha';
+import { luckAdjustedWeights } from './gachaOdds';
 import { syncSynergies } from './synergy';
 // 循环引用（rookieDraft 也引用本模块的 departToFreeAgency）：两边都只在函数体内使用，模块初始化时不调用
 import { draftedRookieReleaseBlock, releaseDraftedRookie } from './rookieDraft';
+import { gachaDiscard, gachaDiscardBlock } from './gacha';
 import {
   allTempSubCandidates, forEachSeat, inSeatOf, isMultiplayer, removePendingDecisionsEverywhere, seatInPlay,
 } from './seat';
@@ -51,31 +52,42 @@ export function roundFee(v: number): number {
 
 /**
  * 本回合内确定的「谈判骰子」：同一回合对同一选手重复操作得到相同结果（防止反复点击刷概率），
- * 由存档内容决定，可复现。
+ * 由存档内容决定，可复现。（trade.ts 的选手交易与 bidForPlayer 共用同一组盐值，现金报价与交易报价在同一回合掷同一枚骰子）
  */
-function negotiationRoll(state: GameState, salt: string): number {
-  return seededRng(hashSeed(`${state.id}|${state.season?.ti ?? 0}|${state.roundIndex}|${salt}`)).next();
+export function negotiationRoll(state: GameState, salt: string): number {
+  // 多人服务器的对局混入服务器端密钥（座位视图中清空）；单机与无密钥时与原来完全相同
+  const secret = state.multiplayer?.secret;
+  const base = secret ? `${state.id}#${secret}` : state.id;
+  return seededRng(hashSeed(`${base}|${state.season?.ti ?? 0}|${state.roundIndex}|${salt}`)).next();
 }
 
-function isTempOrWild(p: Player): boolean {
+/**
+ * 本状态能否预知谈判骰子（negotiationRoll）：多人座位视图中服务器密钥被清空为 ''（multi.seatView），客户端算出的骰子与服务器不同；
+ * 单机、服务器端状态、无服务器的多人模拟（无密钥）都能预知。供纯预览判断「选手会不会婉拒」。
+ */
+export function negotiationPredictable(state: GameState): boolean {
+  return state.multiplayer?.secret !== '';
+}
+
+export function isTempOrWild(p: Player): boolean {
   return !!p.tempSubUntilTournament || !!p.isWildSub;
 }
 
 /** 战队正式阵容（active，不含临时替补） */
-function regularRoster(state: GameState, teamId: string): Player[] {
+export function regularRoster(state: GameState, teamId: string): Player[] {
   return teamPlayers(state, teamId).filter((p) => !p.tempSubUntilTournament);
 }
 
-function isHighProfile(p: Player): boolean {
+export function isHighProfile(p: Player): boolean {
   return p.isReal || tierIndex(playerTier(p)) >= tierIndex('S');
 }
 
-function contractLength(rng: Rng): number {
+export function contractLength(rng: Rng): number {
   const [a, b] = CONFIG.economy.contractSeasons;
   return rng.int(a, b);
 }
 
-function newSigningLoyalty(willingness: number): number {
+export function newSigningLoyalty(willingness: number): number {
   const [a, b] = CONFIG.market.newSigningLoyalty;
   return Math.round(lerp(a, b, clamp(willingness, 0, 1)));
 }
@@ -100,7 +112,7 @@ function expirePlayerOffers(state: GameState, playerId: string, exceptOfferId?: 
   }
 }
 
-/** 选手离开原战队后：作废其待处理报价，移除与原战队相关的离队申请/挖角/续约决策，清除抽卡「可放弃」标记与挂牌状态 */
+/** 选手离开原战队后：作废其待处理报价，移除与原战队相关的离队申请/挖角/续约决策，清除抽卡「可放弃」标记、挂牌状态与自由市场签约记录 */
 function clearDepartureState(state: GameState, p: Player): void {
   expirePlayerOffers(state, p.id);
   removeDecisions(
@@ -110,6 +122,7 @@ function clearDepartureState(state: GameState, p: Player): void {
   delete p.gachaSeason;
   delete p.transferListing;
   delete p.listingStaleMemo;
+  delete p.freeAgentSignedClock;
 }
 
 /** 选手在原队的重要度：头号首发 importanceStar / 首发 importanceStarter / 替补 0 */
@@ -204,7 +217,7 @@ export function refreshFreeAgents(state: GameState): void {
 /** 选手加盟意愿 0..1：sigmoid((teamHonor - tierHonorExpectation[tier]) / scale)，加薪/冠军队可提高 */
 export function playerWillingness(state: GameState, playerId: string, teamId: string): number {
   const p = state.players[playerId];
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!p || !team || team.disbanded || p.status !== 'active') return 0;
   if (p.teamId === teamId) return 1;
   const m = CONFIG.market;
@@ -244,7 +257,7 @@ export function signFreeAgent(state: GameState, playerId: string): OpResult {
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return { ok: false, message: '战队不存在或游戏已结束' };
   if (!isTransferWindowOpen(state)) return { ok: false, message: '转会窗口已关闭（TI 预选与正赛期间锁定）' };
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p) return { ok: false, message: '选手不存在' };
   if (p.status !== 'active') return { ok: false, message: `${p.handle} 当前无法签约` };
   if (p.teamId === team.id) return { ok: false, message: `${p.handle} 已经是你的队员了` };
@@ -275,6 +288,8 @@ export function signFreeAgent(state: GameState, playerId: string): OpResult {
   // 工资：按本俱乐部地位开价（salary.signingSalary：荣誉 / 明星系数，不低于市场工资）
   addPlayerToTeam(state, p.id, team.id, { salary: signingSalary(state, p, team.id), contractSeasons: contractLength(rng) });
   p.loyalty = newSigningLoyalty(will);
+  // 选手交易：签下后不满 freeAgentHoldRounds 个转会回合就用他抵价时，对方按签字费估值（trade.ts，CONFIG.market.trade）
+  p.freeAgentSignedClock = listingClock(state);
   const bonus = CONFIG.honor.transfer.signTierBonus[tier] ?? 0;
   if (bonus) changeHonor(state, team.id, bonus, `签下 ${tier} 级选手 ${p.handle}`);
   addNews(
@@ -316,11 +331,11 @@ export function executeTransfer(
   fee: number,
   opts: { salary?: number; contractSeasons?: number; loyalty?: number } = {},
 ): boolean {
-  const p = state.players[playerId];
-  const to = state.teams[toTeamId];
+  const p = ownEntry(state.players, playerId);
+  const to = ownEntry(state.teams, toTeamId);
   if (!p || !to || p.teamId === toTeamId) return false;
   const fromId = p.teamId;
-  const from = fromId ? state.teams[fromId] : undefined;
+  const from = ownEntry(state.teams, fromId);
   const amount = Math.max(0, Math.round(fee));
   if (amount > 0) {
     addFinance(state, to.id, -amount, 'transfer_in', `从 ${from?.name ?? '自由市场'} 购入 ${p.handle}`);
@@ -346,7 +361,7 @@ export function bidForPlayer(state: GameState, playerId: string, fee: number): O
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return { ok: false, message: '战队不存在或游戏已结束' };
   if (!isTransferWindowOpen(state)) return { ok: false, message: '转会窗口已关闭（TI 预选与正赛期间锁定）' };
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p || p.status !== 'active') return { ok: false, message: '该选手无法转会' };
   if (!p.teamId) return { ok: false, message: `${p.handle} 是自由身，可直接签约` };
   if (p.teamId === team.id) return { ok: false, message: `${p.handle} 已经是你的队员了` };
@@ -410,7 +425,7 @@ function missingPositions(state: GameState, teamId: string): Position[] {
 }
 
 /** AI 能否负担：付完签字费后，余额仍能覆盖（现有工资 + 新增工资）× signBudgetRounds */
-function canAfford(state: GameState, team: Team, fee: number, salary: number): boolean {
+export function canAfford(state: GameState, team: Team, fee: number, salary: number): boolean {
   return team.gold - fee >= (roundWageBill(state, team.id) + salary) * CONFIG.ai.signBudgetRounds;
 }
 
@@ -474,7 +489,7 @@ export function fillRosterFromMarket(
   target: number = CONFIG.ai.minRoster,
   pool?: Player[],
 ): Player[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded) return [];
   const rng = rngOf(state);
   const signed: Player[] = [];
@@ -503,7 +518,7 @@ export function fillRosterFromMarket(
 
 /** 将阵容裁到 max 人：释放评分最低的替补（不动首发、不动临时替补），返回被释放者 */
 export function trimRoster(state: GameState, teamId: string, max: number = CONFIG.ai.maxRoster): Player[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return [];
   const released: Player[] = [];
   let roster = regularRoster(state, teamId);
@@ -592,7 +607,8 @@ export function generateAiOffers(state: GameState): void {
   if (!team) return;
   const rng = rngOf(state);
   const pending = new Set(state.transferOffers.filter((o) => o.status === 'pending').map((o) => o.playerId));
-  const cands = regularRoster(state, team.id).filter((p) => !isTempOrWild(p) && !pending.has(p.id));
+  // 抽卡新秀转售冷却期内不接随机求购（CONFIG.gacha.resaleHoldRounds）
+  const cands = regularRoster(state, team.id).filter((p) => !isTempOrWild(p) && !pending.has(p.id) && !gachaResaleLockLeft(state, p));
   const gaps = cands.map((p) => Math.max(0, salaryGap(state, p)));
   const maxGap = gaps.reduce((m, g) => Math.max(m, g), 0);
   if (!rng.chance(aiOfferChance(CONFIG.market.aiOfferChancePerRound, maxGap))) return;
@@ -717,7 +733,8 @@ export function departToFreeAgency(state: GameState, playerId: string): void {
     if (p.isWildSub && !p.isReal) delete state.players[p.id];
     else delete p.isWildSub;
   }
-  if (state.teams[teamId] && !state.teams[teamId].disbanded) autoLineup(state, teamId);
+  const t = ownEntry(state.teams, teamId);
+  if (t && !t.disbanded) autoLineup(state, teamId);
 }
 
 /** 解约补偿预估（与 releasePlayer 实际扣款一致；合同已到期为 0） */
@@ -726,6 +743,8 @@ export function releaseCompensation(state: GameState, playerId: string): number 
   if (!p) return 0;
   // 本届选秀选中的新秀：赛季初可免费放弃（releasePlayer 转给 rookieDraft.releaseDraftedRookie）
   if (p.draft && draftedRookieReleaseBlock(state, p) === null) return 0;
+  // 本回合抽到的新秀：退回不付补偿（releasePlayer 转给 gacha.gachaDiscard，另有部分返还）
+  if (p.gacha && gachaDiscardBlock(state, p) === null) return 0;
   const ti = state.season?.ti ?? p.contractUntil;
   if (p.contractUntil < ti) return 0;
   const remaining = p.contractUntil - ti + 1;
@@ -738,7 +757,7 @@ export function releasePlayers(state: GameState, playerIds: string[]): OpResult 
   const failed: string[] = [];
   let total = 0;
   for (const id of playerIds) {
-    const p = state.players[id];
+    const p = ownEntry(state.players, id);
     if (!p) continue;
     const comp = releaseCompensation(state, id);
     const r = releasePlayer(state, id);
@@ -762,11 +781,13 @@ export function releasePlayers(state: GameState, playerIds: string[]): OpResult 
 export function releasePlayer(state: GameState, playerId: string): OpResult {
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return { ok: false, message: '战队不存在或游戏已结束' };
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p || p.teamId !== team.id) return { ok: false, message: '该选手不在你的战队' };
   if (p.tempSubUntilTournament) return { ok: false, message: '临时替补会在赛事结束后自动离队' };
   // 本届选秀选中的新秀在赛季初免费放弃（无补偿、不扣荣誉），无论从哪个入口解约
   if (p.draft && draftedRookieReleaseBlock(state, p) === null) return releaseDraftedRookie(state, p.id);
+  // 本回合抽到的新秀：从任何入口解约都按「退回」处理（返还部分抽卡费用，无补偿、不扣荣誉；gacha.gachaDiscard）
+  if (p.gacha && gachaDiscardBlock(state, p) === null) return gachaDiscard(state, p.id);
   if (!isTransferWindowOpen(state)) return { ok: false, message: '转会窗口已关闭（TI 预选与正赛期间锁定）' };
   const ti = state.season?.ti ?? p.contractUntil;
   if (p.contractUntil < ti) {
@@ -799,7 +820,7 @@ export function releasePlayer(state: GameState, playerId: string): OpResult {
 export function renewContract(state: GameState, playerId: string, seasons: number, offeredSalary?: number | null): OpResult {
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return { ok: false, message: '战队不存在或游戏已结束' };
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p || p.teamId !== team.id || p.status !== 'active') return { ok: false, message: '该选手不在你的战队' };
   if (p.tempSubUntilTournament) return { ok: false, message: '临时替补无法续约' };
   const [minS, maxS] = CONFIG.economy.contractSeasons;
@@ -905,7 +926,7 @@ export function generateTempSubCandidatesFor(state: GameState, positions: Positi
 
 /** 临时替补费用 */
 export function tempSubCost(state: GameState, playerId: string): number {
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p) return 0;
   const tier = playerTier(p);
   return Math.round((CONFIG.economy.salaryByTier[tier] ?? 0) * CONFIG.tempSub.costMult * econ(state));
@@ -918,10 +939,10 @@ export function tempSubCost(state: GameState, playerId: string): number {
 export function hireTempSub(state: GameState, playerId: string, tournamentId: string): OpResult {
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return { ok: false, message: '战队不存在或游戏已结束' };
-  const p = state.players[playerId];
+  const p = ownEntry(state.players, playerId);
   if (!p || !state.tempSubCandidates.includes(playerId)) return { ok: false, message: '该替补已不在候选名单中' };
   if (p.teamId || p.status !== 'active') return { ok: false, message: `${p.handle} 当前无法雇佣` };
-  const t = state.tournaments[tournamentId];
+  const t = ownEntry(state.tournaments, tournamentId);
   if (!t) return { ok: false, message: '赛事不存在' };
   if (t.status === 'finished') return { ok: false, message: '赛事已结束' };
   const entered =

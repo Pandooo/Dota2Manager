@@ -213,6 +213,26 @@ export const CONFIG = {
       growthWeight: 0.5,
       declineWeight: 0.3,
     },
+    /**
+     * 荣誉势头（第十四波，momentum.ts；人机共用，Team.momentum）：
+     * - 同比（赛季初）：shift = clamp(yoyWeight × ln(max(本季初荣誉, floor) / max(上季初荣誉, floor)), ±yoyCap)，
+     *   作为该队全部选手赛季状态均值的加项（荣誉 +50% → 约 +2%，翻倍 → 上限 +3%；−30% → 约 −1.8%）。第一个赛季无同比。
+     * - 环比（每回合结束）：ewma ← (1 − alpha) × ewma + alpha × (本回合荣誉变化 / max(荣誉, floor))，
+     *   roundMult = 1 + clamp(roundWeight × ewma, ±roundCap)，作用于五名首发评分之和（team.teamRating）；荣誉不变时按 (1 − alpha) 逐回合衰减回 1。
+     *   荣誉 300 的战队连赢两站 Minor（各 +20）约 +1.3%，输掉一次 Major（−40）约 −1.6%。
+     */
+    honorMomentum: {
+      enabled: true,
+      yoyWeight: 0.05,
+      yoyCap: 0.03,
+      yoyFloor: 100,
+      roundWeight: 0.3,
+      roundCap: 0.02,
+      roundAlpha: 0.4,
+      roundFloor: 100,
+      /** 势头标签阈值（按合计乘子偏离 1 的百分比） */
+      labels: { strong: 0.012, up: 0.004, down: -0.004, weak: -0.012 },
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -603,8 +623,10 @@ export const CONFIG = {
      */
     maxRoster: 8,
     /**
-     * 绝对上限：人类玩家战队只有签约自由选手 / 求购选手时受此限制（达到即不能再引进）。
-     * 赛事临时替补与新秀选秀不受限制（选秀新秀总是入队，由经理决定首发与替补）。
+     * 绝对上限：人类玩家战队签约自由选手 / 求购选手时受此限制（达到即不能再引进）。
+     * 新秀抽卡总是抽满（2026-10-15 用户决策「十连后本回合内退回到 12 人」）：可以超出，但超编期间不能进入下一回合，
+     * 须在本回合内放弃本回合抽到的新秀或解约 / 出售其他队员（game.getAdvanceBlockers 的 roster_over_cap；懒人推进自动处理）。
+     * 赛事临时替补不计入；旧选秀（默认关闭）的新秀同样计入超编。
      */
     hardMaxRoster: 12,
     /**
@@ -926,33 +948,132 @@ export const CONFIG = {
      */
     lowHonorLossRef: 300,
     lowHonorLossMinMult: 0.4,
+    /**
+     * 退赛扣荣誉（第十四波，schedule.unregisterFromTournament / withdrawPenaltyOf）：开赛前退出已接受的邀请或已报名的赛事，
+     * 按赛事等级扣分（约为该等级赛事一次明显失常的扣分：Major 一次垫底约 −50~−75，Minor 约 −20~−35）。
+     * 规则：报名 / 接受邀请所在的同一回合内退出免罚（赛季初的邀请在赛季初随意婉拒；补充邀请在收到通知的回合内婉拒免罚）；
+     * 距开赛 ≥ withdrawFarRounds 回合退出 × withdrawFarMult（减半）；补位线上公开赛按 withdrawOpenCup；低荣誉减损与赛事扣分同口径
+     * （lowHonorLossRef）；扣分会让荣誉跌破 0 时不允许退出。TI 与 TI 预选不可退出；主办方取消、补充邀请让位等非玩家操作不扣分；
+     * AI 战队不退赛，不受影响。
+     */
+    withdraw: { ti: 0, major: -40, premier: -25, minor: -12, qualifier: -5 } as Record<TournamentTier, number>,
+    withdrawOpenCup: -5,
+    withdrawFarRounds: 3,
+    withdrawFarMult: 0.5,
+    /** 退赛扣分 ≥ 此值时新闻标为重要 */
+    withdrawNewsImportant: 20,
   },
 
   // -------------------------------------------------------------------------
-  // 抽卡
+  // 新秀抽卡（gacha.ts；2026-10-14 用户决策：抽卡回归并完全取代新秀选秀，新增「请神」与名人堂）
+  // 每个赛季的新秀（真实 + 虚构）只能经由抽卡进入联赛：赛季初建一个有限卡池，转会窗口开放期间
+  // （赛季初 + 常规赛）人类玩家随时抽卡、AI 战队在第 1 回合开始前与赛季中期按自身资金自动抽卡；
+  // 第 1 回合开始前未被抽走的真实新秀离池、加盟其真实出道战队（人类玩家的出道战队收到「签下 / 放弃」事件；否则其他 AI 战队 / 自由市场），
+  // 卡池同等级补入请神 / 虚构卡；TI 预选赛转会锁定时卡池关闭。
   // -------------------------------------------------------------------------
   gacha: {
-    // 【用户指定数值，平衡调整时不要修改】单抽 1 万、十连 10 万（固定金额，不随年代缩放）
+    /**
+     * 【用户指定，2026-10-14】单抽价格随年代缩放：单抽 = singleCost × econIndex(赛季年份) / econIndex(priceBaseYear)
+     * （TI1 1 万、TI9 4 万、TI13 2.4 万）；十连 = 单抽 × tenMult（不打折）。平衡调整时不要修改。
+     */
     singleCost: 10000,
-    tenCost: 100000,
-    // 【用户指定】SSR 采用伪随机分布（PRD：连续未出时概率递增），第 100 抽必出 SSR
+    priceBaseYear: 2011,
+    tenMult: 10,
+    /** 【用户指定】SSR 保底：距上一张 SSR 第 pityThreshold 抽必出 SSR（计数随战队、跨赛季；简单计数器，任何 SSR 即清零） */
     pityThreshold: 100,
-    poolSize: 60,
-    /** 基础等级概率（%）【用户指定：A 10%、S 5%、SS 1%、SSR 0.1%；C/B 填充其余】 */
+    /**
+     * 【用户指定，2026-10-14】总体出卡概率：SSR 5% / SS 10% / S 10% / A 15% / B 30% / C 30%。
+     * 以有限卡池实现：基础卡池 poolSize（100）张，各等级张数 = 比例（100 张时张数 = 百分比）；卡池内均匀不放回抽取。
+     * 平衡调整时不要修改（只调 AI 抽卡量或虚构新秀的初始水平）。
+     */
+    tierShares: { C: 30, B: 30, A: 15, S: 10, SS: 10, SSR: 5 } as Record<Tier, number>,
+    poolSize: 100,
+    /**
+     * 本届真实新秀（playerIndex.firstTi = 本届，等级取出道届的真实轨迹）先占各自等级的名额；某等级的真实新秀超出名额时，
+     * 卡池按 poolStep 张一档放大（各等级仍严格按比例，卡的等级 = 选手等级），并在卡池记录中注明（GachaPool.enlargedBy）。
+     * 20 张是比例全部为整数的最小卡池单位（SSR 1 / SS 2 / S 2 / A 3 / B 6 / C 6）。
+     */
+    poolStep: 20,
+    /**
+     * 【用户指定，2026-10-14】各等级的非真实名额中请神卡的比例（取整），受该等级可用原型数限制：
+     * 原型 = 名人堂中「出道等级」等于该等级的成员；同一原型每赛季至多 summonMaxPerPrototype 张。其余为虚构新秀卡。
+     */
+    summonShare: 0.5,
+    summonMaxPerPrototype: 2,
+    /** 请神新秀复制原型出道时的年龄（生涯走势含年龄衰退，完全复制原型）；false 时按普通新秀年龄 */
+    summonCopyAge: true as boolean,
+    /**
+     * 新秀合同赛季数（含当前赛季）；工资 = 等级标准工资 × 新秀折扣（economy.rookieSalaryMult），不超过 rookieWageCap × 赛季经济指数
+     * （不低于 economy.minSalary）。
+     */
+    rookieContractSeasons: 3,
+    /**
+     * 抽卡新秀（含按真实出道去向加盟的真实新秀）的新秀合同工资上限（econIndex = 1 时每回合），与选秀第 1 顺位工资 draft.salaryTop 相同。
+     * 2026-10-14 审查：不设上限时 SS 新秀在 TI9 约 4253/回合、SSR 约 6787/回合，新俱乐部按常规玩法（保留真实 / 请神新秀）
+     * TI1 / TI5 / TI9 起 8 季破产 22 / 16 / 14 次（40 个种子；选秀版本 10 / 4 / 0），加上限后见 DESIGN.md 3.3.5。
+     */
+    rookieWageCap: 1800,
+    /**
+     * 转售冷却：本队抽卡抽到（或按真实出道去向加盟本队）的新秀，入队不满此数的转会回合（listingRules.listingClock 之差，约一个赛季）时
+     * 不能挂牌出售、不会收到 AI 的随机求购，作为交易抵价时按 market.trade.freeAgentSignedCap 估值。
+     * 2026-10-14 审查：抽到的新秀平均身价是单抽价格的 3.4~4.5 倍，不设冷却时「抽卡 → 立即按 0.8 倍身价挂牌」每季净赚数百万，
+     * 抽卡从花钱变成了赚钱（DESIGN.md 3.3.5）。与 market.trade.freeAgentHoldRounds 同一时钟。
+     */
+    resaleHoldRounds: 18,
+    /** 抽到的新秀在同一回合内可退回（离队进入自由市场），返还单抽价格 × 此比例（无解约补偿、不扣荣誉） */
+    discardRefundRatio: 0.2,
+    /** 抽空后补充卡池（同比例，只含请神与虚构新秀）的张数 */
+    refillSize: 100,
+    /** 往届抽卡汇总保留的赛季数 */
+    historyMax: 16,
+    /** 新闻：抽到不低于此等级的新秀发公开新闻 */
+    newsMinTier: 'S' as Tier,
+    /** 【用户指定，2026-10-14】每支 AI 战队每赛季至多自动抽卡张数 */
+    aiMaxPullsPerSeason: 3,
+    /**
+     * AI 战队自动抽卡（第 1 回合开始前：人类玩家先抽；以及赛季中期一次）：
+     * 张数 = min(本阶段上限（开赛前 openingMax，中期不限）, 本赛季剩余上限 aiMaxPullsPerSeason, ⌊(资金 − 每回合工资 × reserveRounds) / 单抽价格⌋,
+     *           ai.maxRoster + rosterSlack − 阵容人数)；抽完后自动排阵，超出 ai.maxRoster 时放走保留价值最低的非首发（进入自由市场）。
+     * 弱队（资金少）自然抽得少。标定（DESIGN.md 3.3.5，8 季 × 8 种子对照选秀）：预留 12 回合 / 开赛前 2 张时每季 AI 抽 33~49 张、AI 中位资金约为选秀的一半；
+     * 预留 30 回合且不超编时每季只抽约 7 张、SSR 降到选秀的一半以下；采用 20 / 1 / 1，联赛等级分布与选秀相当；
+     * 加上超编门槛 slackKeepMax 后每季 12~16 张（2026-10-15 复测，新俱乐部懒人推进 TI1 / TI5 / TI9 起 8 季 × 8 种子）。
+     */
+    ai: {
+      openingMax: 1,
+      reserveRounds: 20,
+      rosterSlack: 1,
+      /**
+       * 超编抽卡的门槛：替补中保留价值（rookieDraft.aiKeepValue）最低者低于此值时才使用 rosterSlack。2026-10-14 审查：不设门槛时
+       * AI 每季约 38%~57% 的抽卡在同一回合就被整理阵容放走（抽到的新秀保留价值中位数约 63，满员 AI 替补最低者中位数约 79）。
+       * 80 ≈ 满员 AI 替补最低值的中位数：约一半满员战队仍会超编抽卡，第 8 季 SSR 人数接近选秀版本（标定见 DESIGN.md 3.3.5）。
+       */
+      slackKeepMax: 80,
+    },
+    /**
+     * DotA1 时代传奇等「合成轨迹」种子（src/data/hallOfFame.json 的 source = seed）：生涯第 1 年出道 → peakYear 达到巅峰
+     * （线性）→ 保持到 declineFromYear − 1 → 之后每年衰退，生涯共 careerYears 年。天梯按等级区间取值：
+     * 门槛 + frac × 区间宽度（SSR 区间宽度按 topTierSpan），衰退期每年 −declineMmrPerYear。出道年龄缺省 seedDebutAge。
+     */
+    seedTrajectory: {
+      careerYears: 10,
+      mmrFracDebut: 0.3,
+      mmrFracPeak: 0.7,
+      topTierSpan: 4000,
+      declinePowerPerYear: 2,
+      declineMmrPerYear: 600,
+      seedDebutAge: 19,
+    },
+    /** 名人堂本局生涯记录（game 来源）最多保留的点数 */
+    hofTrajMax: 20,
+    // ---- 以下为旧版抽卡 / 通用生成沿用的数值 ----
+    /** 基础等级概率（%）：程序化生成选手（AI 补员、自由市场等）的默认等级分布（旧版抽卡的【用户指定】值，沿用） */
     baseWeights: { C: 48.9, B: 35, A: 10, S: 5, SS: 1, SSR: 0.1 } as Record<Tier, number>,
     /**
-     * 荣誉幸运度对等级权重的指数修正：w × exp(luck' × slope[tier])，
+     * 荣誉幸运度对等级权重的指数修正（临时替补等通用）：w × exp(luck' × slope[tier])，
      * luck' = max(0, luck - luckBaseline)：新俱乐部（荣誉 100）恰为基础概率，荣誉越高高等级概率小幅提升。
      */
     luckSlope: { C: -0.08, B: -0.04, A: 0.06, S: 0.15, SS: 0.25, SSR: 0.3 } as Record<Tier, number>,
     luckBaseline: 0.30103,
-    discardRefundRatio: 0.2,
-    newPlayersPerSeasonGenerated: 30,
-    /** 同等级内真实新秀被抽中的权重（程序化新人为 1） */
-    realRookieWeight: 3,
-    rookieContractSeasons: 3,
-    /** 开赛（抽卡关闭）时，卡池里未被抽走的真实新秀加盟 AI 战队（优先其真实出道战队），保证在登场赛季出现在赛场上 */
-    realRookiesJoinAi: true,
   },
 
   // -------------------------------------------------------------------------
@@ -960,6 +1081,11 @@ export const CONFIG = {
   // 每个赛季初（退役/年龄/合同之后、休赛期转会潮与赛程之前）举行，所有战队（含玩家）自动参加。
   // -------------------------------------------------------------------------
   draft: {
+    /**
+     * 选秀开关（2026-10-14 用户决策：抽卡完全取代选秀）。false = 赛季初不再举行选秀（新秀改由 gacha.ts 的卡池进入联赛）；
+     * 选秀代码保留一个版本（下个版本删除），覆盖选秀的测试显式打开此开关。
+     */
+    enabled: false as boolean,
     /** 选秀轮数 */
     rounds: 2,
     /** 每赛季程序生成的新秀人数（另加本赛季登场的真实新秀）；新秀池总人数上限 poolMax（真实新秀优先） */
@@ -1006,6 +1132,33 @@ export const CONFIG = {
     notableTier: 'SS' as Tier,
     /** 【选秀大会】新闻最多逐条列出的顺位数（其余汇总为一句，完整结果见「转会 › 新秀选秀」） */
     newsMaxLines: 16,
+  },
+
+  // -------------------------------------------------------------------------
+  // 「下一回合」自动处理（懒人玩法，autoRound.ts）
+  // -------------------------------------------------------------------------
+  autoRound: {
+    /**
+     * 自动补员（v0.3 选秀取消后，只按「下一回合」的人类战队不再自动得到新秀）：转会窗口开放期间，正式阵容（不含临时 / 野外替补）
+     * 不能覆盖五个位置（roles.uncoveredPositions，含副位置）或少于 minRosterFill 人时，先为缺失的位置、再为替补深度（多于 5 时）签下负担得起的自由选手。
+     * 目标 5 人（只补能凑齐五个位置的首发，不自动补替补）：懒人推进默认开启，所有按「下一回合」的玩家都会经过这里，
+     * 6（再补一名替补，只在经常性收入付得起时签）的实测结果与 5 几乎相同（DESIGN.md 3.4.2），却会给手动经营、有意只养 5 人的玩家多签人。
+     */
+    minRosterFill: 5,
+    /**
+     * 预算（autoRound.signingTerms / affordable）：付完签字费后余额 ≥（每回合工资 + 新签工资）× reserveRounds；
+     * 人选分两轮挑：先在签约后每回合经常性收入（赞助 + 直播 + 周边，不含奖金与夺冠热度加成）仍付得起工资的人选中取评分最高者；
+     * 没有时才允许入不敷出：首发（补上空着的首发位，或顶替跨位置首发）要求余额还能覆盖 coverDeficitRounds 个回合（约 4 个赛季）的缺口；
+     * 替补（首发已满：补替补深度，或补位的人选不比现任跨位置首发强）不允许入不敷出。
+     * 不满足时不签，赛事照常由临时替补顶上（按赛事一次性付费，比长期工资便宜）。
+     * 标定（24 + 40 个种子，DESIGN.md 3.4.2）：(6, 40) 时 Mineski TI5 起破产 11/24（HEAD 8/24），(10, 80) 时 8/24 与 11/40（HEAD 10/40）。
+     * 只按评分挑（不分两轮）时新俱乐部多签 S 级、工资长期高于收入，资金逐季降到预留线后再也签不起人，打满 TI16 时阵容覆盖率掉到 75%；
+     * 分两轮后 86% / 94% / 100%（TI1 / TI5 / TI9 起）。入不敷出时改签最便宜的人选覆盖率更高，但强队（EG）成绩明显下滑，未采用。
+     */
+    reserveRounds: 10,
+    coverDeficitRounds: 80,
+    /** 每回合至多自动签下的人数（从空阵容补到 minRosterFill 也够用） */
+    maxSigningsPerRound: 6,
   },
 
   // -------------------------------------------------------------------------
@@ -1062,6 +1215,45 @@ export const CONFIG = {
     realTempSubChance: 0.25,        // 每个候选位从真实自由选手中挑选的概率
     offerHistoryMax: 40,            // 保留的已处理报价条数
     aiOfferLoyaltyWeight: 2.5,      // AI 报价目标权重 = sqrt(身价) × (1 + (100-归属感)/100 × 此值)
+    /**
+     * 选手交易（trade.ts；用户需求 2026-10-14：「报价可以通过现金 + 本队队员身价（可多个）× 一定比例折溢价来达到目标队员报价」）：
+     * 向 AI 战队求购时，报价总额 = 现金 + Σ 抵价选手估值；估值 = 身价 × 系数 × 意愿修正，
+     * 系数 = baseRatio × 需求修正（无首发 / 可顶替首发 → 溢价；位置重叠 / 年龄偏大 / 等级低于首发 → 折价），夹在 ratioRange 内。
+     * 接受概率沿用 aiAcceptChance（fee := 总额）；目标选手的加盟意愿照旧另判。规则与实测见 DESIGN.md 3.4.1。
+     */
+    trade: {
+      /** 一次最多用几名本队选手抵价 */
+      maxPlayers: 3,
+      /** 基础系数：抵价选手按身价的这个比例计价（对方按「以物易物」折价接收） */
+      baseRatio: 0.8,
+      /** 系数（基础 × 需求修正）的夹紧范围 */
+      ratioRange: [0.5, 1.15] as [number, number],
+      /** 需求修正：对方该位置（本位置 / 副位置，含目标离队后腾出的位置）没有可用首发 */
+      needMult: 1.45,
+      /** 需求修正：评分高于对方该位置首发（评分比 1.0 → upgradeMult[0]，≥ 1 + upgradeFullGain → upgradeMult[1]，线性插值） */
+      upgradeMult: [1.1, 1.45] as [number, number],
+      upgradeFullGain: 0.15,
+      /** 需求修正：位置重叠（评分不高于对方首发，只能当替补）：评分比 ≤ overlapFloorRatio → overlapMult[0]，→ 1 时 overlapMult[1] */
+      overlapMult: [0.65, 1.0] as [number, number],
+      overlapFloorRatio: 0.8,
+      /** 年龄偏大：超过所打位置巅峰窗口（aging.peakWindow）每一年 × (1 - agePenaltyPerYear)，不低于 ageMinMult */
+      agePenaltyPerYear: 0.08,
+      ageMinMult: 0.7,
+      /** 天梯等级低于对方该位置首发 */
+      tierBelowMult: 0.85,
+      /** 意愿：抵价选手对卖方的加盟意愿低于 minWillingness 时卖方拒收；介于 minWillingness..willingnessFullAt 之间按 willingnessMinMult..1 线性折价 */
+      minWillingness: 0.25,
+      willingnessFullAt: 0.7,
+      willingnessMinMult: 0.6,
+      /**
+       * 刚从自由市场签下的选手（Player.freeAgentSignedClock，签下后不满 freeAgentHoldRounds 个转会回合 = listingRules.listingClock 之差）：
+       * 实际系数（含意愿修正）最多为 freeAgentSignedCap，与 economy.signingFeeRatio（0.25）相同——对方按签字费估值，
+       * 「签自由选手 → 立即抵价」无利可图（不设上限时实测可省 40%～49% 的报价，见 DESIGN.md 3.4.1）。
+       * 18 个转会回合 ≈ 一个赛季：赛季末签下、下赛季初抵价同样受限；满一个赛季的工资（约身价 × 0.4）已付，之后按正常系数估值。
+       */
+      freeAgentSignedCap: 0.25,
+      freeAgentHoldRounds: 18,
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -1161,7 +1353,10 @@ export const CONFIG = {
     newClubSTierCount: { easy: 2, normal: 1, hard: 0 } as Record<string, number>,
     newClubATierCount: { easy: 3, normal: 3, hard: 3 } as Record<string, number>,
     newClubContractSeasons: 2,
-    /** 新俱乐部创立礼包（若干次单抽的资金）。第八波取消玩家抽卡：新俱乐部改为在赛季初选秀中获得新秀，礼包关闭 */
+    /**
+     * 新俱乐部创立礼包（若干次单抽的资金）。第八波取消玩家抽卡后关闭；2026-10-14 抽卡回归后仍关闭（开局资金已按锚定额给足，
+     * 新俱乐部用启动资金自行抽卡；礼包按旧的固定单抽价计算，未随年代缩放，打开前需复核）
+     */
     newClubGachaGrant: false,
     /** 签约教练签字费 = 工资 × 此值 */
     coachSigningFeeSalaryMult: 4,
@@ -1207,6 +1402,28 @@ export const CONFIG = {
     aiFillWeight: { points: 1, honor: 0.5, rating: 2 },
     /** AI 参赛门槛：荣誉 ≥ minHonor × 此值 */
     aiMinHonorFactor: 0.5,
+    /**
+     * 赛季中补充邀请（第十四波，schedule.refreshSeasonInvites，每回合结束时）：对本赛季未来 horizonRounds 个回合内开赛的常规赛事
+     * 重新评估直邀——当前赛季积分榜排名 ≤ 直邀规模（模板直邀名额与赛季初受邀队数取大；赛区锁定赛事按赛区内排名；
+     * 需本赛季已有积分）或荣誉 ≥ inviteHonor[等级] 的战队，若不在受邀名单中且名单有空位
+     * （婉拒 / 解散腾出的席位 + extraSlots 个追加席位，总数不超过正赛规模）则补邀，按积分榜顺序补齐。
+     * 已有邀请不撤销；AI 自动接受；人类战队默认接受（同回合已有同级或更高等级赛事则记为已婉拒，
+     * 低等级的已有安排自动让位、不扣荣誉）并收到总览通知 + 新闻，至少提前 humanNoticeRounds 个回合通知，
+     * 通知当回合内婉拒免扣荣誉。
+     */
+    lateInvite: {
+      enabled: true,
+      extraSlots: 2,
+      /**
+       * 只评估未来几个回合内开赛的赛事（含下一回合）：邀请随赛事临近逐回合发出、依据的是较新的积分榜，
+       * 而不是第 1 回合结束时就把整季的赛事按一回合的成绩发完
+       */
+      horizonRounds: 4,
+      /** 人类战队至少提前多少个回合收到补充邀请（1 = 下回合开赛的赛事不再补邀人类战队，留出婉拒窗口） */
+      humanNoticeRounds: 1,
+      /** 积分榜排名条件要求本赛季已有积分（避免赛季初按荣誉排序的「排名」把无成绩的战队补邀进来） */
+      requirePoints: true,
+    },
     /** TI 赛区预选：队伍数 ≥ 此值用双败，否则单败 */
     tiQualifierDeMinTeams: 6,
     /** tis.json 缺失某届时的 TI 兜底参数 */

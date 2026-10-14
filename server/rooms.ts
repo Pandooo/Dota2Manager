@@ -8,6 +8,11 @@
 // - 任何异常都不会让进程崩溃：消息处理全部 try/catch，引擎异常转为错误回复。
 // - 会话 ID 只在服务器内部（StoredRoom）：发给客户端的房间信息用每个房间独立的随机座位键（seatKey）识别座位。
 // - 定期清理（sweep）：无人在线的大厅房间、无人在线超过宽限期的已结束对局、长时间无人在线的进行中对局（删除存档文件）。
+// - 在线统计（server/stats.ts）：连接 / hello / 开局与房间变化时通知统计模块；onlineCounts 只给出人数。
+// - 局域网地址只发给来自局域网的连接（Conn.lan）；公网模式（publicMode）一律不发，错误信息不含内部细节。
+// - 同一来源地址的限制（Conn.limited：默认只对公网来源生效）：等待中的房间数、每小时开局次数；聊天单独限流；
+//   房间数满时可清理长时间无人在线的进行中对局（abandonedRoomEvictMs）。
+// - 随机数状态与谈判密钥只在服务器：座位视图中清空（engine seatView），抽卡前混入服务器随机数，客户端无法预测下一张卡。
 // ============================================================================
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { GameState, NewsItem, OpResult } from '../src/engine/types';
@@ -21,6 +26,8 @@ import type { MpEngine } from './engine';
 import { seatsOf } from './engine';
 import { ROOM_FILE_FORMAT, type RoomFile, type RoomStore, type StoredRoom, type StoredSeat } from './persistence';
 import { LIMITS, cleanText, parseClientMsg, parseNewClub } from './validate';
+import { isPrivateAddress, publicSafeErrorText } from './net';
+import type { OnlineCounts, StatsEvents } from './stats';
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -38,6 +45,10 @@ export interface Conn {
   id: number;
   ws: SocketLike;
   ip: string;
+  /** 来自回环 / 私有网段（局域网）：只有这样的连接才会收到局域网地址（server/net.ts isPrivateOrigin） */
+  lan: boolean;
+  /** 是否按来源地址（ip）限制建房 / 开局次数（app.ts：默认只对公网来源） */
+  limited: boolean;
   sessionId: string | null;
   name: string;
   /** 当前所在房间 */
@@ -55,6 +66,11 @@ export interface Conn {
   tokens: number;
   tokensAt: number;
   lastThrottleWarn: number;
+  /** 聊天单独限流（令牌桶） */
+  chatTokens: number;
+  chatTokensAt: number;
+  /** 最近发给该连接的在线统计（相同内容不重复发送） */
+  statsSent?: string;
 }
 
 interface Room {
@@ -77,14 +93,23 @@ interface Room {
   viewCache: Map<string, { version: number; json: string }>;
   /** 房主离线后的移交计时器（宽限期内房主回来则取消） */
   hostTimer: ReturnType<typeof setTimeout> | null;
+  /** 建房连接的来源地址（只在内存中，用于同一地址的等待中房间数限制） */
+  creatorAddr?: string;
 }
 
 export interface RoomManagerOptions {
   engine: MpEngine;
   store?: RoomStore | null;
   serverName?: string;
-  /** welcome 中的局域网地址 */
+  /** welcome 中的局域网地址（只发给来自局域网的连接） */
   lanUrls?: () => string[];
+  /**
+   * 公网模式（--public）：不向任何客户端发送内网地址，welcome 标记 publicServer；发给客户端的错误信息
+   * 不含文件路径、调用栈等内部细节（完整信息只写服务器日志）。
+   */
+  publicMode?: boolean;
+  /** 在线统计（server/stats.ts） */
+  stats?: StatsEvents | null;
   log?: (msg: string) => void;
   /** 两次视图推送的最小间隔（毫秒），默认 250（≤ 4 次/秒） */
   stateIntervalMs?: number;
@@ -105,6 +130,15 @@ export interface RoomManagerOptions {
    * 对局中无人能托管离线玩家（包括房主自己的座位），整个房间永远无法推进回合。
    */
   hostGraceMs?: number;
+  /**
+   * 房间数达到上限时，连续无人在线超过此时长（毫秒，默认 60 分钟；0 = 不清理）的进行中对局也可被清理腾位置
+   * （优先清理从未推进过的对局）。否则开局后立即离开的对局会一直占着房间位，直到 idleRoomTtlMs（默认 14 天）。
+   */
+  abandonedRoomEvictMs?: number;
+  /** 同一来源地址（Conn.limited）最多同时拥有的等待中房间数（默认 3；0 = 不限） */
+  maxLobbyRoomsPerAddress?: number;
+  /** 同一来源地址（Conn.limited）每小时最多开局次数（默认 6；0 = 不限） */
+  maxGamesPerAddressPerHour?: number;
 }
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -112,6 +146,8 @@ const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEFAULT_FINISHED_ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 /** 进行中对局连续无人在线（服务器运行时间）的保留时长默认值 */
 export const DEFAULT_IDLE_ROOM_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+/** 房间数满时可清理的「无人在线的进行中对局」的最短无人在线时长默认值 */
+export const DEFAULT_ABANDONED_ROOM_EVICT_MS = 60 * 60 * 1000;
 /** 每个房间记住的被移出会话上限（随房间存档） */
 const KICKED_MAX = 200;
 const OPEN = 1; // WebSocket.OPEN
@@ -120,6 +156,11 @@ const MAX_BUFFERED = 24 * 1024 * 1024;
 /** 令牌桶：容量 / 每秒补充 */
 const RATE_CAPACITY = 80;
 const RATE_REFILL = 40;
+/** 聊天令牌桶：连续最多 5 条，之后每秒 1 条（陌生人可加入公开的大厅房间，不能刷屏） */
+const CHAT_CAPACITY = 5;
+const CHAT_REFILL = 1;
+/** 引擎把内部异常包装成失败结果时用的前缀（公网模式下只过滤冒号后的内部细节） */
+const WRAPPED_ERROR = /^(操作失败|推进失败|推进回合失败|托管失败|托管出错|开始游戏失败|创建游戏失败)：([\s\S]*)$/;
 const MAX_QUEUE = 500;
 const CALL_FEED_MAX = 20;
 /** 只影响调用者自己视图的 RPC：不给其他玩家推送新快照（下一次变更时一并同步） */
@@ -158,6 +199,8 @@ export class RoomManager {
   private readonly store: RoomStore | null;
   private readonly serverName: string;
   private readonly lanUrls: () => string[];
+  private readonly publicMode: boolean;
+  private readonly stats: StatsEvents | null;
   private readonly log: (msg: string) => void;
   private readonly stateIntervalMs: number;
   private readonly maxRooms: number;
@@ -166,6 +209,11 @@ export class RoomManager {
   private readonly idleRoomTtlMs: number;
   private readonly roundFeedMax: number;
   private readonly hostGraceMs: number;
+  private readonly abandonedRoomEvictMs: number;
+  private readonly maxLobbyRoomsPerAddress: number;
+  private readonly maxGamesPerAddressPerHour: number;
+  /** 来源地址 → 最近一小时的开局时间（Conn.limited 的连接） */
+  private readonly gameStarts = new Map<string, number[]>();
   private connSeq = 0;
   private feedSeq = 0;
   private roomListTimer: ReturnType<typeof setTimeout> | null = null;
@@ -176,6 +224,8 @@ export class RoomManager {
     this.store = opts.store ?? null;
     this.serverName = opts.serverName ?? '刀塔经理服务器';
     this.lanUrls = opts.lanUrls ?? (() => []);
+    this.publicMode = !!opts.publicMode;
+    this.stats = opts.stats ?? null;
     this.log = opts.log ?? (() => undefined);
     this.stateIntervalMs = Math.max(0, opts.stateIntervalMs ?? 250);
     this.maxRooms = opts.maxRooms ?? 64;
@@ -184,17 +234,26 @@ export class RoomManager {
     this.idleRoomTtlMs = Math.max(0, opts.idleRoomTtlMs ?? DEFAULT_IDLE_ROOM_TTL_MS);
     this.roundFeedMax = opts.roundFeedMax ?? 30;
     this.hostGraceMs = Math.max(0, opts.hostGraceMs ?? 30_000);
+    this.abandonedRoomEvictMs = Math.max(0, opts.abandonedRoomEvictMs ?? DEFAULT_ABANDONED_ROOM_EVICT_MS);
+    this.maxLobbyRoomsPerAddress = Math.max(0, Math.floor(opts.maxLobbyRoomsPerAddress ?? 3));
+    this.maxGamesPerAddressPerHour = Math.max(0, Math.floor(opts.maxGamesPerAddressPerHour ?? 6));
     this.store?.attach({ snapshot: (id) => this.snapshot(id) });
   }
 
   // =========================================================================
   // 连接
   // =========================================================================
-  addConn(ws: SocketLike, ip = ''): Conn {
+  /**
+   * lan：连接是否来自局域网（缺省按 ip 判断；app.ts 同时检查转发头，见 net.isPrivateOrigin）；
+   * limited：是否按来源地址限制建房 / 开局次数（缺省 = 非局域网来源）。
+   */
+  addConn(ws: SocketLike, ip = '', lan = isPrivateAddress(ip), limited = !lan): Conn {
     const conn: Conn = {
       id: ++this.connSeq,
       ws,
       ip,
+      lan,
+      limited,
       sessionId: null,
       name: '',
       roomId: null,
@@ -208,14 +267,26 @@ export class RoomManager {
       tokens: RATE_CAPACITY,
       tokensAt: Date.now(),
       lastThrottleWarn: 0,
+      chatTokens: CHAT_CAPACITY,
+      chatTokensAt: Date.now(),
     };
     this.conns.add(conn);
+    this.stats?.connection();
+    this.statsChanged();
     return conn;
   }
 
   /** 连接关闭：座位标记离线（不释放座位） */
   removeConn(conn: Conn): void {
     if (conn.closed) return;
+    try {
+      this.detachConn(conn);
+    } finally {
+      this.statsChanged();
+    }
+  }
+
+  private detachConn(conn: Conn): void {
     conn.closed = true;
     this.conns.delete(conn);
     if (conn.stateTimer) clearTimeout(conn.stateTimer);
@@ -245,8 +316,9 @@ export class RoomManager {
       if (!this.takeToken(conn)) {
         // 被限流的 call 也回复 callResult，客户端的等待不会悬空到超时；被限流的开始游戏请求带 ref（房间页复位按钮）。
         // 这两种已有专门的回复，不再另发通用提示（否则客户端同一件事弹两条）；其余消息的通用提示每秒最多一条
-        const type = raw.length <= LIMITS.maxPayload ? this.peekType(raw) : null;
-        const reqId = type === 'call' ? this.peekReqId(raw) : null;
+        // 被限流时不完整解析消息（最大 128 KB 的消息每条解析两次也是开销）：只用正则看开头的类型与请求号
+        const type = this.peekTypeFast(raw);
+        const reqId = type === 'call' ? this.peekReqIdFast(raw) : null;
         if (reqId !== null) this.send(conn, { t: 'callResult', reqId, ok: false, message: '操作过于频繁，请稍后再试' });
         else if (type === 'startGame') this.error(conn, '操作过于频繁，请稍后再试', 'startGame');
         else if (Date.now() - conn.lastThrottleWarn > 1000) {
@@ -266,17 +338,19 @@ export class RoomManager {
       this.handle(conn, parsed.msg);
     } catch (err) {
       this.log(`处理消息出错（连接 #${conn.id}）：${errMsg(err)}`);
-      this.error(conn, `服务器处理消息出错：${errMsg(err)}`);
+      this.error(conn, `服务器处理消息出错：${this.detail(err)}`);
     }
   }
 
-  private peekType(raw: string): string | null {
-    try {
-      const d = JSON.parse(raw) as { t?: unknown };
-      return d && typeof d.t === 'string' ? d.t : null;
-    } catch {
-      return null;
-    }
+  /** 限流路径：只看消息开头（{"t":"call"…），不做 JSON 解析 */
+  private peekTypeFast(raw: string): string | null {
+    const m = /^\s*\{\s*"t"\s*:\s*"([A-Za-z]{1,32})"/.exec(raw.slice(0, 64));
+    return m ? m[1] : null;
+  }
+
+  private peekReqIdFast(raw: string): number | null {
+    const m = /"reqId"\s*:\s*(\d{1,15})\b/.exec(raw.slice(0, 256));
+    return m ? Number(m[1]) : null;
   }
 
   private peekReqId(raw: string): number | null {
@@ -431,7 +505,18 @@ export class RoomManager {
       }
     }
     this.bySession.set(sid, conn);
-    this.send(conn, { t: 'welcome', sessionId: sid, serverName: this.serverName, lanUrls: this.lanUrls() });
+    // 局域网地址只发给来自局域网的连接；公网模式一律不发（服务器在公网上时内网地址没有用处，也不应暴露）
+    const lanUrls = !this.publicMode && conn.lan ? this.lanUrls() : [];
+    const welcome: Extract<ServerMsg, { t: 'welcome' }> = { t: 'welcome', sessionId: sid, serverName: this.serverName, lanUrls };
+    if (this.publicMode) welcome.publicServer = true;
+    this.send(conn, welcome);
+    this.stats?.session(sid);
+    this.statsChanged();
+    const statsJson = this.stats?.snapshotJson();
+    if (statsJson) {
+      conn.statsSent = statsJson;
+      this.sendRaw(conn, statsJson);
+    }
 
     // 回到原房间：当前所在房间优先；否则已有座位、且没有主动离开的房间（进行中优先，其次最近活跃）。
     // 已结束的对局不自动回去：游戏结束页只有「返回主菜单」（不发 leaveRoom），否则每次进入多人大厅都会被拉回结束页、
@@ -516,7 +601,14 @@ export class RoomManager {
   }
 
   private onCreateRoom(conn: Conn, name: string, maxPlayers: number): void {
-    if (this.rooms.size >= this.maxRooms && !this.evictIdleRoom()) return this.error(conn, '服务器房间数已达上限');
+    // 同一来源地址的等待中房间数（不含连接当前所在、建新房时会离开的房间）
+    if (conn.limited && conn.ip && this.maxLobbyRoomsPerAddress > 0) {
+      const mine = [...this.rooms.values()].filter((r) => r.info.status === 'lobby' && r.creatorAddr === conn.ip && r.info.id !== conn.roomId).length;
+      if (mine >= this.maxLobbyRoomsPerAddress) {
+        return this.error(conn, `同一网络地址等待中的房间已有 ${mine} 个，请先使用或关闭已有的房间`);
+      }
+    }
+    if (this.rooms.size >= this.maxRooms && !this.evictIdleRoom()) return this.error(conn, '服务器房间数已达上限，请稍后再试');
     const cur = conn.roomId ? this.rooms.get(conn.roomId) : undefined;
     if (cur && !this.leave(conn, cur)) return;
     const id = this.newRoomId();
@@ -534,6 +626,7 @@ export class RoomManager {
       info, state: null, version: 0, away: new Set(), kicked: new Set(), autopilot: new Set(), tasks: [], running: false,
       starting: false, lastActive: Date.now(), viewCache: new Map(), hostTimer: null,
     };
+    if (conn.limited && conn.ip) room.creatorAddr = conn.ip;
     this.rooms.set(id, room);
     conn.roomId = id;
     this.log(`创建房间 ${id}「${info.name}」（房主 ${conn.name}）`);
@@ -675,10 +768,11 @@ export class RoomManager {
   }
 
   /**
-   * 房间数达到上限时腾位置：先清理最久没有活动、无人在线的已结束对局，其次是无人在线的大厅房间
-   * （进行中的对局不在此清理，由 sweep 按 idleRoomTtlMs 处理）；返回是否腾出了位置。
+   * 房间数达到上限时腾位置：先清理最久没有活动、无人在线的已结束对局，其次是无人在线的大厅房间，
+   * 最后是连续无人在线超过 abandonedRoomEvictMs 的进行中对局（从未推进过回合的优先，其次最久没人的；其余由 sweep 按 idleRoomTtlMs 处理）。
+   * 返回是否腾出了位置。
    */
-  private evictIdleRoom(): boolean {
+  private evictIdleRoom(now = Date.now()): boolean {
     const idle = [...this.rooms.values()].filter((r) => !r.running && !r.starting && !r.info.seats.some((s) => s.connected));
     const pick = (status: RoomInfo['status']) => idle.filter((r) => r.info.status === status).sort((a, b) => a.lastActive - b.lastActive)[0];
     const finished = pick('finished');
@@ -690,6 +784,20 @@ export class RoomManager {
     if (lobby) {
       this.deleteRoom(lobby, '房间数已达上限，清理无人在线的大厅房间');
       return true;
+    }
+    if (this.abandonedRoomEvictMs > 0) {
+      const untouched = (r: Room) => {
+        const st = r.state;
+        return !!st && st.season?.ti === r.info.settings.startTi && (st.roundIndex ?? 0) <= 1 ? 0 : 1;
+      };
+      const abandoned = idle
+        .filter((r) => r.info.status === 'playing' && now - r.lastActive > this.abandonedRoomEvictMs)
+        .sort((a, b) => untouched(a) - untouched(b) || a.lastActive - b.lastActive)[0];
+      if (abandoned) {
+        const mins = Math.round((now - abandoned.lastActive) / 60_000);
+        this.deleteRoom(abandoned, `房间数已达上限，清理已连续 ${mins} 分钟无人在线的进行中对局`);
+        return true;
+      }
     }
     return false;
   }
@@ -869,6 +977,16 @@ export class RoomManager {
     if (!this.requireLobbyHost(conn, room, '开始游戏', 'startGame')) return;
     const err = this.startError(room);
     if (err) return this.error(conn, err, 'startGame');
+    const addr = conn.limited && conn.ip && this.maxGamesPerAddressPerHour > 0 ? conn.ip : null;
+    if (addr) {
+      const hourAgo = Date.now() - 3_600_000;
+      const recent = (this.gameStarts.get(addr) ?? []).filter((t) => t > hourAgo);
+      if (recent.length) this.gameStarts.set(addr, recent);
+      else this.gameStarts.delete(addr);
+      if (recent.length >= this.maxGamesPerAddressPerHour) {
+        return this.error(conn, `同一网络地址一小时内最多开始 ${this.maxGamesPerAddressPerHour} 局游戏，请稍后再试`, 'startGame');
+      }
+    }
     // 从这里起座位冻结（离开/移出/改座位都会被拒绝或排队），直到开局完成或失败
     room.starting = true;
     let state: GameState;
@@ -898,14 +1016,14 @@ export class RoomManager {
         state = await this.engine.createGame(opts);
       } catch (e) {
         this.log(`房间 ${room.info.id} 创建游戏失败：${errMsg(e)}`);
-        for (const c of this.roomConns(room)) this.error(c, `创建游戏失败：${errMsg(e)}`, c === conn ? 'startGame' : undefined);
+        for (const c of this.roomConns(room)) this.error(c, `创建游戏失败：${this.detail(e)}`, c === conn ? 'startGame' : undefined);
         this.broadcastRoom(room);
         return;
       }
     } catch (e) {
       // 其他意外（如读取阵容数据出错）：同样回复带 ref 的错误，房间页的「正在创建游戏…」按钮不会一直卡住
       this.log(`房间 ${room.info.id} 开始游戏出错：${errMsg(e)}`);
-      this.error(conn, `开始游戏失败：${errMsg(e)}`, 'startGame');
+      this.error(conn, `开始游戏失败：${this.detail(e)}`, 'startGame');
       return;
     } finally {
       room.starting = false;
@@ -927,12 +1045,15 @@ export class RoomManager {
       const teamId = mapping.get(s.sessionId);
       if (teamId) s.gameTeamId = teamId;
     }
+    this.ensureSecret(state);
+    if (addr) this.gameStarts.set(addr, [...(this.gameStarts.get(addr) ?? []), Date.now()]);
     room.state = state;
     room.version = 1;
     room.viewCache.clear();
     room.info.status = state.gameOver ? 'finished' : 'playing';
     room.lastActive = Date.now();
     this.log(`房间 ${room.info.id} 游戏已创建（${Date.now() - t0}ms）`);
+    this.stats?.gameStarted();
     this.touch(room);
     void this.store?.saveNow(room.info.id);
     this.broadcastRoom(room);
@@ -964,6 +1085,8 @@ export class RoomManager {
 
     const before = this.newsIds(state);
     const statusBefore = this.seatFlagsKey(state);
+    // 抽卡前混入服务器随机数：即使有人从抽卡结果反推出随机数状态，也无法预测下一张卡（卡池公开、先到先得）
+    if (fn === 'gachaPull' && typeof state.rngState === 'number') state.rngState = (state.rngState ^ randomInt(1, 2 ** 31)) | 0;
     let value: unknown;
     let thrown: unknown = null;
     try {
@@ -981,11 +1104,11 @@ export class RoomManager {
     let message: string;
     if (thrown) {
       ok = false;
-      message = `操作失败：${errMsg(thrown)}`;
+      message = `操作失败：${this.detail(thrown)}`;
       this.log(`房间 ${room.info.id} ${seat.name} 调用 ${fn} 出错：${errMsg(thrown)}`);
     } else if (isOpResult(value)) {
       ok = value.ok;
-      message = value.ok ? value.message : this.explainFailure(state, teamId, fn, args, value.message);
+      message = value.ok ? value.message : this.opText(this.explainFailure(state, teamId, fn, args, value.message));
     } else {
       ok = true;
       message = '';
@@ -1063,7 +1186,8 @@ export class RoomManager {
         ? this.engine.setSeatReady(state, seat.gameTeamId, ready, { auto: true })
         : this.engine.setSeatReady(state, seat.gameTeamId, ready);
     } catch (e) {
-      r = { ok: false, message: `操作失败：${errMsg(e)}` };
+      this.log(`房间 ${room.info.id} ${seat.name} 准备出错：${errMsg(e)}`);
+      r = { ok: false, message: `操作失败：${this.detail(e)}` };
     }
     this.touch(room);
     if (withAuto || autoFlag() !== autoBefore) {
@@ -1083,7 +1207,7 @@ export class RoomManager {
       if (this.checkFinished(room)) return;
     }
     if (!r.ok) {
-      this.error(conn, r.message || '暂时不能准备');
+      this.error(conn, this.opText(r.message || '暂时不能准备'));
       const st = this.roundStatus(room);
       if (st) this.send(conn, { t: 'roundStatus', status: st });
       return;
@@ -1207,7 +1331,8 @@ export class RoomManager {
     try {
       r = this.engine.advance(state);
     } catch (e) {
-      r = { ok: false, message: `推进回合失败：${errMsg(e)}` };
+      this.log(`房间 ${room.info.id} 推进回合出错：${errMsg(e)}`);
+      r = { ok: false, message: `推进回合失败：${this.detail(e)}` };
     }
     const fresh = this.freshNews(state, before);
     room.version++;
@@ -1221,7 +1346,7 @@ export class RoomManager {
     const feed = this.toFeed(room, fresh, null, this.roundFeedMax);
     if (feed.length) for (const c of conns) this.send(c, { t: 'feed', items: feed });
     this.broadcastRoundStatus(room);
-    if (!r.ok) for (const c of conns) this.error(c, r.message || '推进回合失败');
+    if (!r.ok) for (const c of conns) this.error(c, this.opText(r.message || '推进回合失败'));
     if (finished) {
       this.broadcastRoom(room);
       this.scheduleRoomList();
@@ -1247,6 +1372,11 @@ export class RoomManager {
   private onChat(conn: Conn, room: Room, text: string): void {
     const seat = this.seatOf(room, conn.sessionId!);
     if (!seat) return this.error(conn, '你不在该房间的座位上');
+    const now = Date.now();
+    conn.chatTokens = Math.min(CHAT_CAPACITY, conn.chatTokens + ((now - conn.chatTokensAt) / 1000) * CHAT_REFILL);
+    conn.chatTokensAt = now;
+    if (conn.chatTokens < 1) return this.error(conn, '发言过于频繁，请稍后再试');
+    conn.chatTokens -= 1;
     const msg: ServerMsg = { t: 'chat', from: seat.name, text: cleanText(text, LIMITS.chatMax), at: new Date().toISOString() };
     for (const c of this.roomConns(room)) this.send(c, msg);
   }
@@ -1321,6 +1451,29 @@ export class RoomManager {
 
   private error(conn: Conn, message: string, ref?: ClientMsg['t']): void {
     this.send(conn, ref ? { t: 'error', message, ref } : { t: 'error', message });
+  }
+
+  /** 发给客户端的异常说明：公网模式下去掉文件路径、调用栈等内部细节（完整信息另写服务器日志） */
+  private detail(err: unknown): string {
+    const m = errMsg(err);
+    return this.publicMode ? publicSafeErrorText(m) : m;
+  }
+
+  /**
+   * 引擎返回的失败文字（公网模式）：引擎把内部异常包装成「操作失败：…」等结果时只过滤冒号后的部分；
+   * 不含中文的失败文字（多为程序内部异常）换成通用提示。普通的中文提示原样发送。
+   */
+  private opText(m: string): string {
+    if (!this.publicMode) return m;
+    const w = WRAPPED_ERROR.exec(m);
+    if (w) return `${w[1]}：${publicSafeErrorText(w[2])}`;
+    return /[一-鿿]/.test(m) ? m : publicSafeErrorText(m);
+  }
+
+  /** 对局的谈判密钥（引擎 market.negotiationRoll 混入哈希，座位视图中清空）：开局与载入旧房间时补齐 */
+  private ensureSecret(state: GameState | null): void {
+    const mp = state?.multiplayer;
+    if (mp && typeof mp === 'object' && !mp.secret) mp.secret = randomBytes(16).toString('hex');
   }
 
   /** 房间内在线的连接 */
@@ -1419,7 +1572,7 @@ export class RoomManager {
         cached = { version: room.version, json: JSON.stringify({ t: 'state', version: room.version, state: view } satisfies ServerMsg) };
       } catch (e) {
         this.log(`房间 ${room.info.id} 生成视图失败（${teamId}）：${errMsg(e)}`);
-        this.error(conn, `生成游戏视图失败：${errMsg(e)}`);
+        this.error(conn, `生成游戏视图失败：${this.detail(e)}`);
         return;
       }
       room.viewCache.set(teamId, cached);
@@ -1470,6 +1623,8 @@ export class RoomManager {
 
   /** 推送房间列表给不在房间内的连接（合并 100ms 内的变化；列表按接收者生成，内容相同的复用序列化结果） */
   private scheduleRoomList(): void {
+    // 房间列表变化的地方（建房、加入、离开、开局、结束、删除……）同时也是在线统计可能变化的地方
+    this.statsChanged();
     if (this.roomListTimer || this.shuttingDown) return;
     this.roomListTimer = setTimeout(() => {
       this.roomListTimer = null;
@@ -1486,6 +1641,53 @@ export class RoomManager {
         this.sendRaw(c, data);
       }
     }, 100);
+  }
+
+  // =========================================================================
+  // 在线统计
+  // =========================================================================
+  private statsChanged(): void {
+    if (!this.shuttingDown) this.stats?.changed();
+  }
+
+  /** 当前人数与房间数（只有数字，server/stats.ts 汇总） */
+  onlineCounts(): OnlineCounts {
+    let inLobby = 0;
+    let inRoom = 0;
+    let inGame = 0;
+    for (const c of this.bySession.values()) {
+      if (c.closed) continue;
+      const room = c.roomId ? this.rooms.get(c.roomId) : undefined;
+      if (!room) inLobby++;
+      else {
+        inRoom++;
+        if (room.info.status === 'playing') inGame++;
+      }
+    }
+    const rooms = { total: this.rooms.size, waiting: 0, playing: 0, active: 0, finished: 0 };
+    for (const r of this.rooms.values()) {
+      if (r.info.status === 'lobby') rooms.waiting++;
+      else if (r.info.status === 'playing') {
+        rooms.playing++;
+        if (r.info.seats.some((s) => s.connected)) rooms.active++;
+      } else rooms.finished++;
+    }
+    return { connections: this.conns.size, online: inLobby + inRoom, inLobby, inRoom, inGame, rooms };
+  }
+
+  /** 当前在线的会话（只给统计模块计算散列，不外发） */
+  onlineSessions(): IterableIterator<string> {
+    return this.bySession.keys();
+  }
+
+  /** 在线统计推送给所有已 hello 的连接（与该连接上次收到的内容相同则不发） */
+  pushStats(data: string): void {
+    if (this.shuttingDown) return;
+    for (const c of this.conns) {
+      if (!c.sessionId || c.closed || c.statsSent === data) continue;
+      c.statsSent = data;
+      this.sendRaw(c, data);
+    }
   }
 
   roundStatus(room: Room): RoundStatus | null {
@@ -1605,6 +1807,7 @@ export class RoomManager {
           this.log(`房间 ${info.id}：存档迁移失败（${(err as Error).message}）`);
         }
       }
+      this.ensureSecret(state);
       if (!info.seats.some((s) => s.sessionId === info.hostSessionId)) info.hostSessionId = info.seats[0].sessionId;
       // 无人在线的时长只计服务器运行时间：从存档时的累计值接着计时（服务器关闭期间不算）
       const idleMs = Math.max(0, Math.min(Number(f.idleMs) || 0, 10 * 365 * 24 * 3600_000));
@@ -1658,7 +1861,9 @@ export class RoomManager {
     for (const c of [...this.conns]) {
       if (c.stateTimer) clearTimeout(c.stateTimer);
       c.stateTimer = null;
-      this.error(c, '服务器已关闭，进度已保存。房主重新启动服务器后可继续游戏');
+      this.error(c, this.publicMode
+        ? '服务器正在重启或维护，进度已保存，稍后重新连接即可继续游戏'
+        : '服务器已关闭，进度已保存。房主重新启动服务器后可继续游戏');
       try {
         c.ws.close(1001, 'server shutdown');
       } catch {

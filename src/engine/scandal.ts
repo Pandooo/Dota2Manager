@@ -27,6 +27,7 @@ import {
 } from './seat';
 import { legacyCareerSummary, recordLegacyPartial } from './legacy';
 import { isTiEventRound } from './events';
+import { ownEntry } from './util';
 
 /**
  * 计划曝光回合必须是常规赛回合（第九波 #4：TI 预选 / TI 正赛回合不会出现禁赛类结果）。
@@ -165,7 +166,7 @@ function handOverInvites(state: GameState, oldId: string, newId: string): void {
  * 战队不存在、已解散或已禁赛时返回 null（幂等）。
  */
 export function banClub(state: GameState, teamId: string): ClubBanRecord | null {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || team.disbanded || team.banned) return null;
   const human = isHumanTeam(state, teamId);
   const mp = isMultiplayer(state);
@@ -320,7 +321,7 @@ export function banClub(state: GameState, teamId: string): ClubBanRecord | null 
 
 /** 某战队是否因全员假赛被禁赛 */
 export function isClubBanned(state: GameState, teamId: string | null | undefined): boolean {
-  return !!teamId && !!state.teams[teamId]?.banned;
+  return !!teamId && !!ownEntry(state.teams, teamId)?.banned;
 }
 
 /** 全部人类战队中被禁赛的（多人模式结局判定用） */

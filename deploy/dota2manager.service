@@ -1,0 +1,28 @@
+[Unit]
+Description=刀塔经理 多人服务器（Dota2Manager）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=d2m
+Group=d2m
+WorkingDirectory=/opt/dota2manager
+Environment=NODE_ENV=production
+# 端口 / 存档目录 / 前端产物目录可按需修改；详见 server/index.ts 的参数说明
+# --public：公网模式，不向客户端发送也不打印任何内网地址，错误信息不含内部细节
+# 在线统计：curl -s http://127.0.0.1:8686/api/status；日志 journalctl -u dota2manager | grep 在线；
+#           每日汇总 /opt/dota2manager-data/stats/online-YYYY-MM.jsonl（--stats-interval-min 调整日志间隔，默认 10 分钟）
+ExecStart=/opt/dota2manager/node_modules/.bin/tsx server/index.ts --port 8686 --host 0.0.0.0 --public --data /opt/dota2manager-data --dist /opt/dota2manager/dist --name 刀塔经理服务器
+Restart=always
+RestartSec=3
+# 只有房间存档 / 在线统计目录 /opt/dota2manager-data 可写；程序目录 /opt/dota2manager（源码、node_modules、dist）运行时只读，
+# 即使服务进程被攻破也无法改写自身代码（安装与构建由 scripts/deploy.sh 以 d2m 用户在服务之外完成）。
+# tsx 的编译缓存写在临时目录（PrivateTmp 提供可写的私有 /tmp）。
+ProtectSystem=strict
+ReadWritePaths=/opt/dota2manager-data
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -14,7 +14,7 @@ import type {
 } from './types';
 import { CONFIG } from './config';
 import { rngOf } from './rng';
-import { formatGold, formatRank, placementPercentile } from './util';
+import { formatGold, formatRank, ownEntry, placementPercentile } from './util';
 import { simulateSeries, applySeriesLoyalty } from './match';
 import { applyBeefResult, applyHonorChange, computeHonorBreakdown, expectationScore } from './honor';
 import { addFinance } from './economy';
@@ -176,7 +176,7 @@ function makeStage(t: Tournament, idx: number, type: Stage['type'], format: Stag
  * 正赛阶段在前一阶段 done 后才填充队伍（预选/小组晋级）。
  */
 export function initTournamentStages(state: GameState, tournamentId: string): void {
-  const t = state.tournaments[tournamentId];
+  const t = ownEntry(state.tournaments, tournamentId);
   if (!t) return;
   t.stages = [];
   t.series = {};

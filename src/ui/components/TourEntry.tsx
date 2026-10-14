@@ -3,10 +3,12 @@
 // ============================================================================
 import type { ReactNode } from 'react';
 import type { GameState, PlayerEntryStatus, Tournament, TournamentPlacement } from '../../engine/types';
-import { REGION_LABEL, computePlayerEntryStatus, formatRank } from '../../engine';
+import { REGION_LABEL, computePlayerEntryStatus, formatRank, withdrawPenaltyOf } from '../../engine';
+import type { WithdrawPenalty } from '../../engine';
 import type { useGameStore } from '../../store/gameStore';
 import { getTiInfo } from '../../data/index';
 import { Badge, Button } from './common';
+import { ConfirmButton } from './ConfirmPopover';
 import { ENTRY_STATUS_CLASS, ENTRY_STATUS_LABEL, openTournamentView, rankClass, safe, teamPlacement } from './TourShared';
 
 /** store.call（报名 / 取消报名经 call 调用引擎：单机本地执行，多人发给服务器） */
@@ -20,6 +22,12 @@ export interface EntryControls {
   inEvent: boolean;
   /** 玩家在该赛事的最终名次（已结束且参加过） */
   placement?: TournamentPlacement;
+  /** 现在退出（婉拒 / 取消报名）的荣誉代价；未受邀 / 未报名或不可退出为 null */
+  penalty: WithdrawPenalty | null;
+  /** 赛季中的补充邀请：收到通知的回合（无则 undefined） */
+  lateRound?: number;
+  /** 现在可以报名 / 重新接受（按钮可用：未开赛、本回合没有其他安排） */
+  canEnter: boolean;
   chip: ReactNode;
   action: ReactNode;
 }
@@ -85,6 +93,11 @@ export function entryControls(
     : '';
   /** 玩家在本赛事的受邀名单中（婉拒后仍在名单里，可重新接受） */
   const onInviteList = (t.invitedTeamIds ?? []).includes(me);
+  /** 赛季中的补充邀请（收到通知的回合） */
+  const lateRound = t.lateInvites?.[me];
+  /** 现在退出的荣誉代价（第十四波：同一回合内不扣，距开赛 ≥ 3 回合减半） */
+  const penalty = status === 'invited' || status === 'registered' ? safe(() => withdrawPenaltyOf(game, t.id), null) : null;
+  const lateText = lateRound !== undefined ? `第 ${lateRound} 回合收到的赛季中补充邀请。` : '';
 
   const regionBlocked = !!t.regionLocked && !!myTeam && myTeam.region !== t.regionLocked;
   const lockText = regionBlocked ? `仅限${REGION_LABEL[t.regionLocked!]}赛区` : `荣誉不足（需 ${t.minHonor}）`;
@@ -161,47 +174,66 @@ export function entryControls(
         title={
           status === 'declined'
             ? onInviteList
-              ? '已婉拒邀请（无荣誉惩罚，空出的席位由其他战队递补）。开赛前可重新接受，前提是本回合未参加其他赛事'
-              : '已放弃本赛事'
+              ? `${lateText}已婉拒邀请（空出的席位由其他战队递补）。开赛前可重新接受，前提是本回合未参加其他赛事`
+              : '已放弃本赛事。开赛前可重新报名'
             : status === 'invited'
-              ? '受邀直接进入正赛。开赛前可婉拒（无荣誉惩罚），空出的席位由其他战队递补；婉拒后仍可重新接受'
+              ? `${lateText}受邀直接进入正赛。开赛前可婉拒（${penaltyHint(penalty)}），空出的席位由其他战队递补；婉拒后仍可重新接受`
               : status === 'registered' && !onInviteList
-                ? '未获直邀：开赛时需先打封闭预选赛争夺正赛席位'
+                ? `未获直邀：开赛时需先打封闭预选赛争夺正赛席位。开赛前可取消（${penaltyHint(penalty)}）`
                 : undefined
         }
       >
-        {ENTRY_STATUS_LABEL[status]}
+        {lateRound !== undefined && (status === 'invited' || status === 'declined') ? `补充邀请·${status === 'invited' ? '已接受' : '已婉拒'}` : ENTRY_STATUS_LABEL[status]}
       </Badge>
     );
+    // 同回合已有别的安排而未参加的邀请（多为赛季初 / 补充邀请时按等级自动让出的）：不写「已婉拒」，玩家并没有主动婉拒
+    if (status === 'declined' && onInviteList && conflict) {
+      chip = (
+        <Badge
+          className={ENTRY_STATUS_CLASS.declined}
+          title={`${lateText}与同回合的「${conflict.name}」冲突，未参加（每回合最多一项赛事）。如想改打本赛事，先${conflict.playerStatus === 'invited' ? '婉拒' : '取消'}「${conflict.name}」，再重新接受`}
+        >
+          同回合冲突·未参加
+        </Badge>
+      );
+    }
   }
 
   // ---- 操作按钮 ----
   const run = (fn: 'registerForTournament' | 'unregisterFromTournament') => void call(fn, t.id);
   let action: ReactNode = null;
   if (!isTi && !isTiQual && t.status === 'scheduled') {
-    if (status === 'registered') {
+    if (status === 'registered' || status === 'invited') {
+      const invited = status === 'invited';
+      const verb = invited ? '婉拒' : '取消报名';
+      const blocked = !editable ? notEditableReason : penalty?.blocked ?? '';
+      const cost = penalty && penalty.honor < 0 ? -penalty.honor : 0;
+      const title = blocked
+        || (invited
+          ? `婉拒邀请（${penaltyHint(penalty)}）：空出的席位由其他战队递补，开赛前可重新接受${cost > 0 ? '（已扣的荣誉不退还）' : ''}`
+          : `取消报名（${penaltyHint(penalty)}），该回合将变为休赛回合；开赛前可重新报名${cost > 0 ? '（已扣的荣誉不退还）' : ''}`);
       action = (
-        <Button
+        <ConfirmButton
           size={size}
           variant="danger"
-          disabled={!editable}
-          title={editable ? '取消报名，该回合将变为休赛回合' : notEditableReason}
-          onClick={() => run('unregisterFromTournament')}
+          disabled={!!blocked}
+          title={title}
+          confirm={
+            cost > 0
+              ? {
+                title: `${verb}「${t.name}」？`,
+                message: `开赛前退出要扣荣誉：本次扣除 ${cost} 荣誉（${penalty!.reason}）。`
+                  + `当前荣誉 ${Math.round(myTeam?.honor ?? 0)} → ${Math.round((myTeam?.honor ?? 0) - cost)}。`
+                  + `开赛前仍可重新${invited ? '接受' : '报名'}，但重新${invited ? '接受' : '报名'}不会退还这次扣除的荣誉。`,
+                confirmLabel: `${verb}（荣誉 −${cost}）`,
+                danger: true,
+              }
+              : null
+          }
+          onConfirm={() => run('unregisterFromTournament')}
         >
-          取消报名
-        </Button>
-      );
-    } else if (status === 'invited') {
-      action = (
-        <Button
-          size={size}
-          variant="danger"
-          disabled={!editable}
-          title={editable ? '婉拒邀请：无荣誉惩罚，空出的席位由其他战队递补；开赛前可重新接受' : notEditableReason}
-          onClick={() => run('unregisterFromTournament')}
-        >
-          婉拒
-        </Button>
+          {cost > 0 ? `${verb} −${cost}` : verb}
+        </ConfirmButton>
       );
     } else if (status === 'open') {
       const reason = !editable ? notEditableReason : conflictReason;
@@ -229,7 +261,9 @@ export function entryControls(
           size={size}
           variant={onInviteList ? 'gold' : 'primary'}
           disabled={!!reason}
-          title={reason || (onInviteList ? '重新接受邀请，以受邀身份直接进入正赛' : '重新报名本赛事（需先打封闭预选赛）')}
+          title={reason || (onInviteList
+            ? '重新接受邀请，以受邀身份直接进入正赛（此前婉拒时扣除的荣誉不会退还）'
+            : '重新报名本赛事（需先打封闭预选赛；此前退出时扣除的荣誉不会退还）')}
           onClick={() => run('registerForTournament')}
         >
           {onInviteList ? '重新接受' : '报名'}
@@ -251,5 +285,13 @@ export function entryControls(
     );
   }
 
-  return { status, mine, inEvent, placement, chip, action };
+  const canEnter = !isTi && !isTiQual && t.status === 'scheduled' && (status === 'open' || status === 'declined') && editable && !conflictReason;
+  return { status, mine, inEvent, placement, chip, action, penalty, lateRound, canEnter };
+}
+
+/** 退出代价的一句话说明（按钮 / 标签提示） */
+export function penaltyHint(p: WithdrawPenalty | null): string {
+  if (!p) return '开赛前退出按退赛规则扣荣誉';
+  if (p.blocked) return p.blocked;
+  return p.honor < 0 ? `现在退出扣 ${-p.honor} 荣誉：${p.reason}` : `现在退出不扣荣誉：${p.reason}`;
 }

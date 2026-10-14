@@ -7,9 +7,8 @@ import { formatGold } from './util';
 import { addNews } from './news';
 import { trainTeam, adjustLoyalty } from './growth';
 import { addFinance, roundWageBill } from './economy';
-import { activeTeams, addPlayerToTeam, autoLineup, benchPlayers, lineupPlayers, teamPlayers } from './team';
-import { computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex } from './player';
-import { getPlayerIndex } from '../data/index';
+import { activeTeams, autoLineup, benchPlayers, lineupPlayers, teamPlayers } from './team';
+import { effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex } from './player';
 import {
   aiSignFreeAgent, departToFreeAgency, executeTransfer, fillRosterFromMarket, freeAgents, pickAffordableFreeAgent,
   playerWillingness, roundFee, trimRoster,
@@ -349,76 +348,6 @@ export function aiTransferWindow(
   }
   // 俱乐部使命：刷新进度（新集齐巅峰阵容的发新闻）
   refreshMissions(state);
-}
-
-/** 某战队在 pos 位置首发的评分（空位为 0） */
-function starterRatingAt(state: GameState, teamId: string, pos: Player['position']): number {
-  const slot = lineupPlayers(state, teamId).find((s) => s.pos === pos);
-  return slot?.player ? playerRating(slot.player, pos) : 0;
-}
-
-/**
- * 【已停用】第八波起真实新秀通过赛季初的新秀选秀（rookieDraft.ts）加盟，AI 不再提前签下真实新秀，本函数不再被调用（仅为旧逻辑参考保留）。
- * 原逻辑：赛季开打（抽卡关闭）时：本赛季卡池里未被玩家抽走的真实新秀加盟 AI 战队，让真实新秀在其登场赛季就站上赛场
- * （否则要等下赛季作为自由选手才可能被签下）。优先加盟其真实出道战队（playerIndex.firstTeamId，须为现存 AI 战队；
- * 阵容已满时先放走最弱替补），否则加盟「该位置首发最弱、阵容有空位且付得起工资」的 AI 战队。新秀合同、新秀工资。
- */
-export function aiSignRealRookies(state: GameState): void {
-  if (!CONFIG.gacha.realRookiesJoinAi || state.gameOver) return;
-  const rookies = (state.gachaPool ?? [])
-    .map((id) => state.players[id])
-    .filter((p): p is Player => !!p && p.isReal === true && !p.teamId && p.status === 'active')
-    .sort((a, b) => overallRating(b) - overallRating(a));
-  if (!rookies.length) return;
-  let firstTeam = new Map<string, string | undefined>();
-  try {
-    firstTeam = new Map((getPlayerIndex() ?? []).map((e) => [e.id, e.firstTeamId]));
-  } catch {
-    /* 无索引：全部走通用分配 */
-  }
-  const maxRoster = CONFIG.ai.maxRoster;
-  const signedIds = new Set<string>();
-  const names: string[] = [];
-  for (const p of rookies) {
-    const salary = computeSalary(state, p, true);
-    const home = state.teams[firstTeam.get(p.id) ?? ''];
-    let team: Team | null = home && !home.isPlayer && !home.disbanded && home.playerIds.length > 0 ? home : null;
-    if (team && roster(state, team.id).length >= maxRoster) trimRoster(state, team.id, maxRoster - 1);
-    if (!team) {
-      // 通用分配：付得起工资（放宽为只看新秀自身工资）的 AI 战队中，该位置首发最弱者；阵容已满时须强于其最弱替补
-      const rating = overallRating(p);
-      let best = -Infinity;
-      for (const t of aiTeams(state)) {
-        if (!t.playerIds.length || t.gold < salary * CONFIG.ai.signBudgetRounds) continue;
-        const full = roster(state, t.id).length >= maxRoster;
-        if (full) {
-          const bench = benchPlayers(state, t.id).filter((b) => !b.tempSubUntilTournament);
-          if (!bench.length || bench.every((b) => overallRating(b) >= rating)) continue;
-        }
-        const affordable = t.gold >= (roundWageBill(state, t.id) + salary) * CONFIG.ai.signBudgetRounds;
-        const gap = playerRating(p, p.position) - starterRatingAt(state, t.id, p.position) - (full ? 5 : 0) - (affordable ? 0 : 10);
-        if (gap > best) {
-          best = gap;
-          team = t;
-        }
-      }
-      if (team && roster(state, team.id).length >= maxRoster) trimRoster(state, team.id, maxRoster - 1);
-    }
-    if (!team) continue;
-    addPlayerToTeam(state, p.id, team.id, { salary, contractSeasons: CONFIG.gacha.rookieContractSeasons });
-    if (p.teamId !== team.id) continue;
-    autoLineup(state, team.id);
-    signedIds.add(p.id);
-    names.push(`${p.handle}（${team.name}）`);
-  }
-  if (!signedIds.size) return;
-  state.gachaPool = state.gachaPool.filter((id) => !signedIds.has(id));
-  addNews(
-    state,
-    'transfer',
-    `【新秀】${names.length} 名新秀加盟职业战队`,
-    `本赛季卡池中未被签下的新秀陆续找到了东家：${names.slice(0, 8).join('、')}${names.length > 8 ? ' 等' : ''}。`,
-  );
 }
 
 /** 保证所有 AI 战队至少 5 名可用选手（用自由选手或生成选手补齐）并 autoLineup；战队数 < CONFIG.team.minTeams 时生成新战队 */

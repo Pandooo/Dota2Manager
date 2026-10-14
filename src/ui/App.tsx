@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useGameStore, type HubKey } from '../store/gameStore';
 import { ToastHost } from './components/common';
 import TopBar from './layout/TopBar';
@@ -6,7 +6,6 @@ import SideNav from './layout/SideNav';
 import ActionBar from './layout/ActionBar';
 import MainMenu from './screens/MainMenu';
 import NewGame from './screens/NewGame';
-import GameOver from './screens/GameOver';
 import Dashboard from './screens/Dashboard';
 import Inbox from './screens/Inbox';
 import TeamHub from './screens/TeamHub';
@@ -26,6 +25,9 @@ import MpOverlay from './components/MpOverlay';
 import TiTransition from './components/TiTransition';
 import MusicControl from './components/MusicControl';
 import { initBgm } from './audio/bgm';
+
+// 生涯总结（游戏结束 / 多人本座位出局时才显示）：按需加载，主包保持在 vite.config.ts 的 800 kB 提示线以内
+const GameOver = lazy(() => import('./screens/GameOver'));
 
 /** 侧栏 6 个中心页 + 独立的比赛页（中心页内的标签由各 Hub 根据 store.tab 渲染） */
 const VIEWS: Record<HubKey, () => React.JSX.Element> = {
@@ -59,7 +61,9 @@ function GameScreen() {
   if (gameOver || (seatOut && !spectating))
     return (
       <>
-        <GameOver onSpectate={!gameOver && seatOut ? () => setSpectating(true) : undefined} />
+        <Suspense fallback={<div className="py-16 text-center text-sm text-mute">正在载入生涯总结…</div>}>
+          <GameOver onSpectate={!gameOver && seatOut ? () => setSpectating(true) : undefined} />
+        </Suspense>
         <MusicControl floating />
         <PlayerModal />
         <TeamModal />

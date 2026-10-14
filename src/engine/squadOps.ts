@@ -4,7 +4,7 @@
 import type { GameState, OpResult, Player, Team, TransferListing, TransferOffer } from './types';
 import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, type Rng } from './rng';
-import { clamp, formatGold, lerp, round1, round2 } from './util';
+import { clamp, formatGold, lerp, ownEntry, round1, round2 } from './util';
 import { addNews } from './news';
 import { computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex } from './player';
 import { naturalPositions } from './roles';
@@ -15,7 +15,8 @@ import { addFinance, econ, roundWageBill } from './economy';
 import { createTransferOffer, departToFreeAgency, isTransferWindowOpen, playerTeamOrNull, roundFee } from './market';
 import { SALARY_MOOD_LABEL, raiseGapMultiplier, salaryGap, salaryMoodOf, type SalaryMood } from './salary';
 import {
-  LISTING_RULE_VERSION, listingClock, listingDurationLabel, listingDurationRounds, listingProgress, listingRoundsPerSeason,
+  LISTING_RULE_VERSION, gachaResaleLockText, listingClock, listingDurationLabel, listingDurationRounds, listingProgress,
+  listingRoundsPerSeason,
 } from './listingRules';
 
 // ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ function regularMembers(state: GameState, teamId: string): Player[] {
 function ownRegularPlayer(state: GameState, playerId: string): { team: Team; p: Player } | string {
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return '战队不存在或游戏已结束';
-  const p = typeof playerId === 'string' ? state.players[playerId] : undefined;
+  const p = ownEntry(state.players, playerId);
   if (!p || p.teamId !== team.id) return '该选手不在你的战队';
   if (p.status !== 'active') return `${p.handle} 当前状态无法进行此操作`;
   if (p.tempSubUntilTournament || p.isWildSub) return '临时替补不适用此操作';
@@ -256,7 +257,7 @@ export function teamBuilding(state: GameState): OpResult {
 // 挂牌期规则（整赛季挂牌）的纯函数在 listingRules.ts（market 的合同到期提示也要用，避免循环引用），这里转出
 export {
   LISTING_RULE_VERSION, listingRoundsPerSeason, listingDurationRounds, listingDurationLabel, listingProgress, listingClock,
-  listingListedAtLabel,
+  listingListedAtLabel, gachaResaleLockLeft, gachaResaleLockText,
 } from './listingRules';
 export type { ListingProgress } from './listingRules';
 
@@ -364,6 +365,8 @@ export function listPlayerForTransfer(state: GameState, playerId: string, asking
   const { team, p } = ctx;
   if (!isTransferWindowOpen(state)) return { ok: false, message: '转会窗口已关闭（TI 预选与正赛期间锁定），暂时无法挂牌' };
   if (activeListing(state, p)) return { ok: false, message: `${p.handle} 已在挂牌名单中` };
+  const resale = gachaResaleLockText(state, p);
+  if (resale) return { ok: false, message: resale };
 
   const mv = Math.max(0, marketValue(state, p));
   const step = CONFIG.market.feeRounding;
@@ -432,7 +435,7 @@ export function listPlayersForTransfer(state: GameState, playerIds: string[]): O
   const done: string[] = [];
   const failed: string[] = [];
   for (const id of ids) {
-    const p = state.players[id];
+    const p = ownEntry(state.players, id);
     if (!p) continue;
     const r = listPlayerForTransfer(state, id);
     if (r.ok) done.push(p.handle);
@@ -448,7 +451,7 @@ export function listPlayersForTransfer(state: GameState, playerIds: string[]): O
 export function unlistPlayer(state: GameState, playerId: string): OpResult {
   const team = playerTeamOrNull(state);
   if (!team || state.gameOver) return { ok: false, message: '战队不存在或游戏已结束' };
-  const p = typeof playerId === 'string' ? state.players[playerId] : undefined;
+  const p = ownEntry(state.players, playerId);
   if (!p || p.teamId !== team.id) return { ok: false, message: '该选手不在你的战队' };
   if (!p.transferListing) return { ok: false, message: `${p.handle} 不在挂牌名单中` };
   // 撤牌记忆：记录已经历的出价机会，近期重新挂牌时沿用（防止靠撤牌 / 重挂刷新「挂牌过久」的衰减）

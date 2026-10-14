@@ -194,7 +194,13 @@ describe('pedia · 战队页 / 选手页', () => {
     const og = pediaTeamPage(G, 'og')!;
     expect(og.status).toBe('active');
     expect(og.human).toBe(true);
-    expect(og.roster.length).toBeGreaterThanOrEqual(5);
+    // 阵容 = 本队名单（不含野外替补）。懒人驱动不签人：赛季结算后有人退役时可能不满 5 人
+    const ogRegular = G.teams.og.playerIds.filter((pid) => {
+      const p = G.players[pid];
+      return !!p && p.teamId === 'og' && !p.isWildSub;
+    });
+    expect(og.roster.length).toBe(ogRegular.length);
+    expect(og.roster.length).toBeGreaterThanOrEqual(3);
     // 游戏结束于赛季结算之后：退役者已离队，首发可能不满 5 人
     expect(og.roster.filter((r) => r.starter).length).toBeGreaterThanOrEqual(3);
     expect(og.roster.filter((r) => r.starter).length).toBeLessThanOrEqual(5);

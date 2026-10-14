@@ -13,7 +13,7 @@ import { advanceTournamentUntilPlayer, isTeamEliminated, playerNextSeries, recor
 import { getPlayerIndex, loadRoster } from '../data/index';
 import { aiEnsureRosters } from './ai';
 import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './generation';
-import { addPlayerToTeam, autoLineup, lineupPlayers, validateLineup } from './team';
+import { addPlayerToTeam, autoLineup, lineupPlayers, rosterOverCapNotice, validateLineup } from './team';
 import {
   addFinance, extraTrainingCost, newClubStartingFunds, scrimCost, seedTeamStartingFunds,
 } from './economy';
@@ -31,7 +31,7 @@ import {
   finalizePlayerTournamentIfDone, initPatchBaseline, multiplayerCareerSummary, settleSeason, startSeason,
 } from './season';
 import { addNews } from './news';
-import { formatGold, formatRank } from './util';
+import { formatGold, formatRank, ownEntry } from './util';
 import type { TrainingRecord } from './types';
 import {
   bookScrim, clearScrimBookings, isScrimBooked, nextTrainingSession, pendingExtraSessionCost, recordTraining,
@@ -250,7 +250,7 @@ function validateNewGameOptions(opts: NewGameOptions): string | null {
  * 新游戏：loadRoster(startTi) → 战队/选手/教练/自由选手；接管真实战队（资金 = economy.seedTeamStartingFunds：数据资金 × 0.2 封顶于强队锚定额
  * TI1 10 万 × 年代系数、不低于数据阵容 N 回合工资，再 × 难度倍数；AI 战队同一公式、不乘难度倍数）或新建俱乐部（荣誉 100，
  * 资金 = economy.newClubStartingFunds：TI1 普通难度 20 万 × 年代系数 × 难度倍数，
- * 初始阵容 = 5 名 S/A/B 级程序化选手（各等级人数随难度）；第一个赛季同样举行新秀选秀，新俱乐部借此补充新秀）；
+ * 初始阵容 = 5 名 S/A/B 级程序化选手（各等级人数随难度）；第一个赛季同样开放新秀卡池（CONFIG.draft.enabled 时为新秀选秀），新俱乐部借此补充新秀）；
  * futureRookies：playerIndex 中 firstTi > startTi 且未在本 roster 出现的选手 → 登场 TI = firstTi；
  * 战队不足 CONFIG.team.minTeams 时生成 AI 战队；rngState = seed ?? 基于时间；
  * startSeason(startTi)；lastSeasonRank 按初始荣誉排名；欢迎新闻。
@@ -351,13 +351,17 @@ export async function createNewGame(opts: NewGameOptions): Promise<GameState> {
       + `当前荣誉 ${Math.round(team.honor)}，资金 ${formatGold(team.gold)}。`,
     true,
   );
-  // 欢迎弹窗排在最前（赛季初选秀的结果弹窗随后）
+  // 欢迎弹窗排在最前（选秀开启时，赛季初选秀的结果弹窗随后）
   state.popups.unshift({
     kind: 'message',
     title: '欢迎来到刀塔经理',
     body: `${team.name}（${team.tag}）的征程从 TI${startTi} 赛季开始，共 ${endTi - startTi + 1} 个赛季。\n`
-      + '赛季初：在「赛事 › 赛程报名」报名赛事、在「转会 › 转会市场」补强阵容；每个赛季初都会举行新秀选秀，'
-      + '所有战队按顺位自动挑选新秀，选中的新秀可在「转会 › 新秀选秀」中保留或免费放弃。准备就绪后点击底部的「开始赛季」进入第 1 回合。'
+      + '赛季初：在「赛事 › 赛程报名」报名赛事、在「转会 › 转会市场」补强阵容；'
+      + (CONFIG.draft.enabled
+        ? '每个赛季初都会举行新秀选秀，所有战队按顺位自动挑选新秀，选中的新秀可在「转会 › 新秀选秀」中保留或免费放弃。'
+        : '每个赛季「转会 › 新秀抽卡」都会开放新秀卡池（真实新秀、请神新秀与虚构新秀），可以单抽或十连，'
+          + '抽到的新秀立即入队，不想要的可在同一回合内退回。')
+      + '准备就绪后点击底部的「开始赛季」进入第 1 回合。'
       + '\n资金有限：工资每回合支付，收入来自赞助、直播与内容、周边、赛事奖金与出场费，详见「俱乐部 › 财务」。',
   });
   return state;
@@ -367,7 +371,10 @@ export async function createNewGame(opts: NewGameOptions): Promise<GameState> {
 // 回合推进
 // ---------------------------------------------------------------------------
 
-/** 推进前的阻塞原因：未处理的 blocking 决策、玩家赛事未结束/比赛进行中、首发不足（有赛事时）、游戏结束（阵容人数从不阻塞） */
+/**
+ * 推进前的阻塞原因：未处理的 blocking 决策、玩家赛事未结束/比赛进行中、首发不足（有赛事时）、游戏结束、
+ * 正式阵容超出绝对上限（抽卡超编，转会窗口开放时；超出常规上限不阻塞）
+ */
 export function getAdvanceBlockers(state: GameState): AdvanceBlocker[] {
   if (state.gameOver) {
     return [{
@@ -414,7 +421,11 @@ export function getAdvanceBlockers(state: GameState): AdvanceBlocker[] {
       out.push({ code: 'tournament_running', message: `「${t.name}」中你的下一场比赛尚未确定，请等待其他玩家完成比赛` });
     }
   }
-  // 阵容人数从不阻塞推进：超出常规上限（team.maxRoster）只是提示（工资照付、替补归属感下降更快，见 team.rosterOverflowNotice）
+  // 超出常规上限（team.maxRoster）只是提示（工资照付、替补归属感下降更快，见 team.rosterOverflowNotice）；
+  // 超出绝对上限（team.hardMaxRoster，只会因新秀抽卡出现：十连 / 单抽总是抽满）须在本回合内退回（2026-10-15 用户决策「十连后本回合内退回到 12 人」）。
+  // 只在转会窗口开放时阻塞（抽卡只在窗口开放时可用、本回合内必须处理完，不会带进锁定期；放弃新秀 / 解约也只在窗口开放时可用）
+  const overCap = isTransferWindowOpen(state) ? rosterOverCapNotice(state, me) : null;
+  if (overCap) out.push({ code: 'roster_over_cap', message: overCap });
   return out;
 }
 
@@ -464,7 +475,7 @@ export function advance(state: GameState, opts?: { auto?: boolean }): OpResult &
 
 // 「下一回合」自动处理（懒人玩法）：按钮预览 + 自动处理（多人见 multi.setSeatReady 的 auto 选项）
 export { autoHandleRound, previewAutoActions, AUTO_ROUND_NEWS_TAG } from './autoRound';
-export type { AutoRoundPreview, AutoRoundReport } from './autoRound';
+export type { AutoRoundPreview, AutoRoundReport, OverCapTrim } from './autoRound';
 
 /** 清理失效的比赛状态（赛事/系列赛已不存在或已出结果；玩家对决的回放视图除外） */
 export function dropStaleMatch(state: GameState): void {
@@ -734,7 +745,7 @@ export function hireCoach(state: GameState, coachId: string): OpResult {
     if (!isTransferWindowOpen(state)) return fail('转会窗口已关闭（TI 阶段锁定），无法签约教练');
     const team = myTeam(state);
     if (!team) return fail('战队不存在');
-    const coach = state.coaches[coachId];
+    const coach = ownEntry(state.coaches, coachId);
     if (!coach) return fail('教练不存在');
     if (coach.teamId !== null) return fail(coach.teamId === team.id ? '他已经是你的教练了' : `${coach.name} 已有东家`);
     const fee = coachSigningFee(coach);

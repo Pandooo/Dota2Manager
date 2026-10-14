@@ -10,7 +10,7 @@ import { addFinance, econ, econIndex, roundWageBill } from './economy';
 import { playerTier } from './player';
 import { hashSeed, seededRng } from './rng';
 import { addNews } from './news';
-import { formatGold, formatRank } from './util';
+import { formatGold, formatRank, ownEntry } from './util';
 
 /** 线上公开赛（schedule.ts 补位赛事）的系列前缀；与 schedule.FILLER_SERIES_PREFIX 一致（不 import schedule 以免循环依赖） */
 const FILLER_SERIES_PREFIX = 'online-open-';
@@ -404,7 +404,7 @@ export function remainingPaidRounds(state: GameState): number {
 
 /** 预测本赛季剩余回合的经常性收入与工资（UI：财务页「预计赛季末资金」） */
 export function seasonProjection(state: GameState, teamId: string): SeasonProjection {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const n = remainingPaidRounds(state);
   if (!team) {
     const zero = { sponsor: 0, streaming: 0, merch: 0, merchBoost: 0, total: 0 };

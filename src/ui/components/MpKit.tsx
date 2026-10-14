@@ -1,10 +1,10 @@
 // ============================================================================
-// 多人对战（局域网）通用小组件：连接状态、复制按钮、输入框样式、玩家状态点等
+// 多人对战通用小组件：连接状态、服务器在线统计、复制按钮、输入框样式、玩家状态点等
 // ============================================================================
 import { useEffect, useState, type ReactNode } from 'react';
 import type { NetState } from '../../store/net';
 import { useGameStore } from '../../store/gameStore';
-import type { MpMode, RoomSettings } from '../../shared/protocol';
+import type { MpMode, RoomSettings, ServerStatsSummary } from '../../shared/protocol';
 import { Button, cx } from './common';
 import { DIFFICULTY_LABEL } from './ShellKit';
 
@@ -132,6 +132,39 @@ export function ConnBadge({ net, className }: { net: NetState; className?: strin
       <span className={cx('h-2 w-2 shrink-0 rounded-full', dot)} />
       <span className={text}>{s.text}</span>
     </span>
+  );
+}
+
+/** 在线统计各项的含义（鼠标悬停说明） */
+const STATS_HELP = '在线：当前连接到服务器的玩家；对局中：进行中且有玩家在线的对局；房间：等待中与进行中的房间（含暂时无人在线的对局）';
+
+/** 服务器在线统计：「当前在线 N 人 · 对局中 M 局 · 房间 R 个」；compact = 只显示「在线 N 人」。没有统计（旧服务器）时不显示 */
+export function ServerStatsLine({
+  stats,
+  compact,
+  badge,
+  className,
+}: {
+  stats: ServerStatsSummary | null;
+  compact?: boolean;
+  /** 行尾的附加标记（如大厅里的 New 徽标；compact 时不显示） */
+  badge?: ReactNode;
+  className?: string;
+}) {
+  if (!stats) return null;
+  const full = `当前在线 ${stats.online} 人 · 对局中 ${stats.playing} 局 · 房间 ${stats.rooms} 个`;
+  if (compact) {
+    return (
+      <span className={cx('inline-flex items-center gap-1 text-xs text-mute tabular', className)} title={`服务器${full}`}>
+        在线 <span className="font-semibold text-ink">{stats.online}</span> 人
+      </span>
+    );
+  }
+  return (
+    <div className={cx('text-xs text-mute tabular', className)} title={STATS_HELP}>
+      当前在线 <span className="font-semibold text-ink">{stats.online}</span> 人 · 对局中 <span className="font-semibold text-ink">{stats.playing}</span> 局 · 房间{' '}
+      <span className="font-semibold text-ink">{stats.rooms}</span> 个{badge && <> {badge}</>}
+    </div>
   );
 }
 

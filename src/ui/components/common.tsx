@@ -3,7 +3,7 @@
 // 主题色见 src/index.css @theme：bg / panel / panel-2 / panel-3 / line / ink / mute / faint /
 // dota / gold / radiant / dire / good / bad / info / tier-*
 // ============================================================================
-import { useEffect, type ReactNode, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useRef, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import type { Position, Region, Tier, Player } from '../../engine/types';
 import { CONFIG, POSITION_LABEL, POSITION_SHORT, REGION_LABEL, formatGold } from '../../engine';
 import { useGameStore } from '../../store/gameStore';
@@ -70,12 +70,13 @@ export function Card({
   return (
     <section className={cx('rounded-xl border border-line bg-panel/90 shadow-lg shadow-black/20', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-          <div className="min-w-0">
+        // 窄屏（如手机上主区只剩约 200px）：标题至少保留 8rem，放不下时操作按钮换到下一行（按钮之间也可换行），不会被挤出卡片
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line px-4 py-2.5">
+          <div className="min-w-[8rem] flex-1">
             {title && <h3 className="truncate text-sm font-semibold tracking-wide text-ink">{title}</h3>}
             {subtitle && <div className="truncate text-xs text-mute">{subtitle}</div>}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+          {actions && <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{actions}</div>}
         </header>
       )}
       <div className={cx('p-4', bodyClassName)}>{children}</div>
@@ -310,6 +311,9 @@ export function Tabs<K extends string>({
 // ---------------------------------------------------------------------------
 // Modal
 // ---------------------------------------------------------------------------
+/** 打开中的 Modal（按打开顺序）：Esc 只关闭最上层的一个（如选手详情里打开的报价弹窗） */
+const modalStack: object[] = [];
+
 export function Modal({
   open,
   onClose,
@@ -327,12 +331,28 @@ export function Modal({
   width?: string;
   closable?: boolean;
 }) {
+  // onClose 通常是内联函数：放进 ref，避免每次渲染重新登记（重新登记会改变弹窗的层叠顺序）
+  const onCloseRef = useRef(onClose);
+  const closableRef = useRef(closable);
   useEffect(() => {
-    if (!open || !closable) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose?.();
+    onCloseRef.current = onClose;
+    closableRef.current = closable;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const token = {};
+    modalStack.push(token);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !closableRef.current || modalStack[modalStack.length - 1] !== token) return;
+      onCloseRef.current?.();
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, closable, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+    };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={() => closable && onClose?.()}>

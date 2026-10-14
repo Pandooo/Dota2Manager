@@ -212,14 +212,33 @@ describe('game: 推进阻塞', () => {
     expect(state.phase).toBe('preseason');
   });
 
-  it('阵容人数从不阻塞推进：超出常规上限、甚至超过绝对上限（选秀新秀）都可以开始赛季', () => {
+  it('阵容人数：超出常规上限不阻塞；超出绝对上限（抽卡超编）须在本回合内退回 12 人才能推进（转会窗口锁定时不阻塞）', () => {
     const state = makeTestState(4);
-    for (let i = 0; i < CONFIG.team.hardMaxRoster + 2; i++) {
-      const p = makePlayer({ id: `big${i}`, teamId: 't0' });
-      state.players[p.id] = p;
-      state.teams.t0.playerIds.push(p.id);
+    const add = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        const p = makePlayer({ id: `big${state.teams.t0.playerIds.length}-${i}`, teamId: 't0' });
+        state.players[p.id] = p;
+        state.teams.t0.playerIds.push(p.id);
+      }
+    };
+    add(CONFIG.team.hardMaxRoster - state.teams.t0.playerIds.length);
+    expect(state.teams.t0.playerIds.length).toBe(CONFIG.team.hardMaxRoster);
+    expect(getAdvanceBlockers(state)).toEqual([]); // 12 人（超出常规上限 8）不阻塞
+    add(2);
+    const bl = getAdvanceBlockers(state);
+    expect(bl.map((b) => b.code)).toEqual(['roster_over_cap']);
+    expect(bl[0].message).toBe(`超编 2 人：本回合内放弃新秀或解约，退回 ${CONFIG.team.hardMaxRoster} 人后才能进入下一回合`);
+    expect(advance(state).ok).toBe(false);
+    expect(state.phase).toBe('preseason');
+    // 转会窗口锁定（TI 阶段）时不阻塞：超编只会在窗口开放的回合因抽卡出现、且必须当回合处理完
+    state.phase = 'ti';
+    expect(getAdvanceBlockers(state).map((b) => b.code)).not.toContain('roster_over_cap');
+    state.phase = 'preseason';
+    // 退回 12 人后可以推进
+    for (const id of state.teams.t0.playerIds.slice(-2)) {
+      state.teams.t0.playerIds = state.teams.t0.playerIds.filter((x) => x !== id);
+      state.players[id].teamId = null;
     }
-    expect(state.teams.t0.playerIds.length).toBeGreaterThan(CONFIG.team.hardMaxRoster);
     expect(getAdvanceBlockers(state)).toEqual([]);
     const r = advance(state);
     expect(r.ok, r.message).toBe(true);

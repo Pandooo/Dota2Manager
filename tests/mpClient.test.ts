@@ -198,6 +198,23 @@ describe('store · 多人客户端（替身连接）', () => {
     expect(got).toEqual(['还有玩家未准备：bob']);
   });
 
+  it('welcome 区分局域网 / 公网服务器（公网不保留任何内网地址）；serverStats 写入在线统计', () => {
+    reset({ screen: 'lobby', game: null });
+    const mp0 = useGameStore.getState().mp;
+    useGameStore.setState({ mp: { ...mp0, serverMode: 'unknown', serverStats: null, lanUrls: [] } });
+    deliver({ t: 'welcome', sessionId: 'sid-1', serverName: '局域网服务器', lanUrls: ['http://192.168.1.5:8686'] });
+    expect(useGameStore.getState().mp).toMatchObject({ serverMode: 'lan', lanUrls: ['http://192.168.1.5:8686'] });
+    deliver({ t: 'welcome', sessionId: 'sid-1', serverName: '公网服务器', lanUrls: ['http://10.0.0.2:8686'], publicServer: true });
+    expect(useGameStore.getState().mp).toMatchObject({ serverMode: 'public', lanUrls: [], serverName: '公网服务器' });
+    expect(useGameStore.getState().mp.serverStats).toBeNull();
+    deliver({ t: 'serverStats', online: 12, inGame: 6, rooms: 5, playing: 3 });
+    expect(useGameStore.getState().mp.serverStats).toEqual({ online: 12, inGame: 6, rooms: 5, playing: 3 });
+    // 异常数值按 0 处理
+    deliver({ t: 'serverStats', online: -1, inGame: Number.NaN, rooms: 2.7, playing: 1 } as ServerMsg);
+    expect(useGameStore.getState().mp.serverStats).toEqual({ online: 0, inGame: 0, rooms: 2, playing: 1 });
+    expect(sent.some((m) => m.t === 'listRooms')).toBe(true);
+  });
+
   it('恢复替身', () => {
     netAny.send = origSend;
     netAny.disconnect = origDisconnect;

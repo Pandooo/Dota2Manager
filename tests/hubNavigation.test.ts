@@ -8,6 +8,7 @@ describe('resolveView：旧页面键映射', () => {
     ['training', 'team', 'training'],
     ['coach', 'team', 'coach'],
     ['market', 'transfer', 'market'],
+    ['gacha', 'transfer', 'gacha'],
     ['draft', 'transfer', 'draft'],
     ['tournament', 'events', 'tournament'],
     ['schedule', 'events', 'schedule'],
@@ -45,7 +46,8 @@ describe('resolveView：旧页面键映射', () => {
     expect(new Set(all.map(([, t]) => t)).size).toBe(all.length);
     for (const [hub, t] of all) expect(tabBelongsTo(hub as HubKey, t)).toBe(true);
     expect(HUB_TABS.team).toEqual(['squad', 'training', 'coach']);
-    expect(HUB_TABS.transfer).toEqual(['market', 'draft']);
+    // 新秀抽卡（2026-10-14 取代选秀）；「新秀选秀」标签只在选秀开启或旧存档有选秀记录时显示（TransferHub）
+    expect(HUB_TABS.transfer).toEqual(['market', 'gacha', 'draft']);
     expect(HUB_TABS.events).toEqual(['tournament', 'schedule', 'rankings', 'patches']);
     expect(HUB_TABS.club).toEqual(['finance', 'honors']);
   });
@@ -58,6 +60,9 @@ describe('store：setView / openHub', () => {
     useGameStore.getState().setView('draft');
     expect(useGameStore.getState()).toMatchObject({ view: 'transfer', tab: 'draft' });
     expect(useGameStore.getState().hubTabs.transfer).toBe('draft');
+    useGameStore.getState().setView('gacha');
+    expect(useGameStore.getState()).toMatchObject({ view: 'transfer', tab: 'gacha' });
+    expect(useGameStore.getState().hubTabs.transfer).toBe('gacha');
   });
 
   it('openHub 回到上次停留的标签，无记录时用默认标签', () => {
@@ -87,7 +92,7 @@ describe('hubEntryTab：侧栏入口带「需处理」徽标时直达对应标�
 
   it('阵容问题 → 阵容；报价 → 转会市场；进行中的赛事 → 赛事中心；资金为负 → 财务', () => {
     expect(hubEntryTab('team', { lineupProblem: true }, { team: 'coach' })).toBe('squad');
-    expect(hubEntryTab('transfer', { offers: 2 }, { transfer: 'draft' })).toBe('market');
+    expect(hubEntryTab('transfer', { offers: 2 }, { transfer: 'gacha' })).toBe('market');
     expect(hubEntryTab('events', { live: true }, { events: 'rankings' })).toBe('tournament');
     expect(hubEntryTab('club', { goldNegative: true }, { club: 'honors' })).toBe('finance');
     // 提醒属于别的中心页时不影响

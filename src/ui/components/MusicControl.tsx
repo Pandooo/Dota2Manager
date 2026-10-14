@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { bgm, type BgmSnapshot, type BgmStatus } from '../audio/bgm';
 import { ConfirmButton } from './ConfirmPopover';
 import { Button, cx } from './common';
+import NewBadge from './NewBadge';
 
 const STATUS_TEXT: Record<BgmStatus, string> = {
   off: '已关闭',
@@ -68,7 +69,7 @@ export default function MusicControl({ floating = false }: { floating?: boolean 
       aria-label="背景音乐设置"
       aria-expanded={open}
       className={cx(
-        'inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
+        'relative inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
         floating ? 'border-line bg-panel/90 shadow-lg shadow-black/40 backdrop-blur' : 'border-transparent',
         open ? 'border-gold/50 text-gold' : on ? 'text-ink hover:bg-panel-2' : 'text-faint hover:bg-panel-2 hover:text-mute',
       )}
@@ -76,6 +77,8 @@ export default function MusicControl({ floating = false }: { floating?: boolean 
       <NoteIcon off={!on} />
       {snap.status === 'playing' && <Bars />}
       {snap.status === 'waiting' && <span className="h-1.5 w-1.5 rounded-full bg-gold/80" />}
+      {/* 新功能徽标（v0.2）：点击本按钮后消失；顶栏里窄屏时改为右上角角标，不占顶栏宽度 */}
+      <NewBadge feature="bgm" narrow={floating ? 'inline' : 'corner'} />
     </button>
   );
 

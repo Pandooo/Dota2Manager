@@ -1,7 +1,8 @@
 // 无头全流程模拟（平衡性调试）
 // 用法：npx tsx scripts/simulate.ts --ti 9 --seasons 3 [--team <seedTeamId|new>] [--seed 42] [--runs N] [--quiet]
-//        [--difficulty normal] [--keep-rookies] [--extra 1] [--verbose] [--funds N] [--dump <file>] [--json <file>]
-//   --keep-rookies  保留赛季初选秀选中的全部新秀（默认免费放弃程序生成的 C/B 级新秀）
+//        [--difficulty normal] [--keep-rookies] [--pulls 2] [--extra 1] [--verbose] [--funds N] [--dump <file>] [--json <file>]
+//   --keep-rookies  保留赛季初抽到的全部新秀（默认本回合退回不能顶替最弱首发的虚构新秀；选秀开启时为免费放弃选秀新秀）
+//   --pulls N     赛季初新秀抽卡的单抽次数上限（默认 2；资金需留足 20 回合工资；0 = 不抽卡）
 //   --team <id>   接管真实战队（startTi 届 roster 中的 team id，如 og / team-spirit）；new = 新建俱乐部（默认）
 //   --runs N      用种子 seed..seed+N-1 重复 N 局，最后输出汇总：解散率、每赛季平均荣誉/资金、TI 冠军、选手战力分位数
 //   --quiet       不输出每赛季明细（多局时也不输出每局一行），只输出最终结果/汇总
@@ -29,6 +30,7 @@ import { roundKindForPlayer } from '../src/engine/calendar';
 import { autoLineup, benchPlayers, lineupPlayers, rosterRoom, validateLineup } from '../src/engine/team';
 import { effectivePower, overallRating, playerTier } from '../src/engine/player';
 import { draftedRookiesOf, releaseDraftedRookie } from '../src/engine/rookieDraft';
+import { gachaDiscard, gachaPrice, gachaPull, gachaPullBlock } from '../src/engine/gacha';
 import { freeAgents, isTransferWindowOpen, releasePlayer, signFreeAgent, signingFee } from '../src/engine/market';
 import { talkToPlayer, talkedThisRound } from '../src/engine/squadOps';
 import { playerSalaryMood } from '../src/engine/salary';
@@ -70,6 +72,7 @@ const SEED = Math.round(num(args.seed, 20190825));
 const RUNS = Math.max(1, Math.round(num(args.runs, 1)));
 const DIFFICULTY = (['easy', 'normal', 'hard'].includes(str(args.difficulty, 'normal')) ? str(args.difficulty, 'normal') : 'normal') as NewGameOptions['difficulty'];
 const KEEP_ROOKIES = flag(args['keep-rookies']);
+const PULLS = Math.max(0, Math.round(num(args.pulls, 2)));
 const QUIET = flag(args.quiet);
 const VERBOSE = flag(args.verbose) && !QUIET;
 const EXTRA_PER_ROUND = Math.max(0, Math.round(num(args.extra, 1)));
@@ -209,6 +212,8 @@ function me(state: GameState) {
 interface Ctx {
   preparedSeason: number;
   warnings: number;
+  /** 新秀抽卡张数（本队） */
+  pulls: number;
 }
 
 /** 所有待处理决策选第一项；无法处理的直接移除，防止死循环 */
@@ -306,6 +311,28 @@ function preseason(state: GameState, ctx: Ctx): void {
     }
   }
   if (draftedRookiesOf(state, me(state).id).length) autoLineup(state, me(state).id);
+  // 赛季初新秀抽卡（2026-10-14 取代选秀；模拟普通玩家）：资金留足 20 回合工资时单抽至多 PULLS 张；
+  // 真实 / 请神新秀与能顶替最弱首发的新秀留下，其余本回合退回（返还部分费用）
+  {
+    const team = me(state);
+    for (let i = 0; i < PULLS; i++) {
+      const price = gachaPrice(state).single;
+      if (team.gold - price < roundWageBill(state, team.id) * 20 || gachaPullBlock(state, 1)) break;
+      const r = gachaPull(state, 1);
+      vlog(`新秀抽卡：${r.message}`);
+      if (!r.ok) break;
+      ctx.pulls++;
+      const starters = lineupPlayers(state, team.id).filter((x) => x.player).map((x) => overallRating(x.player!));
+      const weakest = starters.length ? Math.min(...starters) : 0;
+      for (const res of r.results ?? []) {
+        const p = state.players[res.playerId];
+        if (!p || KEEP_ROOKIES || res.kind !== 'fictional' || overallRating(p) >= weakest) continue;
+        const d = gachaDiscard(state, p.id);
+        vlog(`退回新秀 ${p.handle}（${res.tier}）：${d.message}`);
+      }
+    }
+    autoLineup(state, team.id);
+  }
   trimRoster(state);
 }
 
@@ -468,7 +495,7 @@ async function runOnce(seed: number): Promise<{ result: RunResult; state: GameSt
     );
   }
 
-  const ctx: Ctx = { preparedSeason: -1, warnings: 0 };
+  const ctx: Ctx = { preparedSeason: -1, warnings: 0, pulls: 0 };
   const rows: SeasonRow[] = [];
   const powerAtTi = new Map<number, { power: PowerStats | null; mine: number | null; squad: SquadMood | null }>();
   let seasonT = performance.now();
@@ -570,7 +597,9 @@ async function runOnce(seed: number): Promise<{ result: RunResult; state: GameSt
     console.log(
       `总耗时 ${(result.ms / 1000).toFixed(2)}s · 平均每赛季 ${(result.ms / Math.max(1, rows.length)).toFixed(0)}ms`
         + ` · 存档体积 ${result.saveMB.toFixed(2)}MB · 选手 ${Object.keys(state.players).length}`
-        + ` · 赛事实例 ${Object.keys(state.tournaments).length} · 新闻 ${state.news.length}`,
+        + ` · 赛事实例 ${Object.keys(state.tournaments).length} · 新闻 ${state.news.length}`
+        + ` · 本队抽卡 ${ctx.pulls} 张 · 名人堂 ${state.hallOfFame?.members.length ?? 0} 人`
+        + ` · 在役请神新秀 ${Object.values(state.players).filter((p) => p.status === 'active' && p.summon).length} 人`,
     );
   }
   return { result, state };

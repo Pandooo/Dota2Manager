@@ -3,7 +3,7 @@ import type { EventChoice, EventKind, GameState, OpResult, PendingDecision, Play
 import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, type Rng } from './rng';
 import { addNews, pushPopup } from './news';
-import { clamp, formatGold, nextId } from './util';
+import { clamp, formatGold, nextId, ownEntry } from './util';
 import { addModifier, effectiveAttr, eventImpactScale, marketValue, overallRating, playerTier, tierIndex } from './player';
 import { activeTeams, autoLineup, getCoach, rankTeamsByRating, teamPlayers, validateLineup } from './team';
 import { changeHonor, honorLuck } from './honor';
@@ -16,6 +16,7 @@ import {
 import { rollFunEvents, resolveFunDecision } from './funEvents';
 import { inSeatOf, removePendingDecisionsEverywhere } from './seat';
 import { syncSynergies } from './synergy';
+import { resolveHomeRookieDecision } from './gacha';
 import {
   onRookieContract, salaryGap, salaryMoodLevel, salaryMoodOf, unhappyStarPoachChance,
 } from './salary';
@@ -119,7 +120,7 @@ function banPlayer(state: GameState, p: Player): void {
   p.status = 'banned';
   if (teamId) {
     departToFreeAgency(state, p.id);
-    const team = state.teams[teamId];
+    const team = ownEntry(state.teams, teamId);
     if (team && !team.isPlayer && !team.disbanded) fillRosterFromMarket(state, teamId);
   }
   // 多人模式：涉事选手的离队/挖角/续约决策可能在其他座位
@@ -174,7 +175,7 @@ function matchFixingWeights(state: GameState, roster: Player[]): number[] {
  */
 function cushionedFixingLoss(state: GameState, teamId: string, loss: number, mult = 1): number {
   if (!(loss < 0)) return loss;
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   const share = CONFIG.events.matchFixingMaxHonorShare;
   if (!team || !(share > 0)) return loss;
   const base = Math.max(CONFIG.honor.lossCushionFloor, Number.isFinite(team.honor) ? team.honor : 0);
@@ -471,7 +472,7 @@ function processDelayedEvents(state: GameState): void {
         const handle = p?.handle ?? ctxStr(de.ctx, 'handle') ?? '涉事选手';
         if (p && p.status === 'active') banPlayer(state, p);
         const loss = cushionedFixingLoss(state, teamId, CONFIG.events.matchFixingHonor * 2, 2);
-        if (state.teams[teamId]) changeHonor(state, teamId, loss, `假赛调查结果公开（${handle}）`);
+        if (ownEntry(state.teams, teamId)) changeHonor(state, teamId, loss, `假赛调查结果公开（${handle}）`);
         addNews(state, 'event', `【假赛风波】${handle} 假赛调查结果公开`, `联盟公布调查结果，${handle} 被永久禁赛；俱乐部此前未配合调查，荣誉 ${loss}。`, true);
       });
       if (state.gameOver) break;
@@ -753,7 +754,16 @@ export const DEFAULT_DECISION_CHOICE: Readonly<Partial<Record<EventKind, string>
   poach: 'decline',          // 拒绝报价
   contract: 'renew_1',       // 续约 1 赛季
   retire: 'decline',         // 不聘为教练
+  rookie_home: 'sign',       // 签下按真实出道去向而来的真实新秀（同选秀时代的自动选秀）
   unpaid_salary: 'ack',
+};
+
+/**
+ * 默认选项执行失败（事件保留）时自动处理改用的选项：真实出道新秀「签下」在阵容已达绝对上限时会被拦下，
+ * 托管 / 懒人推进改为「放弃」，避免阻塞事件卡住回合（玩家手动处理时仍可先腾出位置再签下）。
+ */
+export const FALLBACK_DECISION_CHOICE: Readonly<Partial<Record<EventKind, string>>> = {
+  rookie_home: 'decline',
 };
 
 /** 某待决事件的默认选项 id（无选项时为 'ack'） */
@@ -791,6 +801,7 @@ export function resolveDecision(state: GameState, decisionId: string, choiceId: 
       case 'poach': out = resolvePoach(state, decision, choiceId); break;
       case 'contract': out = resolveContract(state, team, decision, choiceId); break;
       case 'retire': out = resolveRetire(state, team, decision, choiceId); break;
+      case 'rookie_home': out = resolveHomeRookieDecision(state, team, decision, choiceId); break;
       case 'unpaid_salary': out = { ok: true, message: '已知悉，请尽快改善财务状况' }; break;
       default: out = { ok: true, message: '已处理' };
     }

@@ -80,15 +80,16 @@ export function Banner({
   className?: string;
 }) {
   return (
-    <div className={cx('flex items-start gap-3 rounded-lg border px-4 py-2.5', TONE[tone], className)}>
+    // 窄屏：正文至少保留 10rem，放不下时操作按钮换到正文下方（不会把正文挤成一字一行）
+    <div className={cx('flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border px-4 py-2.5', TONE[tone], className)}>
       <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-current text-[11px] font-bold opacity-80">
         {TONE_ICON[tone]}
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[10rem] flex-1">
         <div className="text-sm font-semibold">{title}</div>
         {children && <div className="mt-0.5 text-xs leading-relaxed opacity-85">{children}</div>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2 self-center">{actions}</div>}
+      {actions && <div className="ml-auto flex flex-wrap items-center gap-2 self-center">{actions}</div>}
     </div>
   );
 }

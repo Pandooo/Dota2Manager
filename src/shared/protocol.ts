@@ -1,5 +1,5 @@
 // ============================================================================
-// 多人对战（局域网）WebSocket 协议 —— 服务器与客户端共享的契约
+// 多人对战（局域网 / 公网服务器）WebSocket 协议 —— 服务器与客户端共享的契约
 // 详见 docs/MULTIPLAYER.md。所有消息为 JSON：{ t: <type>, ...payload }
 // ============================================================================
 import type { GameState, NewGameOptions, Region } from '../engine/types';
@@ -132,11 +132,32 @@ export type ClientMsg =
   | { t: 'setAutopilot'; teamId: string; on: boolean }
   | { t: 'chat'; text: string };
 
+/**
+ * 服务器在线统计摘要（只有人数，不含昵称、会话或地址）。服务器在人数 / 房间变化时推送（至多每 2 秒一次），
+ * hello 后也会立即发一次；旧服务器不发送，客户端此时不显示统计。
+ */
+export interface ServerStatsSummary {
+  /** 在线玩家（不同会话） */
+  online: number;
+  /** 其中在进行中对局里的玩家 */
+  inGame: number;
+  /** 未结束的房间（等待中 + 进行中，含暂时无人在线的对局） */
+  rooms: number;
+  /** 进行中且有玩家在线的对局 */
+  playing: number;
+}
+
 // ---------------------------------------------------------------------------
 // 服务器 → 客户端
 // ---------------------------------------------------------------------------
 export type ServerMsg =
-  | { t: 'welcome'; sessionId: string; serverName: string; lanUrls: string[] }
+  /**
+   * lanUrls：服务器的局域网访问地址，只发给来自回环 / 私有网段的连接；公网来的连接与公网模式下为空数组。
+   * publicServer：服务器以公网模式运行（--public），界面不显示局域网相关说明（旧服务器不发送 = 局域网模式）。
+   */
+  | { t: 'welcome'; sessionId: string; serverName: string; lanUrls: string[]; publicServer?: boolean }
+  /** 在线统计（可选消息：旧客户端忽略） */
+  | ({ t: 'serverStats' } & ServerStatsSummary)
   | { t: 'roomList'; rooms: RoomSummary[] }
   | { t: 'room'; room: RoomInfo | null }
   /** 座位视图快照：以接收者为主视角（settings.playerTeamId = 接收者战队，座位私有字段已换入） */
@@ -168,12 +189,16 @@ export const RPC_WHITELIST = [
   'signFreeAgent', 'bidForPlayer', 'respondToOffer', 'releasePlayer', 'releasePlayers', 'renewContract',
   'generateTempSubCandidates', 'hireTempSub',
   'listPlayerForTransfer', 'unlistPlayer',
+  // 选手交易（src/engine/trade.ts）：现金 + 本队选手抵价求购 AI 战队选手（抵价选手只能是调用者座位战队的队员）
+  'tradeForPlayer',
   // 归属感
   'raiseSalary', 'talkToPlayer', 'teamBuilding',
   // 选手奖金分成（第九波，src/engine/prizeShare.ts；每回合最多调整一次）
   'setPrizeShare',
-  // 新秀选秀（赛季初免费放弃本届选中的新秀）
+  // 新秀选秀（赛季初免费放弃本届选中的新秀；2026-10-14 起选秀默认关闭，保留一个版本供旧房间使用）
   'releaseDraftedRookie',
+  // 新秀抽卡（src/engine/gacha.ts，2026-10-14 取代选秀）：单抽 / 十连（共享卡池，先到先得）、同一回合内退回
+  'gachaPull', 'gachaDiscard',
   // 事件 / 消息 / 弹窗
   'resolveDecision', 'dismissPopup', 'markAllNewsRead', 'markNewsRead',
   // UI 便捷操作（src/engine/uiActions.ts）与批量挂牌

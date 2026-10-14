@@ -11,7 +11,7 @@ import type {
   Coach, GameState, Player, PlayerIndexEntry, PlayerStats, Position, Region, SeedCoach, SeedPlayer, SeedTeam, Team, Tier,
 } from './types';
 import { POSITIONS, REGIONS, TIERS } from './types';
-import { clamp, nextId, round2 } from './util';
+import { clamp, nextId, ownEntry, round2 } from './util';
 
 type Strength = 'weak' | 'mid' | 'strong';
 
@@ -657,7 +657,7 @@ export function playerFromSeed(state: GameState, seed: SeedPlayer, teamId: strin
   if (existing) return existing; // 同一选手重复出现：保留首次注册
   const rng = rngOf(state);
   const ti = state.season?.ti ?? state.settings.startTi;
-  const team = teamId ? state.teams[teamId] : undefined;
+  const team = teamId ? ownEntry(state.teams, teamId) : undefined;
   const position: Position = POSITIONS.includes(seed.position) ? seed.position : 'C';
   const p: Player = {
     id: seed.id,
@@ -697,7 +697,7 @@ export function coachFromSeed(state: GameState, seed: SeedCoach, teamId: string 
   if (existing) return existing;
   const rng = rngOf(state);
   const tier: Tier = TIERS.includes(seed.tier) ? seed.tier : 'A';
-  const team = teamId ? state.teams[teamId] : undefined;
+  const team = teamId ? ownEntry(state.teams, teamId) : undefined;
   const coach: Coach = {
     id: seed.id,
     name: seed.name || seed.id,

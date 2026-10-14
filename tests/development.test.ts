@@ -560,7 +560,17 @@ async function runLeague(opts: { startTi: number; seasons: number; teamId: strin
 }
 
 describe('development: 联赛等级分布稳定（多赛季集成）', () => {
-  it('TI1 → TI8：每届 TI 时全体在役选手的 SS/SSR 占比稳定、SSR 稀有，首发顶级选手战力在 88~100 之间', async () => {
+  // 首发前十战力的下限（第十四波复核）：同一种子下的值随任何改变赛程 / 战绩的引擎改动而小幅漂移（赛季中补充邀请与荣誉势头上线后
+  // 本用例 TI2 88.1 → 87.97、下一用例 TI14 87.5 → 86.96）。110 个种子（TI1 起 8 季，懒人推进）的分布改动前后一致：
+  // TI2 均值 87.50 / 87.55、种子间标准差 ≈ 0.4，TI3–TI8 标准差 0.5–0.8 —— 下限按「均值 − 约 1 个标准差」取 87.5 / 86.5，只拦截整体性的下滑。
+  // 抽卡取代选秀（2026-10-14）后复核（40 个种子，测的是每局 8 届中最低的一届）：TI1 起各届均值与选秀时相当（最低一届均值 88.47、
+  // 标准差 0.44，40 局中 1 局低于 87.5），下限不变；TI9 起 TI12 均值 88.0 → 87.4（只合入抽卡时同样如此），
+  // 最低一届均值 87.35、标准差 0.64，41 局中 4 局低于 86.5（与只合入抽卡时相同，与赛季中报名 / 荣誉势头没有叠加效应）——第二个用例的下限改为 86.0（均值 − 2 个标准差）。
+  // v0.3 审查修复（2026-10-14：真实新秀第 1 回合前离池、AI 超编抽卡门槛、新秀工资上限）后复核「全体 SS+ 占比相对首届的最大跌幅」
+  // （本用例同口径，每局取 8 届中最低的一届）：TI9 起 30 局均值 −0.104（标准差约 0.015），修复前 −0.106，30 局中各有 6 局跌幅超过 0.12；
+  // TI1 起 20 局 −0.104 / −0.102（修复后 / 前）。0.12 的下限离均值只有约 1 个标准差，同一种子随任何改动的随机分叉就会越线，
+  // 两个用例都放宽到 0.14（均值 − 约 2.5 个标准差），首发前十战力下限不变（TI9 起 30 局最低 86.36，TI1 起 20 局最低 88.14）。
+  it('TI1 → TI8：每届 TI 时全体在役选手的 SS/SSR 占比稳定、SSR 稀有，首发顶级选手战力在 87.5~100 之间', async () => {
     const { g, rows } = await runLeague({ startTi: 1, seasons: 8, teamId: 'natus-vincere', seed: 5 });
     expect(g.gameOver?.reason).toBe('completed');
     expect(rows.map((x) => x.ti)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -568,11 +578,11 @@ describe('development: 联赛等级分布稳定（多赛季集成）', () => {
     const first = rows[0];
     for (const x of rows) {
       expect(x.all, `TI${x.ti} 全体 SS+ 占比`).toBeLessThan(first.all + 0.05);
-      expect(x.all, `TI${x.ti} 全体 SS+ 占比`).toBeGreaterThan(first.all - 0.12);
+      expect(x.all, `TI${x.ti} 全体 SS+ 占比`).toBeGreaterThan(first.all - 0.14);
       expect(x.ssr, `TI${x.ti} 全体 SSR 占比`).toBeLessThan(0.05);
       expect(x.rostered, `TI${x.ti} 签约选手 SS+ 占比`).toBeLessThan(0.45);
       expect(x.starters, `TI${x.ti} 首发 SS+ 占比`).toBeLessThan(0.56);
-      expect(x.top10, `TI${x.ti} 首发前十战力`).toBeGreaterThanOrEqual(88);
+      expect(x.top10, `TI${x.ti} 首发前十战力`).toBeGreaterThanOrEqual(87.5);
       expect(x.top10, `TI${x.ti} 首发前十战力`).toBeLessThan(93);
       expect(x.max, `TI${x.ti} 首发最高战力`).toBeLessThanOrEqual(100);
     }
@@ -588,10 +598,10 @@ describe('development: 联赛等级分布稳定（多赛季集成）', () => {
     const first = rows[0];
     for (const x of rows) {
       expect(x.all, `TI${x.ti} 全体 SS+ 占比`).toBeLessThan(first.all + 0.05);
-      expect(x.all, `TI${x.ti} 全体 SS+ 占比`).toBeGreaterThan(first.all - 0.12);
+      expect(x.all, `TI${x.ti} 全体 SS+ 占比`).toBeGreaterThan(first.all - 0.14);
       expect(x.ssr, `TI${x.ti} 全体 SSR 占比`).toBeLessThan(0.04);
       expect(x.starters, `TI${x.ti} 首发 SS+ 占比`).toBeLessThan(0.52);
-      expect(x.top10, `TI${x.ti} 首发前十战力`).toBeGreaterThanOrEqual(87);
+      expect(x.top10, `TI${x.ti} 首发前十战力`).toBeGreaterThanOrEqual(86);
       expect(x.top10, `TI${x.ti} 首发前十战力`).toBeLessThan(93);
       expect(x.max, `TI${x.ti} 首发最高战力`).toBeLessThanOrEqual(100);
       // 自主成长接管之后（第二个赛季起），有当届真实数据的真实首发平均贴近当届真实水平

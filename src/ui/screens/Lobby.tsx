@@ -1,13 +1,15 @@
 // ============================================================================
-// 多人大厅（局域网）：连接状态 / 服务器地址 / 玩家昵称 / 房间列表 / 创建房间 / 房间码加入
-// 房主在电脑上运行 `npm run server`，朋友在浏览器打开 http://<房主局域网IP>:8686 即可进入。
+// 多人大厅：连接状态与在线统计 / 服务器地址 / 玩家昵称 / 房间列表 / 创建房间 / 房间码加入
+// 局域网：房主在电脑上运行 `npm run server`，朋友在浏览器打开 http://<房主局域网IP>:8686 即可进入；
+// 公网服务器（welcome.publicServer）：不显示任何局域网说明，邀请地址为当前页面地址。
 // ============================================================================
 import { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { defaultServerUrl, getManualServer, getNetIdentity, httpUrlOf, normalizeServerAddress } from '../../store/net';
+import { defaultServerUrl, getManualServer, getNetIdentity, invitePageUrl, normalizeServerAddress } from '../../store/net';
 import { DEFAULT_SERVER_PORT, type RoomSummary } from '../../shared/protocol';
 import { Badge, Button, Card, EmptyState, Hint, cx } from '../components/common';
-import { ConnBadge, CopyButton, MpField, mpInputBase, mpInputCls, settingsSummary } from '../components/MpKit';
+import { ConnBadge, CopyButton, MpField, ServerStatsLine, mpInputBase, mpInputCls, settingsSummary } from '../components/MpKit';
+import NewBadge from '../components/NewBadge';
 
 const ROOM_STATUS: Record<RoomSummary['status'], { text: string; cls: string }> = {
   lobby: { text: '等待中', cls: 'bg-good/15 text-good' },
@@ -30,6 +32,9 @@ export default function Lobby() {
   const setName = useGameStore((s) => s.mpSetName);
   const identity = getNetIdentity();
   const connected = mp.net.status === 'open';
+  /** 局域网服务器（收到 welcome 且不是公网模式）：显示房主运行服务器、局域网地址等说明 */
+  const lan = mp.serverMode === 'lan';
+  const pub = mp.serverMode === 'public';
 
   const [addr, setAddr] = useState(() => getManualServer() ?? '');
   const [nameDraft, setNameDraft] = useState(mp.playerName);
@@ -47,7 +52,7 @@ export default function Lobby() {
   }, [connected, send]);
 
   const addrNorm = addr.trim() ? normalizeServerAddress(addr) : null;
-  const addrError = addr.trim() && !addrNorm ? '地址格式不正确，例如 192.168.1.5:8686' : null;
+  const addrError = addr.trim() && !addrNorm ? (pub ? '地址格式不正确，请填写「地址:端口」' : `地址格式不正确，例如 192.168.1.5:${DEFAULT_SERVER_PORT}`) : null;
   const usingManual = !!getManualServer();
 
   const nameTrim = nameDraft.trim();
@@ -75,19 +80,22 @@ export default function Lobby() {
   const rooms = mp.rooms
     .slice()
     .sort((a, b) => (a.mine ? 0 : 1) - (b.mine ? 0 : 1) || (a.status === 'lobby' ? 0 : 1) - (b.status === 'lobby' ? 0 : 1) || a.name.localeCompare(b.name));
-  const lanPages = Array.from(new Set(mp.lanUrls.filter(Boolean)));
+  // 局域网地址只有局域网内的连接才会收到；没有时邀请朋友打开当前页面地址（手动连接其他服务器时为该服务器的地址）
+  const lanPages = pub ? [] : Array.from(new Set(mp.lanUrls.filter(Boolean)));
+  const invitePage = invitePageUrl();
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-panel/95 px-5">
-        <Button variant="ghost" size="sm" onClick={exit} title="断开连接，返回主菜单">
+      {/* 手机宽度（< sm）：按钮、标题与连接状态不换行（原来逐字折行），服务器名与「玩家」字样隐藏（下方卡片里都有） */}
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-panel/95 px-3 sm:gap-4 sm:px-5">
+        <Button variant="ghost" size="sm" onClick={exit} title="断开连接，返回主菜单" className="shrink-0 whitespace-nowrap">
           ‹ 主菜单
         </Button>
-        <div className="text-base font-bold tracking-wide">多人对战（局域网）</div>
-        <ConnBadge net={mp.net} className="ml-2" />
-        {mp.serverName && <span className="truncate text-xs text-faint">服务器：{mp.serverName}</span>}
-        <span className="ml-auto text-xs text-mute">
-          玩家 <span className="font-semibold text-ink">{mp.playerName}</span>
+        <div className="shrink-0 whitespace-nowrap text-base font-bold tracking-wide">{lan ? '多人对战（局域网）' : '多人对战'}</div>
+        <ConnBadge net={mp.net} className="shrink-0 whitespace-nowrap sm:ml-2" />
+        {mp.serverName && <span className="hidden min-w-0 truncate text-xs text-faint sm:inline">服务器：{mp.serverName}</span>}
+        <span className="ml-auto min-w-0 truncate text-xs text-mute">
+          <span className="hidden sm:inline">玩家 </span><span className="font-semibold text-ink">{mp.playerName}</span>
           {identity.alias && <Badge className="ml-1.5 bg-info/15 text-info" title="URL 参数 ?as= 指定的测试身份（独立会话）">测试身份 {identity.alias}</Badge>}
         </span>
       </header>
@@ -96,7 +104,16 @@ export default function Lobby() {
         <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[340px_1fr]">
           {/* ---------------- 左栏 ---------------- */}
           <div className="space-y-4">
-            <Card title="服务器" subtitle="房主电脑运行 npm run server 后，同一局域网内的玩家即可连接">
+            <Card
+              title="服务器"
+              subtitle={
+                lan
+                  ? '房主电脑运行 npm run server 后，同一局域网内的玩家即可连接'
+                  : pub
+                    ? '在线服务器：朋友打开同一网页地址即可加入'
+                    : '连接多人服务器后即可创建或加入房间'
+              }
+            >
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <ConnBadge net={mp.net} />
@@ -106,14 +123,19 @@ export default function Lobby() {
                     </Button>
                   )}
                 </div>
+                {connected && <ServerStatsLine stats={mp.serverStats} badge={<NewBadge feature="onlineStats" dismissOn="view" />} />}
                 <div className="break-all rounded-md border border-line bg-panel-2/60 px-2.5 py-1.5 font-mono text-[11px] text-mute">{mp.net.url || defaultServerUrl()}</div>
                 {mp.net.error && mp.net.status !== 'open' && <div className="text-[11px] text-bad">{mp.net.error}</div>}
-                <MpField label="手动地址（可选）" hint={`填写房主的 IP:端口，例如 192.168.1.5:${DEFAULT_SERVER_PORT}；留空 = 使用当前网页地址`} error={addrError}>
+                <MpField
+                  label="手动地址（可选）"
+                  hint={pub ? '连接其他服务器时填写「地址:端口」；留空 = 使用当前网页地址' : `填写房主的 IP:端口，例如 192.168.1.5:${DEFAULT_SERVER_PORT}；留空 = 使用当前网页地址`}
+                  error={addrError}
+                >
                   <div className="flex gap-2">
                     <input
                       className={cx(mpInputBase, 'min-w-0 flex-1 font-mono')}
                       value={addr}
-                      placeholder={`192.168.1.5:${DEFAULT_SERVER_PORT}`}
+                      placeholder={pub ? '地址:端口' : `192.168.1.5:${DEFAULT_SERVER_PORT}`}
                       onChange={(e) => setAddr(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !addrError && connect(addr.trim() || null)}
                     />
@@ -134,7 +156,7 @@ export default function Lobby() {
                     恢复默认地址（本页）
                   </Button>
                 )}
-                {lanPages.length > 0 && (
+                {lanPages.length > 0 ? (
                   <div>
                     <div className="mb-1 text-xs font-medium text-mute">邀请朋友打开（局域网地址）</div>
                     <div className="space-y-1">
@@ -146,6 +168,16 @@ export default function Lobby() {
                       ))}
                     </div>
                   </div>
+                ) : (
+                  connected && (
+                    <div>
+                      <div className="mb-1 text-xs font-medium text-mute">邀请朋友打开</div>
+                      <div className="flex items-center gap-2 rounded-md border border-line bg-panel-2/50 px-2 py-1">
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink">{invitePage}</span>
+                        <CopyButton text={invitePage} title="复制邀请地址" />
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             </Card>
@@ -161,9 +193,12 @@ export default function Lobby() {
                   onKeyDown={(e) => e.key === 'Enter' && commitName()}
                 />
               </MpField>
-              <Hint className="mt-2">
-                同一浏览器多开测试：在网址后加 <span className="font-mono text-ink">?as=小明</span> 使用独立身份。
-              </Hint>
+              {/* 开发调试用的提示：公网服务器上对普通玩家没有意义，不显示 */}
+              {!pub && (
+                <Hint className="mt-2">
+                  同一浏览器多开测试：在网址后加 <span className="font-mono text-ink">?as=小明</span> 使用独立身份。
+                </Hint>
+              )}
             </Card>
 
             <Card title="加入房间">
@@ -223,7 +258,15 @@ export default function Lobby() {
             bodyClassName="p-0"
           >
             {!connected ? (
-              <EmptyState text={mp.net.status === 'closed' ? '未连接到服务器。请确认房主已运行服务器，或填写房主的 IP:端口。' : '正在连接服务器…'} />
+              <EmptyState
+                text={
+                  mp.net.status !== 'closed'
+                    ? '正在连接服务器…'
+                    : pub
+                      ? '未连接到服务器。请稍后点「立即重连」，或刷新页面。'
+                      : '未连接到服务器。请确认房主已运行服务器，或填写房主的 IP:端口。'
+                }
+              />
             ) : rooms.length === 0 ? (
               <EmptyState text="暂时没有房间，创建一个邀请朋友加入吧。" />
             ) : (
@@ -278,9 +321,18 @@ export default function Lobby() {
 
         <div className="mx-auto mt-5 max-w-6xl rounded-lg border border-line bg-panel/70 px-4 py-3 text-xs leading-relaxed text-mute">
           <span className="font-semibold text-ink">怎么开局：</span>
-          房主在电脑上运行 <span className="font-mono text-ink">npm run server</span>（默认端口 {DEFAULT_SERVER_PORT}），朋友在浏览器打开{' '}
-          <span className="font-mono text-ink">{lanPages[0] ?? httpUrlOf(mp.net.url || defaultServerUrl())}</span>
-          ，进入「多人对战」后用房间码加入。所有玩家共享同一个回合，各自完成操作后点「准备」，全员准备后回合推进；其他玩家的转会、签约、赛果等公开动态会实时推送。
+          {lan ? (
+            <>
+              房主在电脑上运行 <span className="font-mono text-ink">npm run server</span>（默认端口 {DEFAULT_SERVER_PORT}），朋友在浏览器打开{' '}
+              <span className="font-mono text-ink">{lanPages[0] ?? invitePage}</span>
+              ，进入「多人对战」后用房间码加入。
+            </>
+          ) : (
+            <>
+              {usingManual ? '把服务器的网页地址' : '把本页地址'} <span className="font-mono text-ink">{invitePage}</span> 发给朋友，进入「多人对战」后用房间码加入。
+            </>
+          )}
+          所有玩家共享同一个回合，各自完成操作后点「准备」，全员准备后回合推进；其他玩家的转会、签约、赛果等公开动态会实时推送。
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@
 import { WebSocket } from 'ws';
 import type { GameState } from '../src/engine/types';
 import { PROTOCOL_VERSION, isRoomHost, mySeat } from '../src/shared/protocol';
-import type { ClientMsg, FeedItem, RoomInfo, RoomSeat, RoomSummary, RoundStatus, ServerMsg } from '../src/shared/protocol';
+import type { ClientMsg, FeedItem, RoomInfo, RoomSeat, RoomSummary, RoundStatus, ServerMsg, ServerStatsSummary } from '../src/shared/protocol';
 
 type Waiter = { pred: (m: ServerMsg) => boolean; resolve: (m: ServerMsg) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
 
@@ -27,6 +27,11 @@ export class TestClient {
   state: GameState | null = null;
   version = -1;
   roundStatus: RoundStatus | null = null;
+  /** 最近一次 welcome */
+  welcome: Extract<ServerMsg, { t: 'welcome' }> | null = null;
+  /** 最近一次在线统计与收到的次数 */
+  stats: ServerStatsSummary | null = null;
+  statsCount = 0;
   feeds: FeedItem[] = [];
   errors: string[] = [];
   /** 校验失败记录（onState 抛出的错误、版本倒退等） */
@@ -45,11 +50,11 @@ export class TestClient {
   private reqSeq = 0;
   private opened: Promise<void>;
 
-  constructor(url: string, opts: { sessionId: string; name: string; label?: string }) {
+  constructor(url: string, opts: { sessionId: string; name: string; label?: string; headers?: Record<string, string> }) {
     this.sessionId = opts.sessionId;
     this.name = opts.name;
     this.label = opts.label ?? opts.name;
-    this.ws = new WebSocket(url, { perMessageDeflate: true });
+    this.ws = new WebSocket(url, { perMessageDeflate: true, headers: opts.headers });
     this.opened = new Promise((resolve, reject) => {
       this.ws.once('open', () => resolve());
       this.ws.once('error', (err) => reject(err));
@@ -103,6 +108,13 @@ export class TestClient {
         break;
       case 'roundStatus':
         this.roundStatus = msg.status;
+        break;
+      case 'welcome':
+        this.welcome = msg;
+        break;
+      case 'serverStats':
+        this.stats = { online: msg.online, inGame: msg.inGame, rooms: msg.rooms, playing: msg.playing };
+        this.statsCount++;
         break;
       case 'feed':
         this.feeds.push(...msg.items);

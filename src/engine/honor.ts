@@ -1,7 +1,7 @@
 // 荣誉系统【E3 负责实现】
 import type { GameState, HonorBreakdown, Tournament } from './types';
 import { CONFIG } from './config';
-import { clamp, placementPercentile } from './util';
+import { clamp, ownEntry, placementPercentile } from './util';
 import { teamRating } from './team';
 import { addNews } from './news';
 import { inSeatOf, isMultiplayer, seatOf } from './seat';
@@ -14,7 +14,7 @@ export function honorLuck(honor: number): number {
 
 /** 赛前预期评分：teamRating × (1 + expectationHonorWeight × log10(1 + honor/100)) */
 export function expectationScore(state: GameState, teamId: string): number {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return 0;
   const rating = teamRating(state, teamId);
   const honor = Number.isFinite(team.honor) ? Math.max(0, team.honor) : 0;
@@ -223,7 +223,7 @@ export function computeHonorBreakdown(
   let raw = tierBase * (expTerm + yoyTerm + momTerm + placeBonus);
   // 低荣誉减损：荣誉越低，单项赛事扣分越少（各分项等比缩放，明细仍可加总）；见 CONFIG.honor.lowHonorLossRef
   if (raw < 0 && h.lowHonorLossRef > 0) {
-    const honorNow = state.teams[teamId]?.honor;
+    const honorNow = ownEntry(state.teams, teamId)?.honor;
     const hv = Number.isFinite(honorNow) ? Math.max(0, honorNow as number) : 0;
     const k = clamp(h.lowHonorLossMinMult + (1 - h.lowHonorLossMinMult) * clamp(hv / h.lowHonorLossRef, 0, 1), 0, 1);
     if (k < 1) {
@@ -239,7 +239,7 @@ export function computeHonorBreakdown(
   // 低荣誉俱乐部不会因一次大赛失利直接解散，解散需要持续失利或丑闻。
   let cap = h.maxDeltaByTier?.[t.tier] ?? 0;
   if (raw < 0 && cap > 0 && h.maxLossShareOfHonor > 0) {
-    const honorNow = state.teams[teamId]?.honor;
+    const honorNow = ownEntry(state.teams, teamId)?.honor;
     const base = Math.max(h.lossCushionFloor, Number.isFinite(honorNow) ? (honorNow as number) : 0);
     cap = Math.min(cap, Math.max(1, Math.round(base * h.maxLossShareOfHonor)));
   }
@@ -271,7 +271,7 @@ export function computeHonorBreakdown(
  * 但仍记录 history.honor 并做解散判定。返回实际变化值。
  */
 export function applyHonorChange(state: GameState, teamId: string, delta: number, reason: string, notify: boolean): number {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team || !Number.isFinite(delta)) return 0;
   const d = Math.round(delta);
   if (d === 0) return 0;

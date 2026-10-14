@@ -8,6 +8,7 @@
 // 单机（state.multiplayer 为空）时本模块的函数全部退化为直接执行，行为与改造前完全一致。
 // ============================================================================
 import type { GameState, NewsItem, PendingDecision, SeatSaved, SeatState, Tournament } from './types';
+import { ownEntry } from './util';
 
 type Bag = Record<string, unknown>;
 
@@ -47,8 +48,8 @@ const SEASON_DEFAULTS: Record<string, () => unknown> = {
 };
 export const SEAT_SEASON_KEYS = Object.keys(SEASON_DEFAULTS);
 
-/** 赛事中的私有字段（playerStatus 缺省 'locked'，其余缺省为空） */
-export const SEAT_TOURNAMENT_KEYS = ['playerStatus', 'expectedRank', 'settlement', 'playerBeefHonor'] as const;
+/** 赛事中的私有字段（playerStatus 缺省 'locked'，其余缺省为空；entryRound = 本座位报名 / 接受邀请所在的回合） */
+export const SEAT_TOURNAMENT_KEYS = ['playerStatus', 'expectedRank', 'settlement', 'playerBeefHonor', 'entryRound'] as const;
 const TOURNAMENT_STATUS_DEFAULT = 'locked';
 
 // ---------------------------------------------------------------------------
@@ -95,7 +96,8 @@ export function seatOf(state: GameState, teamId: string | null | undefined): Sea
 export function seatInPlay(state: GameState, teamId: string): boolean {
   const seat = seatOf(state, teamId);
   if (!seat) return false;
-  return !seat.eliminated && !!state.teams[teamId] && !state.teams[teamId].disbanded;
+  const team = ownEntry(state.teams, teamId);
+  return !seat.eliminated && !!team && !team.disbanded;
 }
 
 /**

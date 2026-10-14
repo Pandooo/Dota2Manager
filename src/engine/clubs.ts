@@ -17,7 +17,7 @@ import type { ClubFoundingState, GameState, Player, PlayerIndexEntry, Position, 
 import { POSITIONS, REGIONS } from './types';
 import { CONFIG } from './config';
 import { rngOf, type Rng } from './rng';
-import { clamp } from './util';
+import { clamp, ownEntry } from './util';
 import { addNews } from './news';
 import { activeTeams, autoLineup, rankTeamsByRating, teamPlayers } from './team';
 import { computeSalary, marketValue, overallRating, playerTier, seasonYear } from './player';
@@ -560,7 +560,7 @@ export function signFoundedClubRookies(state: GameState): string[] {
       state,
       'transfer',
       `【签约】${team.name} 签下 ${signed.map((p) => p.handle).join('、')}`,
-      `新成立的 ${team.name} 在选秀之后签下本届登场的新秀 ${signed.map((p) => `${p.handle}（${playerTier(p)}）`).join('、')}。`,
+      `新成立的 ${team.name} 签下本届登场的新秀 ${signed.map((p) => `${p.handle}（${playerTier(p)}）`).join('、')}。`,
       false,
       { teamIds: [team.id], playerIds: signed.map((p) => p.id), tags: ['transfer'], noInfer: true },
     );
@@ -570,7 +570,7 @@ export function signFoundedClubRookies(state: GameState): string[] {
 
 /** 某战队是否为本局中途成立的俱乐部（界面展示用） */
 export function foundingOf(state: GameState, teamId: string | null | undefined): Team['founded'] | null {
-  return (teamId && state.teams[teamId]?.founded) || null;
+  return (teamId && ownEntry(state.teams, teamId)?.founded) || null;
 }
 
 // 供测试与界面：本赛季可成立（尚未进入本局）的真实组织

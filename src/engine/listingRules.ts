@@ -1,6 +1,6 @@
 // 挂牌期规则（纯函数，只依赖 CONFIG）：squadOps 的挂牌逻辑与 market 的合同到期提示共用，避免 squadOps ↔ market 循环引用。
 // 用户需求 2026-10-12：「队员挂牌到解约持续一整个赛季，而不是三个回合」。
-import type { GameState, TransferListing } from './types';
+import type { GameState, Player, TransferListing } from './types';
 import { CONFIG } from './config';
 import { clamp } from './util';
 
@@ -73,4 +73,32 @@ export function listingClock(state: GameState): number {
 export function listingListedAtLabel(L: Pick<TransferListing, 'season' | 'listedRound'>): string {
   const r = Number.isFinite(L.listedRound) ? Math.floor(L.listedRound) : 0;
   return r > 0 ? `TI${L.season} 第 ${r} 回合挂牌` : `TI${L.season} 赛季初挂牌`;
+}
+
+/** 某个（TI 序号, 回合）时刻的挂牌时钟读数（与 listingClock 同口径：赛季初 = 第 1 回合） */
+export function listingClockAt(ti: number, round: number): number {
+  const R = listingRoundsPerSeason();
+  const t = Number.isFinite(ti) ? ti : 0;
+  const r = Number.isFinite(round) ? round : 0;
+  return t * R + clamp(r - 1, 0, R);
+}
+
+/**
+ * 抽卡新秀的转售冷却（CONFIG.gacha.resaleHoldRounds，2026-10-14 审查）：本队抽到（或按真实出道去向加盟本队）的新秀仍在本队、
+ * 入队不满 resaleHoldRounds 个转会回合时返回剩余回合数（> 0），否则 0。冷却期内不能挂牌、不接 AI 随机求购，交易抵价按签字费比例估值。
+ */
+export function gachaResaleLockLeft(state: GameState, p: Pick<Player, 'gacha' | 'teamId'> | null | undefined): number {
+  const g = p?.gacha;
+  const hold = Math.floor(Number(CONFIG.gacha.resaleHoldRounds) || 0);
+  if (!g || hold <= 0 || !p?.teamId || g.teamId !== p.teamId) return 0;
+  const left = hold - (listingClock(state) - listingClockAt(g.ti, g.round));
+  return left > 0 ? left : 0;
+}
+
+/** 转售冷却的说明（挂牌按钮 / 失败提示）；不在冷却期返回 null */
+export function gachaResaleLockText(state: GameState, p: Pick<Player, 'gacha' | 'teamId' | 'handle'> | null | undefined): string | null {
+  const left = gachaResaleLockLeft(state, p);
+  if (!left || !p) return null;
+  const hold = Math.floor(Number(CONFIG.gacha.resaleHoldRounds) || 0);
+  return `${p.handle} 是本队抽卡得到的新秀，入队满 ${hold} 个转会回合（约一个赛季）后才能挂牌出售（还差 ${left} 个转会回合）`;
 }

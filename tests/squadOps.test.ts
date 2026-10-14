@@ -805,14 +805,23 @@ describe('squadOps · 整赛季挂牌（真实对局）', () => {
       expect(r.ok, r.message).toBe(true);
     };
     const listAt = 12;
-    while (s.roundIndex < listAt) step();
-    // 本用例验证「整季无人报价 → 到期解约」：关掉与挂牌无关的普通随机求购（generateAiOffers），
-    // 否则结果取决于随机序列（任何引擎改动都可能让某回合的普通求购恰好落到这名选手身上，收到过报价就不会解约）
+    // 本用例验证「整季无人报价 → 到期解约」：从开局就关掉与挂牌无关的普通随机求购（generateAiOffers），
+    // 否则结果取决于随机序列（任何引擎改动都可能让某回合的普通求购恰好落到这名选手身上——包括挂牌前一刻
+    // 第 12 回合开始时的求购，挂牌前已收到、仍待处理的报价同样算「收到过报价」——收到过报价就不会解约）。
+    // 随机事件里的挖角报价（低归属感 / 薪资强烈不满的明星，events.ts createPoach）同理也会算作报价，一并关闭
+    // （抽卡取代选秀后同种子的随机序列分叉，挂牌选手在下赛季第 8 回合被挖角，挂牌改为「收到过报价 → 留队」）
     const offerChance = CONFIG.market.aiOfferChancePerRound;
+    const poachChance = CONFIG.loyalty.poachChancePerRound;
+    const starPoachChance = CONFIG.salary.poach.unhappyStarPoachChance;
     (CONFIG.market as { aiOfferChancePerRound: number }).aiOfferChancePerRound = 0;
+    (CONFIG.loyalty as { poachChancePerRound: number }).poachChancePerRound = 0;
+    (CONFIG.salary.poach as { unhappyStarPoachChance: number }).unhappyStarPoachChance = 0;
     onTestFinished(() => {
       (CONFIG.market as { aiOfferChancePerRound: number }).aiOfferChancePerRound = offerChance;
+      (CONFIG.loyalty as { poachChancePerRound: number }).poachChancePerRound = poachChance;
+      (CONFIG.salary.poach as { unhappyStarPoachChance: number }).unhappyStarPoachChance = starPoachChance;
     });
+    while (s.roundIndex < listAt) step();
     const me0 = s.settings.playerTeamId;
     // 最年轻的正式队员（避免赛季末退役）；挂牌后把标价抬到没有俱乐部负担得起，保证整季无人报价
     const p = teamPlayers(s, me0)

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import {
-  CONFIG, MAX_TI, POSITIONS, REGIONS, REGION_LABEL, estimateNewClubStart, formatGold, formatRank, newClubStartingFunds, seedTeamStartingFunds, tierOf,
+  CONFIG, MAX_TI, POSITIONS, REGIONS, REGION_LABEL, estimateNewClubStart, formatGold, formatRank, gachaPriceForTi, newClubStartingFunds, seedTeamStartingFunds, tierOf,
   tiYear, type NewGameOptions, type Region, type RosterFile, type SeedPlayer, type SeedTeam, type TiInfo,
 } from '../../engine';
 import { availableStartTis, getAllTiInfo, loadRoster } from '../../data/index';
@@ -686,7 +686,7 @@ export default function NewGame() {
           <div>· 5 名程序化选手：{sCount > 0 ? `${sCount} 名 S 级、` : ''}{aCount} 名 A 级，其余 B 级</div>
           <div>· 启动资金 {formatGold(newClubFunds)}（约为初始阵容 {newClubStart.wagePerRound > 0 ? Math.round(newClubFunds / newClubStart.wagePerRound) : '—'} 回合的工资），每回合另有赞助、直播与周边收入</div>
           <div>· 赛事奖金默认 {Math.round(CONFIG.prizeShare.initial * 100)}% 分给队员、其余归俱乐部（可在「俱乐部 › 财务」调整）；队员分到的奖金计入其收入，奖金越多越不容易对薪资不满</div>
-          <div>· 每个赛季初（含第一个赛季）自动举行新秀选秀：排名越差，抽中前几顺位的概率越高</div>
+          <div>· 每个赛季（含第一个赛季）开放新秀卡池：真实新秀、请神新秀与虚构新秀，所有战队共享、先到先得（单抽价格 {formatGold(gachaPriceForTi(startTi || 1).single)} 起，随年代变化）</div>
           <div>· 荣誉从 {CONFIG.team.newClubHonor} 起步，前期多数赛事需要打预选</div>
           <div className="mt-1 text-faint">白手起家难度较高，但每一座奖杯都是你亲手打造的。</div>
         </div>
@@ -808,7 +808,7 @@ export default function NewGame() {
         </div>
         <Hint className="mt-3">
           开局将获得 5 名程序化选手（{sCount > 0 ? `${sCount} 名 S 级、` : ''}{aCount} 名 A 级，其余 B 级）
-          ；第一个赛季初同样举行新秀选秀，新俱乐部可借此补充新秀。
+          ；第一个赛季初同样开放新秀卡池，新俱乐部可以抽卡补充新秀。
         </Hint>
       </div>
     );

@@ -1,5 +1,7 @@
 // ============================================================================
 // 新秀选秀（第八波：取代玩家抽卡）
+// 【2026-10-14 起默认关闭】用户决策：抽卡回归并完全取代选秀（gacha.ts）。本模块保留一个版本（下个版本删除）：
+// 只有 CONFIG.draft.enabled = true 时 season.startSeason 才举行选秀；旧存档的选秀记录与「赛季初免费放弃」仍按原规则处理。
 // 每个赛季初（TI 结算的退役 / 年龄 / 合同之后，休赛期转会潮与赛程之前；新游戏的第一个赛季同样举行）：
 //   1. 新秀池 = 本赛季登场的真实新秀（state.futureRookies 到期）+ 程序生成新秀（CONFIG.draft.generatedPerSeason）。
 //      程序生成新秀等级按 A 15% / S 10% / SS 5% / SSR 1%（其余 C/B）；SSR 为伪随机分布并跨赛季保底：
@@ -21,7 +23,7 @@ import type {
 import { POSITIONS, TIERS } from './types';
 import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, type Rng } from './rng';
-import { clamp, formatGold } from './util';
+import { clamp, formatGold, ownEntry } from './util';
 import { addNews, pushPopup } from './news';
 import { ageOf, effectiveAttr, overallRating, playerRating, playerTier, seasonEconIndex, tierIndex } from './player';
 import { naturalPositions } from './roles';
@@ -29,7 +31,7 @@ import { activeTeams, addPlayerToTeam, autoLineup, rankTeamsByRating } from './t
 import { generatePlayer, rookieFromIndex } from './generation';
 import { departToFreeAgency } from './market';
 import { syncSynergies } from './synergy';
-import { prdConstant } from './gacha';
+import { prdConstant } from './gachaOdds';
 import { forEachSeat, isHumanTeam } from './seat';
 import { getPlayerIndex } from '../data/index';
 
@@ -459,7 +461,7 @@ export function runRookieDraft(state: GameState): RookieDraftRecord | null {
     for (const teamId of order) {
       if (!available.length) break;
       overall++;
-      const team = state.teams[teamId];
+      const team = ownEntry(state.teams, teamId);
       const pick: RookieDraftPick = { round: r, pick: overall, teamId };
       if (r === 1 && winners.includes(teamId)) pick.lottery = true;
       // 不论阵容人数，每支战队都按顺位选人（玩家战队超出常规上限也照选；AI 战队选秀后再整理阵容）
@@ -634,7 +636,7 @@ export function draftedRookieReleaseBlock(state: GameState, p: Player | null | u
 
 /** 本届选秀中被某战队选中、仍以选秀合同在队的新秀 */
 export function draftedRookiesOf(state: GameState, teamId: string, ti: number = state.season?.ti ?? 0): Player[] {
-  const team = state.teams[teamId];
+  const team = ownEntry(state.teams, teamId);
   if (!team) return [];
   return (team.playerIds ?? [])
     .map((id) => state.players[id])
@@ -645,7 +647,7 @@ export function draftedRookiesOf(state: GameState, teamId: string, ti: number = 
 
 /** 免费放弃本届选秀中选中的新秀（仅赛季初）：离队进入自由市场，无解约补偿、不扣荣誉 */
 export function releaseDraftedRookie(state: GameState, playerId: string): OpResult {
-  const p = typeof playerId === 'string' ? state.players[playerId] : undefined;
+  const p = ownEntry(state.players, playerId);
   const block = draftedRookieReleaseBlock(state, p);
   if (block || !p) return fail(block ?? '该选手不在你的战队');
   const team = state.teams[state.settings.playerTeamId];

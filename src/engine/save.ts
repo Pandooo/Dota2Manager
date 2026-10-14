@@ -6,6 +6,8 @@ import { SAVE_VERSION } from './config';
 import { stripLegacyGameBoxes } from './stats';
 import { migrateTransferListings } from './squadOps';
 import { migrateRealRoles } from './roleSync';
+import { migrateHallOfFame } from './hallOfFame';
+import { initMomentumOnLoad } from './momentum';
 
 export interface SaveMeta {
   slot: string;               // 'auto' | '1' | '2' | '3' ...
@@ -140,8 +142,11 @@ function normalizeState(s: GameState): GameState {
   s.coaches ??= {};
   s.seasonTournamentIds ??= [];
   s.futureRookies ??= {};
-  // 第八波取消玩家抽卡：旧存档残留的卡池选手（本就无东家）直接回到自由市场
+  // 第八波旧版抽卡池（选手 id 列表）不再使用：残留的选手（本就无东家）直接回到自由市场。新版卡池见 s.gacha（gacha.ts）
   s.gachaPool = [];
+  if (s.gacha !== undefined && (!isObj(s.gacha) || !Array.isArray((s.gacha as { history?: unknown }).history))) {
+    s.gacha = { pool: isObj(s.gacha) && isObj((s.gacha as { pool?: unknown }).pool) ? s.gacha.pool : null, history: [] };
+  }
   s.gachaPity ??= 0;
   s.transferOffers ??= [];
   s.tempSubCandidates ??= [];
@@ -282,6 +287,13 @@ export function upgradeLoadedState(state: GameState): GameState {
   // 真实生涯位置（第十三波，roleSync.migrateRealRoles，按 roleDataVersion 幂等）：旧存档的真实选手位置沿用首次登场时的位置，
   // 一次性同步到当届真实位置并补齐副位置，人类玩家战队收到一条修正汇总
   migrateRealRoles(state);
+  // 新秀抽卡回归（2026-10-14，gacha.ts / hallOfFame.ts，幂等）：旧存档没有名人堂 → 以初始成员（DotA1 时代传奇）+ 开局补录创建，
+  // 并补录当前在役的 SS / SSR 选手（不发新闻）；本赛季已举行过选秀，卡池从下个赛季初开始。
+  // 开局补录（2026-10-15 用户决策「补录」，按 hallOfFame.backfillVersion 只执行一次）：已有名人堂的存档补录开局届之前
+  // 真实数据中的 SS / SSR 与当前在役的 SS / SSR
+  migrateHallOfFame(state);
+  // 荣誉势头（第十四波，momentum.ts，幂等）：旧存档的玩家战队按本赛季季初荣誉补建记录（其他战队在下次回合结算时建立，标记 partial）
+  initMomentumOnLoad(state);
   // 未来的存档迁移在这里按 version 逐级处理
   state.version = SAVE_VERSION;
   return state;

@@ -19,6 +19,9 @@ import type { StatSlot } from '../src/engine/stats';
 import { createDraft, runDraftUntil } from '../src/engine/draft';
 import { seededRng } from '../src/engine/rng';
 import { importSave } from '../src/engine/save';
+import { gachaPull } from '../src/engine/gacha';
+import { teamPlayers } from '../src/engine/team';
+import { isTransferWindowOpen } from '../src/engine/market';
 import { makeTestState } from './helpers';
 
 beforeAll(() => {
@@ -60,6 +63,12 @@ async function runGame(opts: { startTi: number; seasons: number; teamId: string;
     }
     const me = g.teams[g.settings.playerTeamId];
     if (me && g.phase === 'preseason' && me.gold < 2_000_000) me.gold = 2_000_000;
+    // 抽卡取代选秀（2026-10-14）后人类战队不再在赛季初自动得到新秀：转会窗口开放时用单抽补足 5 名正式队员
+    // （否则开局阵容里有人退役 / 赛季中离队时整季只靠临时替补，赛季末快照的阵容不足 5 人）
+    if (me && isTransferWindowOpen(g)) {
+      const regulars = () => teamPlayers(g, me.id).filter((p) => !p.tempSubUntilTournament && !p.isWildSub).length;
+      for (let k = 0; k < 5 && regulars() < 5; k++) if (!gachaPull(g, 1).ok) break;
+    }
     if (currentPlayerTournament(g) || g.activeMatch) {
       if (!quickSimTournament(g).ok) fillLineupWithTempSubs(g);
     }
