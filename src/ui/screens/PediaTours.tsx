@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
 import { PEDIA_TIERS, TOURNAMENT_TIER_LABEL, formatRank, pediaSeasons, pediaTournament, pediaTournaments, tiYear } from '../../engine';
 import type { GameState, PediaTournamentRow, TournamentHistoryEntry, TournamentTier } from '../../engine';
-import { Card, EmptyState, Gold, cx } from '../components/common';
+import { Card, EmptyState, Gold, TableScroll, cx } from '../components/common';
 import { Chip } from '../components/SquadShared';
 import { Segmented, TourSelect, TourTierBadge, openTournamentView } from '../components/TourShared';
 import {
@@ -107,7 +107,7 @@ function TourList({ game }: { game: GameState }) {
             { key: 'all', label: '全部' },
           ]}
         />
-        <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-mute">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-mute pointer-coarse:min-h-9">
           <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
           只看本方参加的赛事
         </label>
@@ -121,7 +121,41 @@ function TourList({ game }: { game: GameState }) {
       ) : (
         [...groups.entries()].map(([s, list]) => (
           <Card key={s} title={`TI${s} 赛季 · ${tiYear(s)}`} subtitle={`${list.length} 项赛事`} bodyClassName="p-0">
-            <div className="overflow-x-auto">
+            {/* 手机（< sm）：每项赛事两行（日期 · 等级 · 赛事 / 冠军 › 亚军 · 本方名次）；表格有 9 列，横向滑动看不到冠亚军 */}
+            <ul className="divide-y divide-line/50 sm:hidden">
+              {list.map(({ r, my }) => (
+                <li key={r.id} className={cx('px-4 py-2.5 text-sm', my && 'bg-gold/[0.03]', r.championId === me && 'bg-gold/10')}>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 text-xs text-mute tabular">{r.date || '—'}</span>
+                    <TourTierBadge tier={r.tier} />
+                    <PTour id={r.id} name={r.name} className="min-w-0 flex-1 font-medium" />
+                  </div>
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+                    {r.championId ? (
+                      <>
+                        <span className="text-gold">🏆</span>
+                        <PTeam id={r.championId} name={r.championName} className="max-w-[9rem]" />
+                        {r.runnerUpId && (
+                          <>
+                            <span className="text-faint">›</span>
+                            <PTeam id={r.runnerUpId} name={r.runnerUpName} noSwatch className="max-w-[8rem] text-mute" />
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <span className={cx(r.status === 'running' ? 'text-info' : 'text-faint')}>{STATUS_LABEL[r.status]}</span>
+                    )}
+                    {my && (
+                      <span className="ml-auto shrink-0">
+                        <span className="text-faint">本方 </span>
+                        <span className={my.rank ? placeClass(my.rank) : 'text-info'}>{my.text}</span>
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="tbl">
                 <thead>
                   <tr>
@@ -215,7 +249,7 @@ function TourPage({ id }: { id: string }) {
               {page.placements.length === 0 ? (
                 <div className="p-4 text-sm text-faint">赛事尚未决出名次</div>
               ) : (
-                <div className="overflow-x-auto">
+                <TableScroll>
                   <table className="tbl">
                     <thead>
                       <tr>
@@ -238,7 +272,7 @@ function TourPage({ id }: { id: string }) {
                           {anyPrize && <td className="num">{p.prize ? <Gold value={p.prize[0]} /> : <span className="text-faint">—</span>}</td>}
                           {anyPrize && <td className="num">{p.prize ? <Gold value={p.prize[1]} /> : <span className="text-faint">—</span>}</td>}
                           {anyLineup && (
-                            <td className="whitespace-normal">
+                            <td className="whitespace-normal max-sm:min-w-[12rem]">
                               {p.lineup?.length ? (
                                 <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
                                   {p.lineup.map((x) => (
@@ -254,7 +288,7 @@ function TourPage({ id }: { id: string }) {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableScroll>
               )}
             </PSection>
             {page.status !== 'finished' && (
@@ -263,7 +297,16 @@ function TourPage({ id }: { id: string }) {
           </>
         }
         side={
-          <Infobox title={page.name} color={page.tier === 'ti' ? 'var(--color-gold)' : undefined}>
+          <Infobox
+            title={page.name}
+            color={page.tier === 'ti' ? 'var(--color-gold)' : undefined}
+            summary={
+              <>
+                <InfoRow label="等级">{page.tierLabel}</InfoRow>
+                <InfoRow label="冠军">{page.championId ? <PTeam id={page.championId} name={page.championName} /> : '—'}</InfoRow>
+              </>
+            }
+          >
             <InfoRow label="等级">{page.tierLabel}</InfoRow>
             <InfoRow label="赛季">
               TI{page.season}（{page.year}）

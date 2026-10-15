@@ -1,6 +1,7 @@
 // ============================================================================
 // 比赛页 · 赛前准备：双方首发、战队评分/灵性/教练、宿敌提醒、本局阵营
 // 开始 BP / 快速模拟等「下一步」按钮在底部吸附操作栏（MatchDock）。
+// 手机（< sm）：网格一律单列 minmax(0,1fr)；首发表隐藏「等级 / 战力」两列，错位 / 状态 / 招牌英雄的说明点按可见（tapTip）。
 // ============================================================================
 import type { GameRecord, GameState, Series, Team, Tournament } from '../../engine/types';
 import {
@@ -8,9 +9,11 @@ import {
   ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
 import type { RoleFit } from '../../engine';
-import { Badge, Button, Card, Hint, PlayerLink, PosBadge, TeamLink, TeamTag, TierBadge, cx } from './common';
+import { Badge, Button, Card, Hint, PlayerLink, PosBadge, TableScroll, TeamLink, TeamTag, TierBadge, cx } from './common';
 import { HeroAvatar, heroCn } from './MatchHero';
-import { CompareRow, FACTION_LABEL, FACTION_TEXT, MineBadge, fmtDuration, gameWinnerId, pct, safe, strengthShare, type Faction, type Side } from './MatchShared';
+import {
+  CompareRow, FACTION_LABEL, FACTION_TEXT, MineBadge, fmtDuration, gameWinnerId, pct, safe, strengthShare, tapTip, type Faction, type Side,
+} from './MatchShared';
 
 export default function MatchPre({
   game,
@@ -63,9 +66,9 @@ export default function MatchPre({
         subtitle={`${series.label} · Bo${series.bestOf} · 在底部选择 BP 方式开始本局`}
         bodyClassName="p-4"
       >
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="space-y-4">
-            <div className="grid items-end gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 space-y-4">
+            <div className="grid grid-cols-[minmax(0,1fr)] items-end gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
               <div>
                 <div className="text-[11px] text-faint">纸面实力胜率（我方）</div>
                 <div className={cx('text-4xl font-black tabular', myShare >= 0.5 ? 'text-good' : 'text-bad')}>{pct(myShare)}</div>
@@ -108,7 +111,7 @@ export default function MatchPre({
                   ))}
                 </ul>
                 <div className="mt-1 text-[11px] text-mute">首发不足 5 人时，直接「快速模拟本场」将弃权判负。</div>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   <Button size="sm" variant="primary" onClick={onAutoLineup}>
                     一键自动排阵
                   </Button>
@@ -146,7 +149,7 @@ export default function MatchPre({
 
       {games.length > 0 && <SeriesSoFar game={game} games={games} myTeamId={myTeam.id} />}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         <LineupCard game={game} team={teams.A} mine={mySide === 'A'} tournamentId={tournament.id} rating={rA} insight={iA} />
         <LineupCard game={game} team={teams.B} mine={mySide === 'B'} tournamentId={tournament.id} rating={rB} insight={iB} />
       </div>
@@ -175,23 +178,24 @@ function LineupCard({
     <Card
       className={mine ? 'border-gold/40' : undefined}
       title={
-        <span className="flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2">
           <TeamTag color={team.color} tag={team.tag} />
-          <TeamLink teamId={team.id} name={team.name} className="text-mute" />
+          <TeamLink teamId={team.id} name={team.name} className="min-w-0 truncate text-mute" />
           {mine && <MineBadge />}
         </span>
       }
       subtitle={`${REGION_LABEL[team.region] ?? team.region} · 荣誉 ${Math.round(team.honor)}`}
       bodyClassName="p-0"
     >
-      <div className="overflow-x-auto">
+      {/* 手机：隐藏「等级 / 战力」，评分与招牌英雄不用横向滑动就能看到 */}
+      <TableScroll>
         <table className="tbl">
           <thead>
             <tr>
               <th>位置</th>
               <th>选手</th>
-              <th>等级</th>
-              <th className="num">战力</th>
+              <th className="max-sm:hidden">等级</th>
+              <th className="num max-sm:hidden">战力</th>
               <th className="num">评分</th>
               <th>招牌英雄</th>
             </tr>
@@ -204,7 +208,10 @@ function LineupCard({
                     <td>
                       <PosBadge pos={pos} />
                     </td>
-                    <td colSpan={5} className="text-bad">
+                    <td colSpan={5} className="text-bad max-sm:hidden">
+                      空缺
+                    </td>
+                    <td colSpan={3} className="text-bad sm:hidden">
                       空缺
                     </td>
                   </tr>
@@ -224,33 +231,40 @@ function LineupCard({
                     <div className="flex items-center gap-1.5">
                       <PlayerLink player={player} />
                       {fit !== 'main' && (
-                        <Badge
-                          className={fit === 'off' ? 'bg-bad/15 text-bad' : 'bg-info/15 text-info'}
-                          title={`${ROLE_FIT_LABEL[fit]}，评分 ×${roleFitFactor(fit)}`}
-                        >
-                          {fit === 'off' ? '错位' : fit === 'alt' ? '副位' : '4/5互换'}
-                        </Badge>
+                        <span {...tapTip(`${ROLE_FIT_LABEL[fit]}，评分 ×${roleFitFactor(fit)}`)} className="inline-flex">
+                          <Badge className={fit === 'off' ? 'bg-bad/15 text-bad' : 'bg-info/15 text-info'}>
+                            {fit === 'off' ? '错位' : fit === 'alt' ? '副位' : '4/5互换'}
+                          </Badge>
+                        </span>
                       )}
                       {unavailable && <Badge className="bg-bad/25 text-bad">缺阵</Badge>}
                       {player.tempSubUntilTournament && <Badge title="临时替补">替</Badge>}
                     </div>
                   </td>
-                  <td>
+                  <td className="max-sm:hidden">
                     <TierBadge tier={safe(() => playerTier(player), 'C')} />
                   </td>
-                  <td className="num">
+                  <td className="num max-sm:hidden">
                     <span className="tabular">{eff.toFixed(1)}</span>
                     {Math.abs(diff) >= 0.5 && (
-                      <span className={cx('ml-1 text-[11px]', diff > 0 ? 'text-good' : 'text-bad')} title={mods.length ? `状态：${mods.join('、')}` : undefined}>
+                      <span className={cx('ml-1 text-[11px]', diff > 0 ? 'text-good' : 'text-bad')} {...tapTip(mods.length ? `状态：${mods.join('、')}` : undefined)}>
                         {diff > 0 ? '▲' : '▼'}
                       </span>
                     )}
                   </td>
-                  <td className="num font-semibold">{safe(() => playerRating(player, pos), 0).toFixed(1)}</td>
+                  <td className="num font-semibold">
+                    {safe(() => playerRating(player, pos), 0).toFixed(1)}
+                    {/* 手机隐藏了战力列：状态升降标在评分旁 */}
+                    {Math.abs(diff) >= 0.5 && (
+                      <span className={cx('ml-1 text-[11px] font-normal sm:hidden', diff > 0 ? 'text-good' : 'text-bad')} {...tapTip(mods.length ? `状态：${mods.join('、')}` : `战力 ${eff.toFixed(1)}`)}>
+                        {diff > 0 ? '▲' : '▼'}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <span className="flex items-center gap-0.5">
                       {(player.signatureHeroes ?? []).slice(0, 3).map((h) => (
-                        <HeroAvatar key={h} heroId={h} size="xs" title={heroCn(h)} />
+                        <HeroAvatar key={h} heroId={h} size="xs" title={heroCn(h)} tip />
                       ))}
                       {(player.signatureHeroes ?? []).length === 0 && <span className="text-faint">—</span>}
                     </span>
@@ -260,9 +274,9 @@ function LineupCard({
             })}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
       <div className="grid grid-cols-3 gap-2 border-t border-line px-4 py-2.5 text-xs">
-        <div>
+        <div className="min-w-0">
           <div className="text-faint">教练</div>
           {coach ? (
             <div className="mt-0.5 flex items-center gap-1">
@@ -297,7 +311,7 @@ function SeriesSoFar({ game, games, myTeamId }: { game: GameState; games: GameRe
           const myK = mySideInGame === 'A' ? g.killsA : g.killsB;
           const opK = mySideInGame === 'A' ? g.killsB : g.killsA;
           return (
-            <div key={i} className={cx('min-w-[180px] rounded-lg border px-3 py-2', win ? 'border-good/40 bg-good/5' : 'border-bad/40 bg-bad/5')}>
+            <div key={i} className={cx('min-w-[150px] flex-1 rounded-lg border px-3 py-2 sm:min-w-[180px] sm:flex-none', win ? 'border-good/40 bg-good/5' : 'border-bad/40 bg-bad/5')}>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-mute">第 {i + 1} 局</span>
                 <span className={cx('font-bold', win ? 'text-good' : 'text-bad')}>{win ? '胜' : '负'}</span>

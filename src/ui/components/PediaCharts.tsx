@@ -2,9 +2,27 @@
 // DotaPedia 小型图表（内联 SVG / HTML，无第三方库）：单系列柱状图、折线图、胜平负条、分项条、生涯时间线。
 // 约定：单系列只用一种颜色（默认金色），细柱 + 顶端圆角、2px 间隔、网格线弱化；
 // 每个数据点都有悬停提示（SVG <title>），数值标签只标注最大值 / 最后一项，避免满屏数字。
+// 触屏没有悬停：点按柱子 / 数据点时在图表下方显示该点的说明（再点一次收起）。
 // ============================================================================
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cx } from './common';
+import { BREAKPOINT, useCoarsePointer, useMinWidth } from '../mobile';
+
+/** 触屏：点选的数据点（索引）与图表下方的说明行 */
+function useTapTip(n: number): { coarse: boolean; sel: number | null; toggle: (i: number) => void } {
+  const coarse = useCoarsePointer();
+  const [sel, setSel] = useState<number | null>(null);
+  return {
+    coarse,
+    sel: coarse && sel !== null && sel < n ? sel : null,
+    toggle: (i) => setSel((s) => (s === i ? null : i)),
+  };
+}
+
+function TapTipLine({ text }: { text: string | null }) {
+  if (!text) return null;
+  return <div className="mt-1 rounded bg-panel-2/70 px-2 py-1 text-xs text-mute">{text}</div>;
+}
 
 /** 容器宽度（像素）：图表按实际宽度绘制，文字保持 11px，不随缩放变形 */
 function useWidth(fallback = 480): [RefObject<HTMLDivElement | null>, number] {
@@ -67,6 +85,7 @@ export function PBarChart({
   ariaLabel?: string;
 }) {
   const [ref, W] = useWidth();
+  const tap = useTapTip(data.length);
   if (!data.length) {
     return (
       <div ref={ref} className="w-full py-6 text-center text-xs text-faint">
@@ -98,11 +117,12 @@ export function PBarChart({
         const x = cx0 - bw / 2;
         const y = padT + innerH - h;
         const showVal = i === maxIdx || d.highlight || (i === data.length - 1 && data.length <= 16);
+        const picked = tap.sel === i;
         return (
-          <g key={d.key}>
+          <g key={d.key} onClick={tap.coarse ? () => tap.toggle(i) : undefined}>
             <title>{d.tip ?? `${d.label}：${format(d.value)}`}</title>
-            <rect x={padL + slot * i} y={padT - 14} width={slot} height={innerH + 14} fill="transparent" />
-            <path d={barPath(x, y, bw, h, 4)} fill={color} opacity={d.highlight ? 1 : 0.78} />
+            <rect x={padL + slot * i} y={padT - 14} width={slot} height={innerH + 14} fill={picked ? 'var(--color-panel-3)' : 'transparent'} opacity={picked ? 0.6 : 1} />
+            <path d={barPath(x, y, bw, h, 4)} fill={color} opacity={d.highlight || picked ? 1 : 0.78} />
             {showVal && v > 0 && (
               <text x={cx0} y={y - 4} textAnchor="middle" fontSize={11} fill={INK} className="tabular">
                 {format(d.value)}
@@ -117,6 +137,7 @@ export function PBarChart({
         );
       })}
     </svg>
+    <TapTipLine text={tap.sel !== null ? (data[tap.sel].tip ?? `${data[tap.sel].label}：${format(data[tap.sel].value)}`) : null} />
     </div>
   );
 }
@@ -147,6 +168,7 @@ export function PLineChart({
   ariaLabel?: string;
 }) {
   const [ref, W] = useWidth();
+  const tap = useTapTip(data.length);
   const pts = data.filter((d) => Number.isFinite(d.value));
   if (!pts.length) {
     return (
@@ -204,17 +226,17 @@ export function PLineChart({
       <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       {coords.map((c, i) =>
         c ? (
-          <g key={c.d.key}>
+          <g key={c.d.key} onClick={tap.coarse ? () => tap.toggle(i) : undefined}>
             <title>{c.d.tip ?? `${c.d.label}：${format(c.d.value)}`}</title>
-            <circle cx={c.x} cy={c.y} r={12} fill="transparent" />
-            <circle cx={c.x} cy={c.y} r={c.d.highlight ? 5 : 4} fill={color} stroke="var(--color-panel)" strokeWidth={2} />
+            <circle cx={c.x} cy={c.y} r={tap.coarse ? 16 : 12} fill="transparent" />
+            <circle cx={c.x} cy={c.y} r={c.d.highlight || tap.sel === i ? 5 : 4} fill={color} stroke={tap.sel === i ? 'var(--color-ink)' : 'var(--color-panel)'} strokeWidth={2} />
           </g>
         ) : (
           <g key={data[i].key} />
         ),
       )}
       {last && (
-        <text x={Math.min(last.x, W - padR - 2)} y={last.y - 9} textAnchor={last.x > W - padR - 30 ? 'end' : 'middle'} fontSize={11} fill={INK} className="tabular">
+        <text x={Math.min(last.x, W - padR - 2)} y={Math.max(11, last.y - 9)} textAnchor={last.x > W - padR - 30 ? 'end' : 'middle'} fontSize={11} fill={INK} className="tabular">
           {format(last.d.value)}
         </text>
       )}
@@ -226,6 +248,9 @@ export function PLineChart({
         ) : null,
       )}
     </svg>
+    <TapTipLine
+      text={tap.sel !== null && Number.isFinite(data[tap.sel].value) ? (data[tap.sel].tip ?? `${data[tap.sel].label}：${format(data[tap.sel].value)}`) : null}
+    />
     </div>
   );
 }
@@ -264,7 +289,7 @@ export function PartBars({ parts, max }: { parts: { label: string; value: number
   return (
     <div className="space-y-1.5">
       {parts.map((p) => (
-        <div key={p.label} className="grid grid-cols-[120px_minmax(0,1fr)_48px] items-center gap-2 text-xs" title={`${p.label}：${p.value}`}>
+        <div key={p.label} className="grid grid-cols-[96px_minmax(0,1fr)_44px] items-center gap-2 text-xs sm:grid-cols-[120px_minmax(0,1fr)_48px]" title={`${p.label}：${p.value}`}>
           <span className="truncate text-mute">{p.label}</span>
           <div className="h-1.5 overflow-hidden rounded-full bg-panel-3">
             <div className={cx('h-full rounded-full', p.value < 0 ? 'bg-bad' : 'bg-gold')} style={{ width: `${(Math.abs(p.value) / top) * 100}%` }} />
@@ -312,13 +337,15 @@ export function CareerTimeline({
   to: number;
   rows: { key: string; label: ReactNode; start: number; end: number; color?: string; tip?: string; sub?: ReactNode }[];
 }) {
+  // 手机（< sm）：名称列收窄，横轴标签最多约 5 个（每格只有十几像素宽）
+  const wide = useMinWidth(BREAKPOINT.sm);
   if (!rows.length || to < from) return <div className="text-xs text-faint">暂无记录</div>;
   const span = to - from + 1;
   const cols = Array.from({ length: span }, (_, i) => from + i);
-  const labelEvery = Math.max(1, Math.ceil(span / 12));
+  const labelEvery = Math.max(1, Math.ceil(span / (wide ? 12 : 5)));
   return (
     <div className="space-y-1.5">
-      <div className="grid grid-cols-[150px_minmax(0,1fr)] items-end gap-2">
+      <div className="grid grid-cols-[92px_minmax(0,1fr)] items-end gap-2 sm:grid-cols-[150px_minmax(0,1fr)]">
         <span />
         <div className="relative flex text-[10.5px] text-faint">
           {cols.map((c, i) => (
@@ -334,7 +361,7 @@ export function CareerTimeline({
         const left = ((s - from) / span) * 100;
         const width = ((e - s + 1) / span) * 100;
         return (
-          <div key={r.key} className="grid grid-cols-[150px_minmax(0,1fr)] items-center gap-2" title={r.tip}>
+          <div key={r.key} className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[150px_minmax(0,1fr)]" title={r.tip}>
             <div className="min-w-0 truncate text-xs">{r.label}</div>
             <div className="relative h-5 rounded bg-panel-3/50">
               {cols.slice(1).map((c, i) => (

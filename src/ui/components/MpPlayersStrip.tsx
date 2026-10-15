@@ -20,7 +20,8 @@ export default function MpPlayersStrip({ className }: { className?: string }) {
   const seatOf = (teamId: string) => room?.seats.find((s) => s.gameTeamId === teamId);
 
   return (
-    <div className={cx('flex min-w-0 items-center gap-1.5 overflow-x-auto', className)}>
+    // 横向滑动、不显示滚动条（窄屏第二行不会因为滚动条变高）
+    <div className={cx('no-scrollbar flex min-w-0 items-center gap-1.5 overflow-x-auto', className)}>
       {ids.map((id) => {
         const team = game.teams[id];
         const seat = seatOf(id);
@@ -45,7 +46,7 @@ export default function MpPlayersStrip({ className }: { className?: string }) {
               onClick={() => openTeam(id)}
               title={title}
               className={cx(
-                'flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border py-1 pl-1 pr-2 text-xs transition-colors',
+                'flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border py-1 pl-1 pr-2 text-xs transition-colors pointer-coarse:min-h-9',
                 isMe ? 'border-gold/50 bg-gold/10' : 'border-line bg-panel-2/60 hover:border-gold/40',
                 out && 'opacity-50',
               )}
@@ -79,7 +80,7 @@ export default function MpPlayersStrip({ className }: { className?: string }) {
                     ? `取消托管 ${name}（之后需要 ${name} 回来亲自操作才能推进回合）`
                     : `托管离线玩家 ${name}：服务器代为处理待决事件（保守选项）、快速模拟比赛并准备；${name} 重连后自动解除`
                 }
-                className="cursor-pointer rounded border border-line px-1.5 py-1 text-[10px] text-mute transition-colors hover:border-gold/50 hover:text-gold"
+                className="cursor-pointer whitespace-nowrap rounded border border-line px-1.5 py-1 text-[10px] text-mute transition-colors hover:border-gold/50 hover:text-gold pointer-coarse:min-h-9 pointer-coarse:px-2.5 pointer-coarse:text-xs"
               >
                 {auto ? '取消托管' : '托管'}
               </button>

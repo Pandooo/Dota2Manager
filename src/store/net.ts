@@ -2,7 +2,7 @@
 // 多人对战（局域网 / 公网服务器）WebSocket 客户端
 // - 身份：匿名会话 ID（store/session.getSession）；URL 参数 ?as=<名字> 时改用独立身份
 //   （localStorage 键 d2m:session:<名字>），便于同一浏览器多标签模拟多名玩家（docs/MULTIPLAYER.md §7）。
-// - 服务器地址：默认当前页面同源 + WS_PATH；可手动填写 ip:端口（记在 localStorage）。
+// - 服务器地址：默认当前页面同源 + WS_PATH；可手动填写 ip:端口或网页地址 http://host/（记在 localStorage）。
 // - 断线自动重连（指数退避），重连后重新发送 hello，服务器按 sessionId 把玩家放回原座位。
 //   会话 ID 只发给服务器：房间信息里没有任何会话 ID，座位用服务器生成的座位键识别（RoomInfo.yourSeatKey / hostSeatKey）。
 // - 消息收发均按 src/shared/protocol.ts 的类型约束。
@@ -182,17 +182,23 @@ export function defaultServerUrl(): string {
 
 /**
  * 把用户输入的地址规范化为 WebSocket URL：
- * 「192.168.1.5:8686」「192.168.1.5」「http://host:port」「ws://host:port/ws」均可。返回 null = 无法识别。
+ * 「192.168.1.5:8686」「192.168.1.5」「http://host:port」「http://host/」「ws://host:port/ws」均可。返回 null = 无法识别。
+ * 端口：写了端口按所写（含「地址:80」）；没写端口时，纯「地址」按局域网服务器的默认端口 DEFAULT_SERVER_PORT，
+ * 带 http:// / https:// / ws:// / wss:// 的网页地址按浏览器的默认端口（80 / 443，如部署在 80 端口的公网服务器 http://host/）。
  */
 export function normalizeServerAddress(input: string): string | null {
   let s = input.trim();
   if (!s) return null;
+  const hadScheme = /^(?:https?|wss?):\/\//i.test(s);
   s = s.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
   if (!/^wss?:\/\//i.test(s)) s = `ws://${s}`;
   try {
     const u = new URL(s);
     if (!u.hostname) return null;
-    if (!u.port && u.protocol === 'ws:') u.port = String(DEFAULT_SERVER_PORT);
+    // URL 会把默认端口（ws 的 80）省略成空串，所以「地址:80」要看原文里是否写了端口（IPv6 写在方括号里，不会被误认）
+    const hostPort = (/^wss?:\/\/([^/?#]*)/i.exec(s)?.[1] ?? '').replace(/^.*@/, '');
+    const explicitPort = /:\d+$/.test(hostPort);
+    if (!u.port && !explicitPort && !hadScheme && u.protocol === 'ws:') u.port = String(DEFAULT_SERVER_PORT);
     if (!u.pathname || u.pathname === '/') u.pathname = WS_PATH;
     return u.toString().replace(/\/$/, '');
   } catch {
@@ -228,7 +234,7 @@ export function invitePageUrl(): string {
   return httpUrlOf(defaultServerUrl());
 }
 
-/** 由 ws URL 推出给朋友打开的网页地址（http://host:port） */
+/** 由 ws URL 推出给朋友打开的网页地址（http://host:port；80 / 443 端口不写端口号） */
 export function httpUrlOf(wsUrl: string): string {
   try {
     const u = new URL(wsUrl);

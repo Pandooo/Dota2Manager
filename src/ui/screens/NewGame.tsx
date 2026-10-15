@@ -1,5 +1,5 @@
 // 新游戏向导：① 时代与设定 → ② 选择 / 新建俱乐部 → ③ 确认
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import {
   CONFIG, MAX_TI, POSITIONS, REGIONS, REGION_LABEL, estimateNewClubStart, formatGold, formatRank, gachaPriceForTi, newClubStartingFunds, seedTeamStartingFunds, tierOf,
@@ -7,7 +7,7 @@ import {
 } from '../../engine';
 import { availableStartTis, getAllTiInfo, loadRoster } from '../../data/index';
 import {
-  Badge, Button, Card, EmptyState, Hint, PosBadge, RegionBadge, TeamTag, TierBadge, cx,
+  Badge, Button, Card, EmptyState, Hint, PosBadge, RegionBadge, TableScroll, TeamTag, TierBadge, cx,
 } from '../components/common';
 import { TeamEmblem } from '../components/TeamEmblem';
 import { DIFFICULTY_LABEL, MiniTitle, Spinner, prettySlug, safe, type Difficulty } from '../components/ShellKit';
@@ -86,7 +86,7 @@ function avgPower(team: SeedTeam): number {
 // ---------------------------------------------------------------------------
 function StepIndicator({ step }: { step: number }) {
   return (
-    <ol className="flex items-center gap-2">
+    <ol className="flex items-center gap-1.5 sm:gap-2">
       {STEPS.map((label, i) => {
         const n = i + 1;
         const done = n < step;
@@ -102,7 +102,7 @@ function StepIndicator({ step }: { step: number }) {
               {done ? '✓' : n}
             </span>
             <span className={cx('hidden text-sm sm:inline', active ? 'font-semibold text-ink' : done ? 'text-mute' : 'text-faint')}>{label}</span>
-            {n < STEPS.length && <span className={cx('mx-1 h-px w-6 md:w-12', done ? 'bg-gold/50' : 'bg-line')} />}
+            {n < STEPS.length && <span className={cx('h-px w-4 sm:mx-1 sm:w-6 md:w-12', done ? 'bg-gold/50' : 'bg-line')} />}
           </li>
         );
       })}
@@ -253,6 +253,11 @@ export default function NewGame() {
   const startTis = useMemo(() => safe(() => availableStartTis(), [] as number[]).filter((t) => t >= 1 && t <= MAX_TI - 1), []);
 
   const [step, setStep] = useState(1);
+  // 换步骤时回到顶部（否则第 2 步会停在上一步的滚动位置，打开时就在战队列表中间）
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    mainRef.current?.scrollTo?.({ top: 0 });
+  }, [step]);
   // 默认起止：TI1 → TI16
   const [startTi, setStartTi] = useState<number | null>(() => (startTis.includes(1) ? 1 : startTis.length ? startTis[0] : null));
   const [endPick, setEndPick] = useState<number>(MAX_TI);
@@ -405,7 +410,8 @@ export default function NewGame() {
   // 渲染各步骤
   // ---------------------------------------------------------------------------
   const renderStep1 = () => (
-    <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
+    // 单列也写 minmax(0,1fr)：隐式 auto 列会按截断文字 / 表格的最小内容宽度撑出屏幕（docs/UI.md「手机适配」）
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <Card
         title="选择起始 TI"
         subtitle="你的生涯从该届 TI 的赛季开始，各战队使用该届 TI 参赛时的真实阵容"
@@ -432,7 +438,7 @@ export default function NewGame() {
           </div>
         )}
         {tiInfo && (
-          <div className="mt-4 grid gap-3 rounded-lg border border-line bg-panel-2/50 p-3 text-xs sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-line bg-panel-2/50 p-3 text-xs sm:grid-cols-4">
             <div>
               <div className="text-faint">赛事</div>
               <div className="font-semibold text-ink">{tiInfo.name}</div>
@@ -470,12 +476,13 @@ export default function NewGame() {
                     key={ti}
                     onClick={() => setEndPick(ti)}
                     className={cx(
-                      'cursor-pointer rounded-md border px-2 py-1.5 text-left transition-colors',
+                      'cursor-pointer rounded-md border px-2 py-1.5 text-left transition-colors max-sm:px-1.5',
                       sel ? 'border-gold bg-gold/15' : 'border-line bg-panel-2/50 hover:border-gold/40',
                     )}
                   >
                     <div className={cx('text-sm font-black', sel ? 'text-gold' : 'text-ink')}>TI{ti}</div>
-                    <div className="text-[10px] text-faint">{tiYear(ti)}{ti === MAX_TI ? ' · 推演' : ''}</div>
+                    {/* 360px 宽时四列格子只剩约 60px：年份与「推演」不折行 */}
+                    <div className="whitespace-nowrap text-[10px] text-faint">{tiYear(ti)}{ti === MAX_TI ? ' · 推演' : ''}</div>
                   </button>
                 );
               })}
@@ -554,11 +561,11 @@ export default function NewGame() {
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <input className={cx(inputBase, 'w-64 max-w-full')} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索战队 / 简称 / 选手 ID" />
+          <input className={cx(inputBase, 'w-full sm:w-64 sm:max-w-full')} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索战队 / 简称 / 选手 ID" />
           <div className="flex flex-wrap gap-1">
             <button
               onClick={() => setRegionFilter('ALL')}
-              className={cx('cursor-pointer rounded-md border px-2.5 py-1 text-xs', regionFilter === 'ALL' ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink')}
+              className={cx('cursor-pointer rounded-md border px-2.5 py-1 text-xs pointer-coarse:min-h-9', regionFilter === 'ALL' ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink')}
             >
               全部 {teams.length}
             </button>
@@ -567,13 +574,13 @@ export default function NewGame() {
                 key={r}
                 onClick={() => setRegionFilter(r)}
                 title={REGION_LABEL[r]}
-                className={cx('cursor-pointer rounded-md border px-2.5 py-1 text-xs', regionFilter === r ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink')}
+                className={cx('cursor-pointer rounded-md border px-2.5 py-1 text-xs pointer-coarse:min-h-9', regionFilter === r ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink')}
               >
                 {REGION_LABEL[r]} {regionCounts.get(r)}
               </button>
             ))}
           </div>
-          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-mute">
+          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-mute pointer-coarse:min-h-9">
             <input type="checkbox" checked={tiOnly} onChange={(e) => setTiOnly(e.target.checked)} className="accent-[#e5b24d]" />
             仅 TI 参赛队
           </label>
@@ -581,7 +588,7 @@ export default function NewGame() {
         {filteredTeams.length === 0 ? (
           <EmptyState text="没有符合条件的战队，试试清空搜索或切换赛区。" />
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {filteredTeams.map((t) => (
               <SeedTeamCard
                 key={t.id}
@@ -606,7 +613,7 @@ export default function NewGame() {
   const sCount = CONFIG.season.newClubSTierCount[difficulty] ?? 1;
 
   const renderNewClub = () => (
-    <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-4">
         <Field label="俱乐部名称" error={clubName ? clubNameError : null} hint="最多 24 个字">
           <input className={inputCls} value={clubName} maxLength={30} onChange={(e) => setClubName(e.target.value)} placeholder="例如：Phoenix Gaming" />
@@ -628,7 +635,7 @@ export default function NewGame() {
                 key={r}
                 onClick={() => setClubRegion(r)}
                 className={cx(
-                  'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors',
+                  'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors pointer-coarse:min-h-9',
                   clubRegion === r ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line bg-panel-2/50 text-mute hover:text-ink',
                 )}
               >
@@ -646,12 +653,12 @@ export default function NewGame() {
                 key={c}
                 onClick={() => setClubColor(c)}
                 title={c}
-                className={cx('h-7 w-7 cursor-pointer rounded-md border-2 transition-transform hover:scale-110', clubColor === c ? 'border-white' : 'border-transparent')}
+                className={cx('h-7 w-7 cursor-pointer rounded-md border-2 transition-transform hover:scale-110 pointer-coarse:h-9 pointer-coarse:w-9', clubColor === c ? 'border-white' : 'border-transparent')}
                 style={{ background: c }}
               />
             ))}
             <label className="flex cursor-pointer items-center gap-1 text-xs text-mute" title="自定义颜色">
-              <input type="color" value={clubColor} onChange={(e) => setClubColor(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-line bg-transparent" />
+              <input type="color" value={clubColor} onChange={(e) => setClubColor(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-line bg-transparent pointer-coarse:h-9 pointer-coarse:w-11" />
               自定义
             </label>
           </div>
@@ -707,7 +714,7 @@ export default function NewGame() {
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={cx('cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors', mode === m ? 'bg-dota text-white' : 'text-mute hover:text-ink')}
+              className={cx('cursor-pointer whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-9', mode === m ? 'bg-dota text-white' : 'text-mute hover:text-ink')}
             >
               {m === 'real' ? '接管真实战队' : '新建俱乐部'}
             </button>
@@ -748,7 +755,8 @@ export default function NewGame() {
               <div className="font-semibold tabular">{avgPower(selectedTeam).toFixed(1)}</div>
             </div>
           </div>
-          <table className="tbl mt-3">
+          <TableScroll className="mt-3">
+          <table className="tbl">
             <thead>
               <tr>
                 <th>位置</th>
@@ -779,6 +787,7 @@ export default function NewGame() {
               ))}
             </tbody>
           </table>
+          </TableScroll>
           {selectedTeam.coach && <div className="mt-2 text-xs text-mute">教练：{selectedTeam.coach.name}（{selectedTeam.coach.tier} 级）</div>}
         </div>
       );
@@ -815,7 +824,7 @@ export default function NewGame() {
   };
 
   const renderStep3 = () => (
-    <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <Card title="生涯设定">
         <div className="divide-y divide-line/60 text-sm">
           {[
@@ -857,21 +866,32 @@ export default function NewGame() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line bg-panel/90 px-6 py-3 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-md bg-dota text-sm font-black italic text-white">D2</div>
+      {/* 手机（< sm）：标志、步骤、关闭按钮排成一行（副标题与「返回主菜单」文字隐藏，关闭按钮只留 ✕） */}
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-panel/90 px-3 py-2 backdrop-blur sm:gap-3 sm:px-6 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-dota text-xs font-black italic text-white sm:h-9 sm:w-9 sm:text-sm">D2</div>
           <div className="leading-tight">
             <div className="text-sm font-bold">新游戏</div>
-            <div className="text-[11px] text-faint">刀塔经理 · 生涯创建</div>
+            <div className="hidden text-[11px] text-faint sm:block">刀塔经理 · 生涯创建</div>
           </div>
         </div>
         <StepIndicator step={step} />
-        <Button variant="ghost" size="sm" onClick={() => setScreen('menu')} disabled={busy} title={busy ? '正在创建游戏' : undefined}>
-          ✕ 返回主菜单
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setScreen('menu')}
+          disabled={busy}
+          title={busy ? '正在创建游戏' : '返回主菜单'}
+          aria-label="返回主菜单"
+          className="max-sm:min-w-9"
+        >
+          {/* 两套文字而不是「✕ + 隐藏的文字」：按钮是 inline-flex，拆开的文字之间会多出 gap，桌面宽度会变 */}
+          <span className="sm:hidden">✕</span>
+          <span className="hidden sm:inline">✕ 返回主菜单</span>
         </Button>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6 sm:py-5">
         <div className="mx-auto max-w-[1400px]">
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
@@ -879,11 +899,25 @@ export default function NewGame() {
         </div>
       </main>
 
-      {/* 底部吸附操作栏：占满一整行，主按钮居中加宽（与游戏内底栏一致） */}
-      <footer className="shrink-0 border-t border-line bg-panel/95 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-3">
+      {/* 底部吸附操作栏：占满一整行，主按钮居中加宽（与游戏内底栏一致）。
+          手机（< sm）：上方一行小字写当前步骤与未完成项（右侧提示列不显示），下方「返回」+ 通栏主按钮；
+          右侧让出右下角浮动的背景音乐按钮（App 的 MusicControl floating="bottom"），底部让出 Home 横条 */}
+      <footer className="shrink-0 border-t border-line bg-panel/95 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur">
+        <div className="flex items-center gap-2 truncate px-3 pt-2 text-[11px] text-mute sm:hidden">
+          <span className="shrink-0 text-faint">
+            第 {step}/{STEPS.length} 步 · {STEPS[step - 1]}
+          </span>
+          {nextTitle && step < 3 ? (
+            <span className="min-w-0 truncate">{nextTitle}</span>
+          ) : step === 2 && mode === 'real' && selectedTeam ? (
+            <span className="min-w-0 truncate">
+              已选：<span className="font-semibold text-ink">{selectedTeam.name}</span>
+            </span>
+          ) : null}
+        </div>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 py-2 pl-3 pr-[calc(5rem+env(safe-area-inset-right,0px))] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 sm:px-6 sm:py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="secondary" onClick={onBack} disabled={busy} title={busy ? '正在创建游戏' : undefined}>
+            <Button variant="secondary" onClick={onBack} disabled={busy} title={busy ? '正在创建游戏' : undefined} className="shrink-0 whitespace-nowrap max-sm:h-12">
               ‹ {step === 1 ? '主菜单' : '上一步'}
             </Button>
             <span className="hidden truncate text-xs text-faint lg:inline">
@@ -897,13 +931,13 @@ export default function NewGame() {
             onClick={onNext}
             disabled={!canNext}
             title={nextTitle ?? undefined}
-            className={cx('h-12 min-w-[min(360px,50vw)] text-base font-bold tracking-wider', step === 3 && canNext && 'glow')}
+            className={cx('h-12 w-full min-w-0 whitespace-nowrap text-base font-bold tracking-wider sm:w-auto sm:min-w-[min(360px,50vw)]', step === 3 && canNext && 'glow')}
           >
             {busy && <Spinner />}
             {nextLabel}
           </Button>
 
-          <div className="min-w-0 text-right text-xs">
+          <div className="hidden min-w-0 text-right text-xs sm:block">
             {nextTitle && step < 3 ? (
               <span className="line-clamp-2 text-mute">{nextTitle}</span>
             ) : step === 2 && mode === 'real' && selectedTeam ? (

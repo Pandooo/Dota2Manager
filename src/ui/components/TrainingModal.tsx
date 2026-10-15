@@ -70,18 +70,19 @@ export function TrainingCard({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* 标题行（常驻）：点击展开 / 收起；收起时也能直接开始训练 */}
+      {/* 标题行（常驻）：点击展开 / 收起；收起时也能直接开始训练。
+          手机（< sm）：标题与概况独占一行（概况换行显示全文，不截断），「开始训练 / 展开」在下一行 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
           title={open ? '收起训练卡片' : '展开训练：焦点、额外训练、训练赛'}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left max-sm:basis-full pointer-coarse:min-h-9"
         >
-          <span className={cx('text-sm font-semibold', st.trainable ? 'text-good' : 'text-mute')}>⚔ 训练</span>
+          <span className={cx('shrink-0 whitespace-nowrap text-sm font-semibold', st.trainable ? 'text-good' : 'text-mute')}>⚔ 训练</span>
           {st.trainable ? (
-            <span className="min-w-0 truncate text-xs text-mute">
+            <span className="min-w-0 text-xs text-mute sm:truncate">
               剩余 <b className={cx('tabular', st.sessionsLeft > 0 ? 'text-good' : 'text-faint')}>{st.sessionsLeft}</b> 次
               <span className="mx-1.5 text-faint">·</span>
               焦点 <span className="text-ink">{focusInfo.icon} {focusInfo.title}</span>
@@ -94,7 +95,7 @@ export function TrainingCard({ className }: { className?: string }) {
               )}
             </span>
           ) : (
-            <span className="min-w-0 truncate text-xs text-faint" title={st.reason || st.lockTitle}>
+            <span className="min-w-0 text-xs text-faint sm:truncate" title={st.reason || st.lockTitle}>
               本回合无法训练{st.lockTitle ? `：${st.lockTitle}` : ''}
             </span>
           )}
@@ -110,13 +111,13 @@ export function TrainingCard({ className }: { className?: string }) {
             ⚔ 开始训练
           </Button>
         )}
-        <button type="button" onClick={toggle} className="shrink-0 cursor-pointer text-xs text-faint hover:text-gold">
+        <button type="button" onClick={toggle} className="shrink-0 cursor-pointer text-xs text-faint hover:text-gold max-sm:ml-auto pointer-coarse:min-h-9 pointer-coarse:px-1">
           {open ? '收起 ▴' : '展开 ▾'}
         </button>
       </div>
 
       {open && (
-        <div className="space-y-4 border-t border-line/70 px-4 py-3">
+        <div className="space-y-4 border-t border-line/70 px-3 py-3 sm:px-4">
           {!st.trainable && (
             <div className="flex items-start gap-3 rounded-lg border border-gold/40 bg-gold/5 px-3 py-2.5">
               <div className="text-lg leading-none text-gold">⏸</div>
@@ -140,7 +141,7 @@ export function TrainingCard({ className }: { className?: string }) {
           <TrainingBody st={st} last={last} manualCount={manual.length} />
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-2.5">
-            <button type="button" className="cursor-pointer text-xs text-mute hover:text-gold hover:underline" onClick={() => setView('training')}>
+            <button type="button" className="cursor-pointer text-xs text-mute hover:text-gold hover:underline pointer-coarse:-my-2 pointer-coarse:py-2" onClick={() => setView('training')}>
               查看训练详情（历史与成长曲线）›
             </button>
             {st.trainable && st.sessionsLeft > 0 && (
@@ -193,7 +194,7 @@ function TrainingBody({
       {/* 焦点（切换不弹提示） */}
       <div>
         <div className="mb-1.5 text-xs font-semibold text-mute">训练焦点</div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {FOCUS_ORDER.map((f) => {
             const info = FOCUS_INFO[f];
             const mult = CONFIG.growth.focus[f] ?? [0.5, 0.5, 0.5];
@@ -262,13 +263,14 @@ function TrainingBody({
             {suggested.map((r) => {
               const why = scrimReason(st, r.cost, r.booked, r.t.name);
               return (
-                <div key={r.t.id} className={cx('flex items-center gap-3 px-3 py-1.5 text-sm', r.booked && 'opacity-60')}>
+                // 手机：列间距与金额列收窄、不显示评分（倍数已由评分差距算出），战队简称不被挤没
+                <div key={r.t.id} className={cx('flex items-center gap-2 px-3 py-1.5 text-sm sm:gap-3', r.booked && 'opacity-60')}>
                   <span className="min-w-0 flex-1 truncate">
                     <TeamTag color={r.t.color} tag={r.t.tag} />
-                    <span className="ml-1.5 text-xs text-faint">评分 {r.rating.toFixed(1)}</span>
+                    <span className="ml-1.5 text-xs text-faint max-sm:hidden">评分 {r.rating.toFixed(1)}</span>
                   </span>
-                  <span className={cx('w-14 text-right font-semibold tabular', scrimMultTone(r.mult))}>×{r.mult.toFixed(2)}</span>
-                  <Gold value={r.cost} className={cx('w-24 text-right', !r.booked && r.cost > st.team.gold && 'text-bad')} />
+                  <span className={cx('w-12 text-right font-semibold tabular sm:w-14', scrimMultTone(r.mult))}>×{r.mult.toFixed(2)}</span>
+                  <Gold value={r.cost} className={cx('w-14 text-right sm:w-24', !r.booked && r.cost > st.team.gold && 'text-bad')} />
                   <Button
                     size="xs"
                     variant="secondary"
@@ -276,7 +278,14 @@ function TrainingBody({
                     title={why || `花费 ${formatGold(r.cost)} 与 ${r.t.name} 打一场训练赛`}
                     onClick={() => void call('doScrim', r.t.id)}
                   >
-                    {r.booked ? SCRIM_BOOKED_LABEL : '约训练赛'}
+                    {r.booked ? (
+                      SCRIM_BOOKED_LABEL
+                    ) : (
+                      <>
+                        <span className="sm:hidden">约练</span>
+                        <span className="max-sm:hidden">约训练赛</span>
+                      </>
+                    )}
                   </Button>
                 </div>
               );
@@ -331,7 +340,7 @@ function LastResult({ record, count }: { record: TrainingRecord; count: number }
         </span>
       </div>
       <div className="max-h-56 overflow-y-auto">
-        <GainsTable game={game} gains={record.gains} compact />
+        <GainsTable game={game} gains={record.gains} compact bg="color-mix(in srgb, var(--color-panel-2) 40%, var(--color-panel))" />
       </div>
     </div>
   );

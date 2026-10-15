@@ -426,7 +426,7 @@ export function rosterOverCap(state: GameState, teamId: string): number {
 export function rosterOverCapNotice(state: GameState, teamId: string): string | null {
   const over = rosterOverCap(state, teamId);
   if (over <= 0) return null;
-  return `超编 ${over} 人：本回合内放弃新秀或解约，退回 ${CONFIG.team.hardMaxRoster} 人后才能进入下一回合`;
+  return `超编 ${over} 人：本回合内放弃新秀或解约 ${over} 人（降到 ${CONFIG.team.hardMaxRoster} 人以内）后才能进入下一回合`;
 }
 
 /** 人类玩家签约自由选手 / 求购选手时，阵容人数造成的阻止原因：只有达到绝对上限才阻止（null = 可以引进） */

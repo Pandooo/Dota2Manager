@@ -142,6 +142,8 @@ export interface Toast {
   id: number;
   text: string;
   ok: boolean;
+  /** 玩家点开了全文（手机上长提示先收起）：不再按原时限消失，改为 holdToast 的较长时限 */
+  held?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +296,8 @@ interface GameStore {
   openTeam(id: string | null): void;
   toast(text: string, ok?: boolean): void;
   dismissToast(id: number): void;
+  /** 留住一条提示（展开全文后）：取消原来的自动消失，TOAST_HOLD_MS 后再消失 */
+  holdToast(id: number): void;
 
   /** 当前会话的进度摘要（入口页「继续游戏」用；null = 无进度） */
   progress: ProgressMeta | null;
@@ -378,6 +382,8 @@ function writeLazyAdvance(on: boolean): void {
 }
 
 let toastSeq = 0;
+/** 展开全文后的提示再保留多久（毫秒） */
+const TOAST_HOLD_MS = 12000;
 let cardFocusSeq = 0;
 let reqSeq = 0;
 let chatSeq = 0;
@@ -536,9 +542,16 @@ export const useGameStore = create<GameStore>((set, get) => {
     toast: (text, ok = true) => {
       const id = ++toastSeq;
       set((s) => ({ toasts: [...s.toasts.slice(-4), { id, text, ok }] }));
-      setTimeout(() => get().dismissToast(id), ok ? 3500 : 6000);
+      setTimeout(() => {
+        if (!get().toasts.find((t) => t.id === id)?.held) get().dismissToast(id);
+      }, ok ? 3500 : 6000);
     },
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+    holdToast: (id) => {
+      if (!get().toasts.some((t) => t.id === id && !t.held)) return;
+      set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, held: true } : t)) }));
+      setTimeout(() => get().dismissToast(id), TOAST_HOLD_MS);
+    },
 
     act: (fn, opts) => {
       const g = get().game;

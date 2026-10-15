@@ -32,7 +32,7 @@ export default function PediaSynergies() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="grid grid-cols-3 gap-3 self-start">
           <PStat label="已解锁" value={`${prog.unlocked} / ${prog.total}`} accent sub="任意战队首次集齐即解锁" />
           <PStat label="当前激活" value={prog.active} sub="全联盟" />
@@ -42,14 +42,14 @@ export default function PediaSynergies() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex overflow-hidden rounded-md border border-line">
+        <div className="no-scrollbar inline-flex max-w-full overflow-x-auto rounded-md border border-line sm:overflow-hidden">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               type="button"
               onClick={() => setFilter(f.key)}
               className={cx(
-                'cursor-pointer px-3 py-1 text-xs',
+                'shrink-0 cursor-pointer whitespace-nowrap px-3 py-1 text-xs pointer-coarse:min-h-9',
                 filter === f.key ? 'bg-panel-3 font-semibold text-ink' : 'bg-panel-2 text-mute hover:text-ink',
               )}
             >
@@ -65,7 +65,7 @@ export default function PediaSynergies() {
           <EmptyState text={filter === 'active' ? '目前没有激活中的羁绊' : filter === 'unlocked' ? '还没有解锁任何羁绊' : '没有符合条件的羁绊'} />
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {shown.map((e) => (e.unlocked ? <UnlockedCard key={e.def.id} game={game} e={e} myTeamId={myTeamId} /> : <LockedCard key={e.def.id} e={e} />))}
         </div>
       )}

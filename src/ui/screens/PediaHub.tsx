@@ -6,6 +6,7 @@ import type { PediaSearchHit } from '../../engine';
 import { HubShell, useHubTab, type HubTabDef } from '../layout/HubKit';
 import { cx } from '../components/common';
 import NewBadge from '../components/NewBadge';
+import { useIsPhone } from '../mobile';
 import { PEDIA_KIND_LABEL, openPedia, pediaTabReselect, safe, syncPediaGame, type PediaKind } from '../components/PediaKit';
 import PediaHome from './PediaHome';
 import PediaTeams from './PediaTeams';
@@ -70,15 +71,17 @@ function PediaSearchBox() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
+  const phone = useIsPhone();
   // 悬停 / 方向键只改高亮，不重新搜索
   const hits: PediaSearchHit[] = useMemo(() => (q.trim() ? safe(() => pediaSearch(game, q, 12), []) : []), [game, version, q]);
 
+  // 点外部关闭：pointerdown（iOS Safari 点按非可点击元素不发 mousedown）
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: PointerEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
     };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
   }, []);
 
   const go = (h: PediaSearchHit | undefined) => {
@@ -89,8 +92,10 @@ function PediaSearchBox() {
   };
 
   return (
+    // 手机（< sm）：搜索框与「DotaPedia」标题同一行（HubShell），宽度随屏幕收窄；结果列表不超出屏幕
     <div ref={boxRef} className="relative">
       <input
+        enterKeyHint="search"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -111,22 +116,22 @@ function PediaSearchBox() {
             setActive((a) => Math.max(0, a - 1));
           }
         }}
-        placeholder="搜索战队 / 选手 / 赛事 / 英雄"
-        className="w-64 rounded-md border border-line bg-panel-2 px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-faint hover:border-mute focus:border-dota"
+        placeholder={phone ? '搜索战队 / 选手 / 赛事…' : '搜索战队 / 选手 / 赛事 / 英雄'}
+        className="w-[min(16rem,calc(100vw-10rem))] rounded-md border border-line bg-panel-2 px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-faint hover:border-mute focus:border-dota sm:w-64"
       />
       {open && q.trim() && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-80 overflow-hidden rounded-lg border border-line bg-panel shadow-2xl shadow-black/50">
+        <div className="absolute right-0 top-full z-30 mt-1 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-line bg-panel shadow-2xl shadow-black/50">
           {hits.length === 0 ? (
             <div className="px-3 py-3 text-xs text-faint">没有找到「{q.trim()}」</div>
           ) : (
-            <ul className="max-h-96 overflow-y-auto py-1">
+            <ul className="max-h-[min(24rem,60dvh)] overflow-y-auto overscroll-contain py-1">
               {hits.map((h, i) => (
                 <li key={`${h.kind}-${h.id}`}>
                   <button
                     type="button"
                     onMouseEnter={() => setActive(i)}
                     onClick={() => go(h)}
-                    className={cx('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm', i === active ? 'bg-panel-2' : 'hover:bg-panel-2')}
+                    className={cx('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm pointer-coarse:min-h-11', i === active ? 'bg-panel-2' : 'hover:bg-panel-2')}
                   >
                     <span className={cx('w-8 shrink-0 text-[11px] font-semibold', KIND_TONE[h.kind])}>{PEDIA_KIND_LABEL[h.kind]}</span>
                     <span className="min-w-0 flex-1 truncate text-ink">{h.label}</span>

@@ -3,13 +3,14 @@ import { useMemo, useState } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
 import { isHumanTeam, pediaDashboard, pediaTeamLegacy, tiYear } from '../../engine';
 import type { GameState, PediaBoard, PediaBoardRow, PediaTeamLegacy } from '../../engine';
-import { Card, EmptyState, cx } from '../components/common';
+import { Card, EmptyState, TableScroll, cx } from '../components/common';
 import { Chip } from '../components/SquadShared';
 import { TourSelect } from '../components/TourShared';
 import {
-  CoverageNote, GradeBadge, PHero, PPlayer, PStat, PTeam, fmt1, fmtInt, fmtMinutes, fmtPct, openPedia, safe,
+  CoverageNote, GradeBadge, PHONE_HIDE, PHero, PPlayer, PStat, PTeam, STICKY_TD, STICKY_TH, fmt1, fmtInt, fmtMinutes, fmtPct, openPedia, safe, tipOnTap,
 } from '../components/PediaKit';
 import { MeterBar, PBarChart, PLineChart, WdlBar, type ChartDatum } from '../components/PediaCharts';
+import { BREAKPOINT, useMinWidth } from '../mobile';
 
 export default function PediaHome() {
   const game = useGame();
@@ -57,12 +58,13 @@ export default function PediaHome() {
         <PStat label="记录赛季" value={fmtInt(ov.seasonsRecorded)} sub={`当前 TI${ov.currentTi}`} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      {/* 网格一律带单列基准（minmax(0,1fr)）：窄屏时卡片不会被不换行的副标题 / 图表撑出屏幕 */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <MyTeamCard game={game} />
         <TrendCard game={game} highlightTi={ti} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
         <TiChampionsCard rows={dash.tiChampions} />
         <LegacyBoardCard game={game} rows={dash.legacy} />
       </div>
@@ -71,7 +73,7 @@ export default function PediaHome() {
         <h2 className="mb-2 text-[15px] font-semibold tracking-wide">
           排行榜{ti !== undefined && <span className="ml-2 text-xs font-normal text-mute">TI{ti} 赛季</span>}
         </h2>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
           {pick('teamTitles', 'teamWinRate', 'teamPrize', 'teamStreak', 'playerKda', 'playerMvp', 'playerWinRate', 'playerKills', 'playerPrize', 'playerStreak', 'heroPicks', 'heroWinRate').map((b) => (
             <BoardCard key={b.id} game={game} board={b} />
           ))}
@@ -101,7 +103,7 @@ function MyTeamCard({ game }: { game: GameState }) {
       title="我的战队 · 历史地位"
       subtitle="不必等生涯结束：按当前成就实时评估（开局前的现实成就 + 本局成就）"
       actions={
-        <button type="button" className="cursor-pointer text-xs text-info hover:text-gold hover:underline" onClick={() => openPedia('team', me)}>
+        <button type="button" className="cursor-pointer text-xs text-info hover:text-gold hover:underline pointer-coarse:min-h-9" onClick={() => openPedia('team', me)}>
           战队词条 ›
         </button>
       }
@@ -168,11 +170,18 @@ function MyRecord({ game, teamId }: { game: GameState; teamId: string }) {
       <span className="text-mute">系列赛</span>
       <WdlBar w={sw} d={sd} l={sl} />
       <span className="text-mute">小局</span>
+      {/* 每一项不在中间折行（窄屏时整项换到下一行） */}
       <span className="tabular">
-        {gw}-{gl}
-        <span className="ml-1 text-mute">（胜率 {fmtPct(gw + gl > 0 ? gw / (gw + gl) : NaN)}）</span>
-        <span className="ml-3 text-mute">K/D</span> {k} / {d}
-        <span className="ml-3 text-mute">冠军</span> <span className="text-gold">{titles}</span>
+        <span className="inline-block whitespace-nowrap">
+          {gw}-{gl}
+          <span className="ml-1 text-mute">（胜率 {fmtPct(gw + gl > 0 ? gw / (gw + gl) : NaN)}）</span>
+        </span>
+        <span className="ml-3 inline-block whitespace-nowrap">
+          <span className="text-mute">K/D</span> {k} / {d}
+        </span>
+        <span className="ml-3 inline-block whitespace-nowrap">
+          <span className="text-mute">冠军</span> <span className="text-gold">{titles}</span>
+        </span>
       </span>
     </div>
   );
@@ -195,7 +204,7 @@ function TrendCard({ game, highlightTi }: { game: GameState; highlightTi?: numbe
   }));
   return (
     <Card title="联赛趋势" subtitle="每个赛季全联盟的对局数与场均击杀（双方合计）">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
         <div>
           <div className="mb-1 text-xs text-mute">每赛季对局数</div>
           <PBarChart data={gamesData} format={(v) => String(Math.round(v))} ariaLabel="每赛季对局数" />
@@ -212,9 +221,16 @@ function TrendCard({ game, highlightTi }: { game: GameState; highlightTi?: numbe
 // ---------------------------------------------------------------------------
 // TI 冠军时间线（含开局前的真实 TI）
 // ---------------------------------------------------------------------------
+/** 窄屏（< lg）先列出的现实冠军届数（其余点「显示全部」） */
+const REAL_TI_PREVIEW = 4;
+
 function TiChampionsCard({ rows }: { rows: ReturnType<typeof pediaDashboard>['tiChampions'] }) {
   const inGame = rows.filter((r) => !r.real);
-  const real = rows.filter((r) => r.real);
+  const allReal = rows.filter((r) => r.real);
+  // 手机 / 平板：不用卡片内滚动（滑动会被卡片吞掉、页面滚不动），现实历史只先列几届
+  const wide = useMinWidth(BREAKPOINT.lg);
+  const [more, setMore] = useState(false);
+  const real = wide || more ? allReal : allReal.slice(0, REAL_TI_PREVIEW);
   const line = (r: (typeof rows)[number]) => (
     <li key={`${r.real ? 'r' : 'g'}-${r.ti}`} className="relative grid grid-cols-[56px_minmax(0,1fr)] gap-2 py-1.5 pl-4">
       <span className={cx('absolute left-0 top-[11px] h-2 w-2 rounded-full', r.real ? 'bg-faint' : 'bg-gold')} />
@@ -235,7 +251,7 @@ function TiChampionsCard({ rows }: { rows: ReturnType<typeof pediaDashboard>['ti
     </li>
   );
   return (
-    <Card title="TI 冠军" subtitle="本局冠军（金）与开局前的现实历史（灰）" bodyClassName="max-h-[460px] overflow-y-auto p-4">
+    <Card title="TI 冠军" subtitle="本局冠军（金）与开局前的现实历史（灰）" bodyClassName="p-4 lg:max-h-[460px] lg:overflow-y-auto">
       {rows.length === 0 ? (
         <EmptyState text="尚无 TI 冠军" />
       ) : (
@@ -248,6 +264,13 @@ function TiChampionsCard({ rows }: { rows: ReturnType<typeof pediaDashboard>['ti
             </li>
           )}
           {real.map(line)}
+          {real.length < allReal.length && (
+            <li className="pl-4 pt-1">
+              <button type="button" className="min-h-9 cursor-pointer text-xs text-info hover:text-gold" onClick={() => setMore(true)}>
+                显示全部 {allReal.length} 届 ▾
+              </button>
+            </li>
+          )}
         </ol>
       )}
     </Card>
@@ -257,74 +280,96 @@ function TiChampionsCard({ rows }: { rows: ReturnType<typeof pediaDashboard>['ti
 // ---------------------------------------------------------------------------
 // 历史地位榜
 // ---------------------------------------------------------------------------
+/** 窄屏（< lg）历史地位榜先列出的战队数（本方总会列出） */
+const LEGACY_PREVIEW = 10;
+
 function LegacyBoardCard({ game, rows }: { game: GameState; rows: PediaTeamLegacy[] }) {
   const me = game.settings.playerTeamId;
   const mine = rows.some((r) => r.teamId === me) ? null : safe(() => pediaTeamLegacy(game, me), null);
   const all = mine ? [...rows, mine] : rows;
   const top = Math.max(1, ...all.map((r) => r.score));
+  // 手机 / 平板：不用卡片内滚动（滑动会被吞掉），先列前 10 名 + 本方，可展开全部
+  const wide = useMinWidth(BREAKPOINT.lg);
+  const [more, setMore] = useState(false);
+  const cut = !wide && !more && all.length > LEGACY_PREVIEW + 1;
+  const list = cut ? all.filter((r, i) => i < LEGACY_PREVIEW || r.teamId === me) : all;
   return (
     <Card
       title="历史地位榜"
       subtitle="实时传奇值：开局前的现实成就 + 本局成就（TI 名次、冠军、赛季实力、声望）"
       actions={
-        <button type="button" className="cursor-pointer text-xs text-info hover:text-gold hover:underline" onClick={() => openPedia('team', null)}>
+        <button type="button" className="cursor-pointer text-xs text-info hover:text-gold hover:underline pointer-coarse:min-h-9" onClick={() => openPedia('team', null)}>
           全部战队 ›
         </button>
       }
-      bodyClassName="max-h-[460px] overflow-y-auto p-0"
+      bodyClassName="p-0 lg:max-h-[460px] lg:overflow-y-auto"
     >
       {all.length === 0 ? (
         <EmptyState text="暂无数据" />
       ) : (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th className="num">#</th>
-              <th>战队</th>
-              <th>称号</th>
-              <th title="评级">级</th>
-              <th className="w-40">传奇值</th>
-              <th title="插入现实俱乐部历史排行榜后的名次">历史</th>
-              <th>最接近的历史俱乐部</th>
-            </tr>
-          </thead>
-          <tbody>
-            {all.map((r, i) => {
-              const human = isHumanTeam(game, r.teamId);
-              const sep = mine && i === rows.length;
-              return (
-                <tr key={r.teamId} className={cx(r.teamId === me && 'bg-gold/5', sep && 'border-t-2 border-gold/40')}>
-                  <td className="num text-mute">{r.rank}</td>
-                  <td className="max-w-44">
-                    <div className="flex items-center gap-1.5">
-                      <PTeam id={r.teamId} name={r.name} color={r.color} />
-                      {human && <Chip tone={r.teamId === me ? 'gold' : 'info'}>{r.teamId === me ? '本方' : '玩家'}</Chip>}
-                      {!r.active && <Chip>已解散</Chip>}
-                    </div>
-                  </td>
-                  <td title={r.title.desc} className={cx(r.title.id === 'unknown' ? 'text-faint' : 'text-ink')}>
-                    {r.title.name}
-                  </td>
-                  <td>
-                    <GradeBadge grade={r.grade} />
-                  </td>
-                  <td title={`单算本局 ${r.inGameScore} · 单算开局前 ${r.preGameScore}（合并后重新计分，不是两项之和）`}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-12 text-right font-semibold tabular">{r.score}</span>
-                      <MeterBar value={r.score} max={top} className="flex-1" />
-                    </div>
-                  </td>
-                  <td className="text-mute tabular">
-                    {r.historyRank}/{r.historySize}
-                  </td>
-                  <td className="max-w-48 truncate text-xs text-mute" title={r.match?.line}>
-                    {r.match ? r.match.name : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        // 手机：横向滑动、战队列固定在左侧，名次并入战队列；「历史」「最接近的历史俱乐部」隐藏（战队词条里有）
+        <TableScroll>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th className={cx('num', PHONE_HIDE)}>#</th>
+                <th className={STICKY_TH}>战队</th>
+                <th>称号</th>
+                <th title="评级">级</th>
+                <th className="w-40 max-sm:w-28">传奇值</th>
+                <th className={PHONE_HIDE} title="插入现实俱乐部历史排行榜后的名次">历史</th>
+                <th className={PHONE_HIDE}>最接近的历史俱乐部</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((r) => {
+                const human = isHumanTeam(game, r.teamId);
+                const sep = !!mine && r === mine;
+                return (
+                  <tr key={r.teamId} className={cx(r.teamId === me && 'bg-gold/5', sep && 'border-t-2 border-gold/40')}>
+                    <td className={cx('num text-mute', PHONE_HIDE)}>{r.rank}</td>
+                    <td className={STICKY_TD}>
+                      <div className="flex max-w-44 items-center gap-1.5 max-sm:max-w-[9.5rem]">
+                        <span className="w-5 shrink-0 text-right text-xs text-mute tabular sm:hidden">{r.rank}</span>
+                        <PTeam id={r.teamId} name={r.name} color={r.color} />
+                        {human && <Chip tone={r.teamId === me ? 'gold' : 'info'}>{r.teamId === me ? '本方' : '玩家'}</Chip>}
+                        {!r.active && <Chip>已解散</Chip>}
+                      </div>
+                    </td>
+                    <td title={r.title.desc} {...tipOnTap(r.title.desc)} className={cx(r.title.id === 'unknown' ? 'text-faint' : 'text-ink')}>
+                      {r.title.name}
+                    </td>
+                    <td>
+                      <GradeBadge grade={r.grade} />
+                    </td>
+                    <td
+                      title={`单算本局 ${r.inGameScore} · 单算开局前 ${r.preGameScore}（合并后重新计分，不是两项之和）`}
+                      {...tipOnTap(`单算本局 ${r.inGameScore} · 单算开局前 ${r.preGameScore}（合并后重新计分，不是两项之和）`)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-12 text-right font-semibold tabular max-sm:w-9">{r.score}</span>
+                        <MeterBar value={r.score} max={top} className="flex-1" />
+                      </div>
+                    </td>
+                    <td className={cx('text-mute tabular', PHONE_HIDE)}>
+                      {r.historyRank}/{r.historySize}
+                    </td>
+                    <td className={cx('max-w-48 truncate text-xs text-mute', PHONE_HIDE)} title={r.match?.line}>
+                      {r.match ? r.match.name : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableScroll>
+      )}
+      {cut && (
+        <div className="border-t border-line px-4 py-1.5 text-center">
+          <button type="button" className="min-h-9 cursor-pointer text-xs text-info hover:text-gold" onClick={() => setMore(true)}>
+            显示全部 {all.length} 支战队 ▾
+          </button>
+        </div>
       )}
     </Card>
   );
@@ -355,7 +400,7 @@ function BoardCard({ game, board }: { game: GameState; board: PediaBoard }) {
                     <span className="min-w-0 truncate text-[11px] text-faint">· {r.teamName}</span>
                   )}
                 </div>
-                {r.sub && <div className="truncate text-[11px] text-faint">{r.sub}</div>}
+                {r.sub && <div className="break-words text-[11px] text-faint max-sm:line-clamp-2 sm:truncate">{r.sub}</div>}
               </div>
               <span className="text-right font-semibold tabular">{r.display}</span>
             </li>
@@ -375,7 +420,39 @@ function RecordsCard({ dash }: { dash: NonNullable<ReturnType<typeof pediaDashbo
       {dash.records.length === 0 ? (
         <EmptyState text="还没有任何对局纪录" />
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* 手机（< sm）：每条纪录一张两三行的小卡片（表格有 7 列，横向滑动看不全） */}
+        <ul className="divide-y divide-line/50 sm:hidden">
+          {dash.records.map((r) => (
+            <li key={r.kind} className="px-4 py-2.5 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-mute">{r.label}</span>
+                <span className="shrink-0 font-semibold text-gold tabular">{r.display}</span>
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                {r.playerId ? (
+                  <>
+                    <PPlayer id={r.playerId} handle={r.playerName} />
+                    {r.heroId && (
+                      <>
+                        <span className="text-faint">·</span>
+                        <PHero id={r.heroId} name={r.heroName ?? r.heroId} className="text-mute" />
+                      </>
+                    )}
+                    <span className="text-faint">·</span>
+                  </>
+                ) : null}
+                <PTeam id={r.teamId} name={r.teamName} />
+                <span className="text-xs text-faint">vs</span>
+                <PTeam id={r.oppId} name={r.oppName} noSwatch className="text-mute" />
+              </div>
+              <div className="mt-0.5 text-[11px] text-faint tabular">
+                TI{r.ti} · {r.date} · {r.tierLabel}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="tbl">
             <thead>
               <tr>
@@ -423,6 +500,7 @@ function RecordsCard({ dash }: { dash: NonNullable<ReturnType<typeof pediaDashbo
             </tbody>
           </table>
         </div>
+        </>
       )}
     </Card>
   );

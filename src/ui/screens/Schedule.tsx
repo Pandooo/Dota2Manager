@@ -1,5 +1,7 @@
 // 赛程报名：赛季回合表、赛事报名/取消、版本更新落点
-import { useState } from 'react';
+// 手机（< sm，docs/UI.md「手机适配」）：规则说明收进可展开的「规则说明」；回合行的回合信息在上方排成一行，
+// 赛事行为「名称 / 地点」一行 +「奖金 · 状态 · 操作」一行；「我的参赛计划」不再嵌套滚动。
+import { useState, type ReactNode } from 'react';
 import { useCall, useGame, useGameStore } from '../../store/gameStore';
 import type { GameState, RoundInfo, Tournament, TournamentTier } from '../../engine/types';
 import {
@@ -13,6 +15,22 @@ import {
   TourTierBadge, championOf, dateRange, openTournamentView, rankClass, safe, teamPlacement, type RoundKind,
 } from '../components/TourShared';
 import { entryControls } from '../components/TourEntry';
+import { useIsPhone } from '../mobile';
+
+/** 手机上收起的说明块（点「规则说明」展开）；≥ sm 直接显示 */
+function PhoneFold({ summary, children }: { summary: ReactNode; children: ReactNode }) {
+  const phone = useIsPhone();
+  if (!phone) return <>{children}</>;
+  return (
+    <details className="group rounded-lg border border-line bg-panel-2/40">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3 text-xs text-mute [&::-webkit-details-marker]:hidden">
+        {summary}
+        <span className="text-faint group-open:rotate-180">▾</span>
+      </summary>
+      <div className="border-t border-line px-3 py-2">{children}</div>
+    </details>
+  );
+}
 
 const TIER_ORDER: Record<TournamentTier, number> = { ti: 0, major: 1, premier: 2, minor: 3, qualifier: 4 };
 const TIERS_FOR_TABLE: TournamentTier[] = ['major', 'premier', 'minor'];
@@ -110,7 +128,7 @@ export default function Schedule() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-3">
         <Card title="赛季概况" className="lg:col-span-2">
           <div className="text-base font-semibold">
             本赛季共 <span className="text-gold tabular">{counts.total}</span> 个大回合
@@ -119,7 +137,8 @@ export default function Schedule() {
               <span className="tabular text-ink">{counts.restRounds}</span> 个休赛回合）
             </span>
           </div>
-          <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+            <PhoneFold summary="规则说明：每回合一项赛事、邀请与婉拒、退出扣荣誉、补充邀请">
             <ul className="space-y-1.5 text-xs leading-relaxed text-mute">
               <li>· 每个大回合<span className="text-ink">最多参加一项赛事</span>，同回合的多项赛事只能择一。</li>
               <li>
@@ -149,6 +168,7 @@ export default function Schedule() {
               </li>
               {directInvites > 0 && <li>· 赛季积分榜前 {directInvites} 名直邀 TI，其余战队在 TI 预选回合打赛区预选。</li>}
             </ul>
+            </PhoneFold>
             <div className="shrink-0">
               <table className="tbl text-xs">
                 <thead>
@@ -199,7 +219,7 @@ export default function Schedule() {
           {mine.length === 0 ? (
             <EmptyState text="还没有报名任何赛事。在下方回合表中点击「报名」。" />
           ) : (
-            <div className="max-h-[340px] overflow-y-auto">
+            <div className="sm:max-h-[340px] sm:overflow-y-auto">
               {mine.map((t) => {
                 const pl = teamPlacement(t, me);
                 return (
@@ -212,7 +232,10 @@ export default function Schedule() {
                     )}
                   >
                     <span className="w-8 shrink-0 font-semibold tabular text-mute">R{t.roundIndex}</span>
-                    <button className="min-w-0 flex-1 cursor-pointer truncate text-left hover:text-gold" onClick={() => openTournamentView(game, t.id)}>
+                    <button
+                      className="min-w-0 flex-1 cursor-pointer truncate text-left hover:text-gold pointer-coarse:min-h-8"
+                      onClick={() => openTournamentView(game, t.id)}
+                    >
                       {t.name}
                     </button>
                     <TourTierBadge tier={t.tier} className="shrink-0" />
@@ -293,19 +316,26 @@ function RoundRow({ game, r, kind, directInvites }: { game: GameState; r: RoundI
   return (
     <div
       className={cx(
-        'grid grid-cols-[132px_minmax(0,1fr)] border-b border-line/60 md:grid-cols-[160px_minmax(0,1fr)]',
+        'grid grid-cols-[minmax(0,1fr)] border-b border-line/60 sm:grid-cols-[132px_minmax(0,1fr)] md:grid-cols-[160px_minmax(0,1fr)]',
         isCur && 'bg-gold/5',
         r.phase === 'ti' && !isCur && 'bg-gold/[0.03]',
       )}
     >
-      <div className={cx('border-l-2 px-3 py-2.5', isCur ? 'border-gold' : 'border-transparent', isPast && 'opacity-55')}>
+      {/* 手机：回合信息排成一行（R1 · 阶段 · 日期 · 类型），赛事列表在下方占满宽度 */}
+      <div
+        className={cx(
+          'border-l-2 px-3 py-2.5 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-0.5 max-sm:pb-0.5',
+          isCur ? 'border-gold' : 'border-transparent',
+          isPast && 'opacity-55',
+        )}
+      >
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={cx('text-base font-bold tabular', isCur && 'text-gold')}>R{r.index}</span>
           <Badge className={PHASE_CLASS[r.phase]}>{PHASE_LABEL[r.phase]}</Badge>
           {isCur && <Badge className="bg-gold text-black">当前</Badge>}
         </div>
-        <div className="mt-0.5 text-[11px] text-faint tabular">{dateRange(r.startDate, r.endDate)}</div>
-        <div className={cx('mt-0.5 text-xs', ROUND_KIND_CLASS[kind])}>{ROUND_KIND_TEXT[kind]}</div>
+        <div className="mt-0.5 text-[11px] text-faint tabular max-sm:mt-0">{dateRange(r.startDate, r.endDate)}</div>
+        <div className={cx('mt-0.5 text-xs max-sm:mt-0', ROUND_KIND_CLASS[kind])}>{ROUND_KIND_TEXT[kind]}</div>
       </div>
       <div className={cx('min-w-0 space-y-1 px-2 py-2', isPast && 'opacity-60')}>
         {patches.length > 0 && (
@@ -317,7 +347,7 @@ function RoundRow({ game, r, kind, directInvites }: { game: GameState; r: RoundI
                   key={v}
                   onClick={() => setView('patches')}
                   title={p ? `${p.date} · ${p.title}\n${p.summary}` : `版本 ${v}`}
-                  className="inline-flex cursor-pointer items-center gap-1 rounded border border-info/40 bg-info/10 px-1.5 py-0.5 text-[11px] text-info hover:bg-info/20"
+                  className="inline-flex cursor-pointer items-center gap-1 rounded border border-info/40 bg-info/10 px-1.5 py-0.5 text-[11px] text-info hover:bg-info/20 pointer-coarse:min-h-8"
                 >
                   ⟳ 版本 {v}
                   {p?.major && <span className="font-semibold text-gold">大版本</span>}
@@ -356,11 +386,11 @@ function TourRow({ game, t, siblings, directInvites }: { game: GameState; t: Tou
         mine ? (isTi ? 'border-gold bg-gold/5' : 'border-good bg-good/5') : 'border-transparent',
       )}
     >
-      <div className="min-w-[220px] flex-1">
+      <div className="min-w-0 flex-1 basis-full sm:min-w-[220px] sm:basis-auto">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <button
             onClick={() => openTournamentView(game, t.id)}
-            className={cx('cursor-pointer truncate text-left text-sm font-medium hover:text-gold hover:underline', isTi && 'text-gold')}
+            className={cx('max-w-full cursor-pointer truncate text-left text-sm font-medium hover:text-gold hover:underline', isTi && 'text-gold')}
             title="在赛事中心查看"
           >
             {t.name}
@@ -382,13 +412,14 @@ function TourRow({ game, t, siblings, directInvites }: { game: GameState; t: Tou
           {t.minHonor > 0 ? ` · 门槛 ${t.minHonor}` : ''}
         </div>
       </div>
+      {/* 手机：奖金 · 状态 · 操作排在名称下面的一行（奖金靠左、操作靠右） */}
       <div
-        className="w-20 text-right text-xs"
+        className="shrink-0 text-xs sm:w-20 sm:text-right"
         title={`${TOURNAMENT_TIER_LABEL[t.tier]} · 游戏内发放奖金池（真实奖金池 $${Math.round(t.prizePool ?? 0).toLocaleString('en-US')}）`}
       >
         <Gold value={awardedPoolOf(game, t)} />
       </div>
-      <div className="flex w-40 flex-wrap items-center justify-end gap-1 text-right text-xs">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1 text-right text-xs sm:w-40 sm:flex-none">
         {t.status === 'finished' ? (
           <>
             {placement ? (
@@ -408,7 +439,8 @@ function TourRow({ game, t, siblings, directInvites }: { game: GameState; t: Tou
           chip
         )}
       </div>
-      <div className="flex w-24 justify-end">{action}</div>
+      {action && <div className="flex shrink-0 justify-end sm:w-24">{action}</div>}
+      {!action && <div className="hidden w-24 sm:block" />}
     </div>
   );
 }

@@ -7,7 +7,8 @@ import {
   CONFIG, computeAllLegacyReports, computeLegacyReport, formatGold, TOURNAMENT_TIER_LABEL,
   type GameOverReason, type LegacyBoardRow, type LegacyReport, type LegacyTimelineRow,
 } from '../../engine';
-import { Badge, Button, Card, EmptyState, PlayerLink, PosBadge, TeamTag, TierBadge, cx } from '../components/common';
+import { Badge, Button, Card, EmptyState, PlayerLink, PosBadge, TableScroll, TeamTag, TierBadge, cx } from '../components/common';
+import MusicControl from '../components/MusicControl';
 import { DIFFICULTY_LABEL, MiniTitle, Sparkline, TourTierBadge, downloadText, safe, saveFileName } from '../components/ShellKit';
 import type { Position } from '../../engine';
 
@@ -151,7 +152,7 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
   ];
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto overscroll-contain">
       {/* ---------- 横幅 ---------- */}
       <div className={cx('relative overflow-hidden border-b border-line', theme.banner)}>
         <div
@@ -170,10 +171,16 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
             style={{ backgroundImage: 'repeating-linear-gradient(0deg, #ff9f1a 0 1px, transparent 1px 26px)' }}
           />
         )}
-        <div className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-8 px-6 py-10">
-          <div className="min-w-0 flex-1">
+        {/* 手机：背景音乐按钮在横幅右上角（随页面滚走；App 在手机上不显示固定的浮动按钮） */}
+        <div className="absolute right-3 top-3 z-10 sm:hidden">
+          <MusicControl floating="inline" />
+        </div>
+        {/* 手机：顶部让出右上角的背景音乐按钮（pt-14）；文字列至少 16rem，放不下评级圆章时圆章换到上方居中（order-first），
+            不再与文字并排把文字挤成一字一行 */}
+        <div className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-6 px-4 pb-8 pt-14 sm:gap-8 sm:px-6 sm:py-10">
+          <div className="min-w-[16rem] flex-1">
             <div className={cx('text-xs font-semibold uppercase tracking-[0.4em]', theme.accent)}>{theme.kicker}</div>
-            <h1 className="mt-2 text-5xl font-black tracking-wide">{theme.heading}</h1>
+            <h1 className="mt-2 text-4xl font-black tracking-wide sm:text-5xl">{theme.heading}</h1>
             <div className="mt-2 text-sm text-mute">{theme.sub(report, report.endTi)}</div>
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <TeamTag color={report.color} tag={report.tag || '—'} />
@@ -225,8 +232,8 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-center">
-            <div className={cx('relative grid h-40 w-40 place-items-center rounded-full border-4 bg-panel/80 shadow-2xl', theme.ring, ending === 'completed' && s.tiTitles.length > 0 && 'glow')}>
+          <div className="flex shrink-0 flex-col items-center max-sm:order-first max-sm:w-full">
+            <div className={cx('relative grid h-32 w-32 place-items-center rounded-full border-4 bg-panel/80 shadow-2xl sm:h-40 sm:w-40', theme.ring, ending === 'completed' && s.tiTitles.length > 0 && 'glow')}>
               <div className="text-center">
                 <div className={cx('text-5xl font-black italic', GRADE_STYLE[report.grade] ?? 'text-ink')}>{report.grade}</div>
                 <div className="mt-1 text-lg font-bold tabular text-ink">{report.score.total}</div>
@@ -253,7 +260,7 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-4 px-6 py-6">
+      <div className="mx-auto max-w-6xl space-y-4 px-4 py-4 sm:px-6 sm:py-6">
         {/* ---------- 数据 ---------- */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           {tiles.map((t) => (
@@ -267,7 +274,8 @@ export default function GameOver({ onSpectate }: { onSpectate?: () => void } = {
 
         {mp && all.length > 1 && <HumanComparison reports={all} me={me} />}
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+        {/* 单列也写 minmax(0,1fr)：隐式 auto 列会被排行榜表格撑到 700px 以上，整页横向滚动 */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-4">
             <Leaderboard report={report} />
             <Timeline rows={report.timeline} />
@@ -304,12 +312,13 @@ function Leaderboard({ report }: { report: LegacyReport }) {
   const rankOf = (r: LegacyBoardRow) => rows.indexOf(r) + 1;
   return (
     <Card title="历史排行榜" subtitle="真实俱乐部截至 TI15（2026）的 TI 成绩与 Valve Major 冠军，与你的俱乐部按同一口径计算传奇值">
-      <div className="-mx-4 -my-4 overflow-x-auto">
+      {/* 手机：横向滑动，名次与俱乐部两列固定在左侧（年份区间不显示，固定列更窄） */}
+      <TableScroll className="-mx-4 -my-4">
         <table className="tbl">
           <thead>
             <tr>
-              <th className="num">#</th>
-              <th>俱乐部</th>
+              <th className={cx('num', STICKY_RANK, 'max-sm:z-[3]!')}>#</th>
+              <th className={cx(STICKY_CLUB, 'max-sm:z-[3]!')}>俱乐部</th>
               <th>称号</th>
               <th>TI 冠军</th>
               <th>TI 亚军</th>
@@ -330,13 +339,13 @@ function Leaderboard({ report }: { report: LegacyReport }) {
                   className={cx(r.kind === 'self' && 'bg-gold/10 ring-1 ring-inset ring-gold/50', r.kind === 'human' && 'bg-info/5')}
                   title={r.highlight}
                 >
-                  <td className={cx('num', r.kind === 'self' ? 'font-bold text-gold' : 'text-mute')}>{rankOf(r)}</td>
-                  <td>
+                  <td className={cx('num', STICKY_RANK, stickyRowBg(r.kind), r.kind === 'self' ? 'font-bold text-gold' : 'text-mute')}>{rankOf(r)}</td>
+                  <td className={cx(STICKY_CLUB, stickyRowBg(r.kind))}>
                     <div className="flex items-center gap-2">
                       <span className={cx('font-semibold', r.kind === 'self' ? 'text-gold' : r.kind === 'human' ? 'text-info' : 'text-ink')}>{r.name}</span>
                       {r.kind === 'self' && <Badge className="bg-gold/20 text-gold">你</Badge>}
                       {r.kind === 'human' && <Badge className="bg-info/15 text-info">玩家</Badge>}
-                      <span className="text-[11px] text-faint">{r.span}</span>
+                      <span className="text-[11px] text-faint max-sm:hidden">{r.span}</span>
                     </div>
                   </td>
                   <td className={cx('whitespace-nowrap text-xs', TITLE_STYLE[r.title.id] ?? 'text-mute')}>{r.title.name}</td>
@@ -350,9 +359,21 @@ function Leaderboard({ report }: { report: LegacyReport }) {
             )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </Card>
   );
+}
+
+/**
+ * 手机（< sm）历史排行榜：名次列（w-10）与俱乐部列固定在左侧。固定格要实色底（遮住滑过的列），本人 / 玩家行的底色按行色混合；
+ * 表头格的层级要加 !（index.css 的 .tbl th { z-index: 1 } 不在 @layer 里，优先于工具类）
+ */
+const STICKY_RANK = 'max-sm:sticky max-sm:left-0 max-sm:z-[2] max-sm:w-10 max-sm:min-w-10';
+const STICKY_CLUB = 'max-sm:sticky max-sm:left-10 max-sm:z-[2] max-sm:shadow-[1px_0_0_var(--color-line)]';
+function stickyRowBg(kind: LegacyBoardRow['kind']): string {
+  if (kind === 'self') return 'max-sm:bg-[color-mix(in_srgb,var(--color-gold)_10%,var(--color-panel))]';
+  if (kind === 'human') return 'max-sm:bg-[color-mix(in_srgb,var(--color-info)_5%,var(--color-panel))]';
+  return 'max-sm:bg-panel';
 }
 
 function tiCellClass(r: LegacyTimelineRow): string {
@@ -475,8 +496,13 @@ function BestPlayers({ report }: { report: LegacyReport }) {
           {list.map((p) => (
             <div key={p.id} className="flex items-center gap-2 rounded-md border border-line bg-panel-2/50 px-2.5 py-1.5 text-sm">
               <span className="shrink-0 whitespace-nowrap"><PosBadge pos={p.position as Position} /></span>
-              <span className="min-w-0 truncate">
-                {game.players[p.id] ? <PlayerLink player={{ id: p.id, handle: p.handle }} /> : <span className="font-medium">{p.handle}</span>}
+              {/* 名字过长时按钮本身截断（截断加在外层 span 上时，按钮是原子行内盒，只会被硬裁掉、没有省略号） */}
+              <span className="min-w-0">
+                {game.players[p.id] ? (
+                  <PlayerLink player={{ id: p.id, handle: p.handle }} className="block max-w-full truncate text-left" />
+                ) : (
+                  <span className="block truncate font-medium">{p.handle}</span>
+                )}
               </span>
               <span className="shrink-0"><TierBadge tier={p.tier} /></span>
               {p.status === 'banned' && <Badge className="shrink-0 whitespace-nowrap bg-[#ff5c8a]/15 text-[#ff8fb0]">禁赛</Badge>}
@@ -502,7 +528,7 @@ function BestPlayers({ report }: { report: LegacyReport }) {
 function HumanComparison({ reports, me }: { reports: LegacyReport[]; me: string }) {
   return (
     <Card title="玩家对比" subtitle="本局全部人类俱乐部的生涯总结">
-      <div className="-mx-4 -my-4 overflow-x-auto">
+      <TableScroll className="-mx-4 -my-4">
         <table className="tbl">
           <thead>
             <tr>
@@ -540,7 +566,7 @@ function HumanComparison({ reports, me }: { reports: LegacyReport[]; me: string 
             ))}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </Card>
   );
 }

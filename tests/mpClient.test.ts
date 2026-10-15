@@ -9,7 +9,7 @@ import { POSITIONS } from '../src/engine/types';
 import { RPC_WHITELIST, isRoomHost, mySeat } from '../src/shared/protocol';
 import * as engine from '../src/engine';
 import { importSave } from '../src/engine/save';
-import { net, normalizeServerAddress, onRequestError, trimArgs } from '../src/store/net';
+import { httpUrlOf, net, normalizeServerAddress, onRequestError, trimArgs } from '../src/store/net';
 import type { ClientMsg, RoomInfo, ServerMsg } from '../src/shared/protocol';
 import { useGameStore } from '../src/store/gameStore';
 import { registerNodeRosterLoader } from '../scripts/nodeData';
@@ -23,6 +23,23 @@ describe('net · 服务器地址与参数', () => {
     expect(normalizeServerAddress('http://host.local:9000')).toBe('ws://host.local:9000/ws');
     expect(normalizeServerAddress('ws://10.0.0.2:1234/ws')).toBe('ws://10.0.0.2:1234/ws');
     expect(normalizeServerAddress('   ')).toBeNull();
+  });
+
+  it('80 端口的公网服务器：写了「:80」或带协议头的网页地址不再被改成默认端口 8686', () => {
+    // 写了端口按所写（URL 会把 ws 的默认端口 80 省略，规范化结果不带端口号）
+    expect(normalizeServerAddress('203.0.113.7:80')).toBe('ws://203.0.113.7/ws');
+    expect(normalizeServerAddress('[2001:db8::1]:80')).toBe('ws://[2001:db8::1]/ws');
+    expect(normalizeServerAddress('[2001:db8::1]')).toBe('ws://[2001:db8::1]:8686/ws');
+    // 带协议头的网页地址按浏览器默认端口
+    expect(normalizeServerAddress('http://203.0.113.7')).toBe('ws://203.0.113.7/ws');
+    expect(normalizeServerAddress('http://203.0.113.7/')).toBe('ws://203.0.113.7/ws');
+    expect(normalizeServerAddress('https://game.example.com/')).toBe('wss://game.example.com/ws');
+    expect(normalizeServerAddress('http://203.0.113.7:8686/')).toBe('ws://203.0.113.7:8686/ws');
+    // 纯地址（局域网房主的电脑）仍按默认端口
+    expect(normalizeServerAddress('game.example.com')).toBe('ws://game.example.com:8686/ws');
+    // 给朋友的网页地址同样不写 80
+    expect(httpUrlOf(normalizeServerAddress('203.0.113.7:80')!)).toBe('http://203.0.113.7');
+    expect(httpUrlOf(normalizeServerAddress('192.168.1.5')!)).toBe('http://192.168.1.5:8686');
   });
 
   it('去掉末尾 undefined 参数（JSON 会把数组里的 undefined 变成 null）', () => {

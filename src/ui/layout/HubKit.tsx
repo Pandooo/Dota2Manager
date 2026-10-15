@@ -44,7 +44,8 @@ export function ScreenHeader({
   return (
     <div className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-2">
       <div className="min-w-0 text-sm text-mute">{subtitle}</div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {/* max-w-full：操作区（如赛事中心的下拉框）在手机上不超过一行宽度，内部换行 */}
+      {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -86,9 +87,20 @@ export function HubShell({
   const setView = useGameStore((s) => s.setView);
   return (
     <div>
+      {/* 手机（< sm）：标题单独一行，标签不换行、整行横向滑动（隐藏滚动条，左右出血到 main 的内边距）；
+          标签行用 -mb-px 压住底边线（滚动容器会裁掉标签自身的 -mb-px）。≥ sm 与以前一样。
+          有 right（如 DotaPedia 搜索框）时，手机上 right 与标题同一行（标题之后），标签行排在下一整行 */}
       <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-1 border-b border-line">
-        <h1 className="pb-2 text-xl font-bold tracking-wide">{title}</h1>
-        <div role="tablist" className="flex min-w-0 flex-wrap items-end gap-1">
+        <h1 className={cx('pb-0.5 text-lg font-bold tracking-wide sm:basis-auto sm:pb-2 sm:text-xl', right ? 'min-w-0 flex-1 truncate sm:flex-initial' : 'basis-full')}>
+          {title}
+        </h1>
+        <div
+          role="tablist"
+          className={cx(
+            'no-scrollbar -mx-3 -mb-px flex min-w-0 flex-1 items-end gap-1 overflow-x-auto px-3 sm:mx-0 sm:mb-0 sm:flex-initial sm:flex-wrap sm:overflow-visible sm:px-0',
+            !!right && 'max-sm:order-2 max-sm:basis-full',
+          )}
+        >
           {tabs.map((t) => {
             const active = t.key === value;
             return (
@@ -99,7 +111,7 @@ export function HubShell({
                 title={t.title}
                 onClick={() => (active && onReselect ? onReselect(t.key) : setView(t.key))}
                 className={cx(
-                  '-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 px-3 pb-2 pt-1.5 text-[15px] transition-colors',
+                  'flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-2 pt-1.5 text-[15px] transition-colors sm:-mb-px',
                   active ? 'border-dota font-semibold text-ink' : 'border-transparent text-mute hover:border-line hover:text-ink',
                 )}
               >
@@ -110,7 +122,7 @@ export function HubShell({
             );
           })}
         </div>
-        {right && <div className="ml-auto flex items-center gap-2 pb-2 text-xs text-mute">{right}</div>}
+        {right && <div className="ml-auto flex items-center gap-2 pb-2 text-xs text-mute max-sm:order-1 max-sm:pb-1">{right}</div>}
       </div>
       <HubEmbedContext.Provider value={true}>
         {/* 不包 transform 动画容器：页面内的 Modal（position: fixed）需要以视口为包含块 */}
@@ -123,9 +135,17 @@ export function HubShell({
 // ---------------------------------------------------------------------------
 // 徽标（侧栏 / 中心页标签共用）
 // ---------------------------------------------------------------------------
-export function CountBadge({ n, tone = 'gold', title }: { n: number | string; tone?: 'gold' | 'dota' | 'mute' | 'good'; title?: string }) {
+export function CountBadge({ n, tone = 'gold', title }: { n: number | string; tone?: 'gold' | 'dota' | 'mute' | 'good' | 'info'; title?: string }) {
   const cls =
-    tone === 'dota' ? 'bg-dota text-white' : tone === 'mute' ? 'bg-panel-3 text-mute' : tone === 'good' ? 'bg-good/20 text-good' : 'bg-gold text-black';
+    tone === 'dota'
+      ? 'bg-dota text-white'
+      : tone === 'mute'
+        ? 'bg-panel-3 text-mute'
+        : tone === 'good'
+          ? 'bg-good/20 text-good'
+          : tone === 'info'
+            ? 'bg-info/20 text-info'
+            : 'bg-gold text-black';
   return (
     <span title={title} className={cx('rounded-full px-1.5 text-[10px] font-bold leading-4 tabular', cls)}>
       {n}

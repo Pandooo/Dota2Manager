@@ -10,6 +10,7 @@ import {
 } from '../../engine';
 import type { FormLabel, RoleFit } from '../../engine';
 import { Button, cx } from './common';
+import { BREAKPOINT, useMinWidth } from '../mobile';
 
 // ---------------------------------------------------------------------------
 // 防御：引擎函数可能尚未实现（throw 'TODO'）或数据缺失时，返回兜底值而不是崩溃
@@ -21,6 +22,14 @@ export function safe<T>(fn: () => T, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * 宽表格首列固定（`<TableScroll stickyFirst={…}>`）只在 < lg 时开启（docs/UI.md「手机适配 · 表格」）：
+ * 桌面（≥ 1024px）表格放得下，固定列的实色底与分隔线会让悬停高亮缺一格，保持与以前一致。
+ */
+export function useStickyFirstCol(): boolean {
+  return !useMinWidth(BREAKPOINT.lg);
 }
 
 export const fmt1 = (v: number) => (Number.isFinite(v) ? v.toFixed(1) : '—');

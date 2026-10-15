@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
 import { POSITIONS, POSITION_LABEL, TIERS, pediaPlayerStandingBoard, playerTier } from '../../engine';
 import type { GameState, PediaPlayerStanding, Position, Tier } from '../../engine';
-import { Card, EmptyState, Gold, PosBadge, TierBadge, cx } from '../components/common';
+import { Card, EmptyState, Gold, PosBadge, TableScroll, TierBadge, cx } from '../components/common';
 import { Flag, SortTh, sortList, useSort } from '../components/SquadShared';
 import { Segmented, TourSelect } from '../components/TourShared';
-import { PPlayer, PTeam, Pager, PediaInput, TIER_RANK, fmt1, fmtKda, fmtPct, safe, usePediaSel, PediaEntryGuard } from '../components/PediaKit';
+import {
+  PHONE_HIDE, PPlayer, PTeam, Pager, PediaEntryGuard, PediaInput, PediaSortSelect, STICKY_TD, STICKY_TH, TIER_RANK, fmt1, fmtKda, fmtPct, safe, usePediaSel,
+} from '../components/PediaKit';
 import PediaPlayerPage from './PediaPlayerPage';
 
 export default function PediaPlayers() {
@@ -171,7 +173,7 @@ function PlayerList({ game }: { game: GameState }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <PediaInput value={q} onChange={reset(setQ)} placeholder="按 ID / 本名筛选" className="w-48" />
+        <PediaInput value={q} onChange={reset(setQ)} placeholder="按 ID / 本名筛选" className="w-full sm:w-48" />
         <TourSelect value={pos} onChange={(v) => reset(setPos)(v as 'all' | Position)} title="位置">
           <option value="all">全部位置</option>
           {POSITIONS.map((p) => (
@@ -207,10 +209,24 @@ function PlayerList({ game }: { game: GameState }) {
             { key: 'banned', label: '禁赛' },
           ]}
         />
-        <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-mute" title="只列出在本局有出场记录的选手">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-mute pointer-coarse:min-h-9" title="只列出在本局有出场记录的选手">
           <input type="checkbox" checked={played} onChange={(e) => reset(setPlayed)(e.target.checked)} />
           仅有出场
         </label>
+        <PediaSortSelect
+          sort={sort}
+          options={[
+            { key: 'standing', label: '历史地位' },
+            { key: 'games', label: '局数' },
+            { key: 'winRate', label: '胜率' },
+            { key: 'kda', label: 'KDA' },
+            { key: 'avgK', label: '场均击杀' },
+            { key: 'mvps', label: 'MVP' },
+            { key: 'prize', label: '奖金' },
+            { key: 'tier', label: '等级' },
+            { key: 'handle', label: '选手 ID', defaultDir: 'asc' },
+          ]}
+        />
         <div className="ml-auto">
           <Pager page={pg} pages={pages} onPage={setPage} total={sorted.length} />
         </div>
@@ -220,30 +236,32 @@ function PlayerList({ game }: { game: GameState }) {
         {shown.length === 0 ? (
           <EmptyState text={played ? '没有符合条件的选手（已勾选「仅有出场」）' : '没有符合条件的选手'} />
         ) : (
-          <div className="overflow-x-auto">
+          // 手机（< sm）：选手列固定在左侧（序号并入），K/D/A、MVP、奖金隐藏（可用上方的排序选择）
+          <TableScroll>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th className="num">#</th>
-                  <SortTh k="handle" sort={sort} defaultDir="asc">选手</SortTh>
+                  <th className={cx('num', PHONE_HIDE)}>#</th>
+                  <SortTh k="handle" sort={sort} defaultDir="asc" className={STICKY_TH}>选手</SortTh>
                   <th>位置</th>
                   <SortTh k="tier" sort={sort}>等级</SortTh>
                   <th title="现役 = 当前东家；其他状态显示最近效力的战队">战队 / 状态</th>
                   <SortTh k="standing" sort={sort} title="选手历史地位（TI 名次、冠军、MVP、赛季、巅峰等级；含开局前的现实 TI）">历史地位</SortTh>
                   <SortTh k="games" sort={sort} className="num">局数</SortTh>
                   <SortTh k="winRate" sort={sort} className="num">胜率</SortTh>
-                  <SortTh k="avgK" sort={sort} className="num" title="场均 击杀 / 阵亡 / 助攻">K / D / A</SortTh>
+                  <SortTh k="avgK" sort={sort} className={cx('num', PHONE_HIDE)} title="场均 击杀 / 阵亡 / 助攻">K / D / A</SortTh>
                   <SortTh k="kda" sort={sort} className="num" title="(击杀 + 助攻) / 阵亡">KDA</SortTh>
-                  <SortTh k="mvps" sort={sort} className="num">MVP</SortTh>
-                  <SortTh k="prize" sort={sort} className="num" title="赛事奖金的队员分成">奖金</SortTh>
+                  <SortTh k="mvps" sort={sort} className={cx('num', PHONE_HIDE)}>MVP</SortTh>
+                  <SortTh k="prize" sort={sort} className={cx('num', PHONE_HIDE)} title="赛事奖金的队员分成">奖金</SortTh>
                 </tr>
               </thead>
               <tbody>
                 {shown.map((r, i) => (
                   <tr key={r.id} className={cx(r.teamId === me && !r.formerTeam && 'bg-gold/5')}>
-                    <td className="num text-faint">{pg * PAGE + i + 1}</td>
-                    <td>
+                    <td className={cx('num text-faint', PHONE_HIDE)}>{pg * PAGE + i + 1}</td>
+                    <td className={STICKY_TD}>
                       <span className="inline-flex items-center gap-1.5">
+                        <span className="w-6 shrink-0 text-right text-xs text-faint tabular sm:hidden">{pg * PAGE + i + 1}</span>
                         {r.cc ? <Flag cc={r.cc} /> : <span className="inline-block w-4" />}
                         <PPlayer id={r.id} handle={r.handle} />
                         {!r.real && <span className="text-[10px] text-faint" title="程序生成的选手">生成</span>}
@@ -275,15 +293,15 @@ function PlayerList({ game }: { game: GameState }) {
                     </td>
                     <td className="num">{r.games || <span className="text-faint">0</span>}</td>
                     <td className="num">{fmtPct(r.winRate)}</td>
-                    <td className="num text-mute">{r.games > 0 ? `${fmt1(r.avgK)} / ${fmt1(r.avgD)} / ${fmt1(r.avgA)}` : '—'}</td>
+                    <td className={cx('num text-mute', PHONE_HIDE)}>{r.games > 0 ? `${fmt1(r.avgK)} / ${fmt1(r.avgD)} / ${fmt1(r.avgA)}` : '—'}</td>
                     <td className="num font-semibold">{r.games > 0 ? fmtKda(r.kda) : '—'}</td>
-                    <td className="num">{r.mvps || <span className="text-faint">0</span>}</td>
-                    <td className="num">{r.prize > 0 ? <Gold value={r.prize} /> : <span className="text-faint">—</span>}</td>
+                    <td className={cx('num', PHONE_HIDE)}>{r.mvps || <span className="text-faint">0</span>}</td>
+                    <td className={cx('num', PHONE_HIDE)}>{r.prize > 0 ? <Gold value={r.prize} /> : <span className="text-faint">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
       </Card>
       {pages > 1 && (

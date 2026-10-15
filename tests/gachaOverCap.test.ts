@@ -51,11 +51,11 @@ describe('抽卡超编 · 规则', () => {
     expect(r.results).toHaveLength(10);
     expect(rosterSize(s, 't0')).toBe(15);
     expect(rosterOverCap(s, 't0')).toBe(3);
-    expect(r.message).toContain(`超编 3 人：本回合内放弃新秀或解约，退回 ${HARD} 人后才能进入下一回合`);
+    expect(r.message).toContain(`超编 3 人：本回合内放弃新秀或解约 3 人（降到 ${HARD} 人以内）后才能进入下一回合`);
     expect(s.news.some((n) => n.title.includes('十连') && n.body.includes('超编 3 人'))).toBe(true);
     const bl = getAdvanceBlockers(s).find((b) => b.code === 'roster_over_cap')!;
     expect(bl.message).toBe(rosterOverCapNotice(s, 't0'));
-    expect(bl.message).toBe(`超编 3 人：本回合内放弃新秀或解约，退回 ${HARD} 人后才能进入下一回合`);
+    expect(bl.message).toBe(`超编 3 人：本回合内放弃新秀或解约 3 人（降到 ${HARD} 人以内）后才能进入下一回合`);
     expect(advance(s).ok).toBe(false);
     expect(s.phase).toBe('preseason');
     // 超编时不能再抽

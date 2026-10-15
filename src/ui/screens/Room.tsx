@@ -93,7 +93,7 @@ function SeatRow({
       <span className="text-faint">尚未填写俱乐部</span>
     );
   return (
-    <div className={cx('flex items-center gap-3 rounded-lg border px-3 py-2', me ? 'border-gold/50 bg-gold/5' : 'border-line bg-panel-2/40')}>
+    <div className={cx('flex items-center gap-2 rounded-lg border px-3 py-2 sm:gap-3', me ? 'border-gold/50 bg-gold/5' : 'border-line bg-panel-2/40')}>
       <OnlineDot online={seat.connected} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-sm">
@@ -111,6 +111,7 @@ function SeatRow({
       {seat.lobbyReady ? <Badge className="bg-good/15 font-semibold text-good">✓ 已准备</Badge> : <Badge className="bg-panel-3 text-mute">未准备</Badge>}
       {isHost && !me && (
         <ConfirmButton
+          className="shrink-0"
           size="xs"
           variant="danger"
           title={`把 ${seat.name} 移出房间`}
@@ -210,6 +211,37 @@ export default function Room() {
     setStartRejected(null);
     if (send({ t: 'startGame' })) setStarting(true);
   };
+  const readyCount = room.seats.filter((s) => s.lobbyReady).length;
+  const readyBtn = me && (
+    <Button
+      variant={me.lobbyReady ? 'secondary' : 'primary'}
+      size="lg"
+      className="w-full"
+      disabled={!me.lobbyReady && !!setupError}
+      title={!me.lobbyReady && setupError ? setupError : undefined}
+      onClick={toggleReady}
+    >
+      {me.lobbyReady ? '取消准备' : '准备'}
+    </Button>
+  );
+  const startBtn = isHost && (
+    <Button variant="gold" size="lg" className={cx('w-full', !startBlock && 'glow')} disabled={!!startBlock || starting} title={startBlock ?? '所有玩家已准备，开始游戏'} onClick={start}>
+      {starting ? '正在创建游戏…' : '开始游戏 ▶'}
+    </Button>
+  );
+  /** 准备 / 开始游戏下方的说明（按钮禁用的原因、被服务器拒绝的原因） */
+  const actionNote =
+    !me?.lobbyReady && setupError ? (
+      <span className="text-bad">{setupError}</span>
+    ) : isHost && startBlock ? (
+      <span className="text-faint">{startBlock}</span>
+    ) : isHost && !starting && startRejected ? (
+      <span className="text-bad" role="alert">
+        未能开始：{startRejected}
+      </span>
+    ) : !isHost ? (
+      <span className="text-faint">全部玩家准备后，由房主开始游戏（已准备 {readyCount}/{room.seats.length}）</span>
+    ) : null;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -238,21 +270,27 @@ export default function Room() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      {/* 手机：内边距收窄；< xl 底部有固定的「准备 / 开始游戏」栏（见文件末尾），内容区让出音乐按钮 */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 max-xl:pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
         {playing && (
           <div className="mx-auto mb-4 flex max-w-6xl items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-gold">
             <Spinner className="h-4 w-4" />
             {room.status === 'finished' ? '对局已结束，正在同步最终状态…' : '游戏已开始，正在同步游戏状态…'}
           </div>
         )}
-        <div className="mx-auto grid max-w-6xl gap-5 xl:grid-cols-[1fr_380px]">
-          <div className="min-w-0 space-y-5">
+        {/* < xl：单列，玩家列表排在最前（谁已加入 / 准备），其后为对局设置、我的战队、邀请、聊天；≥ xl 两栏与以前一样 */}
+        <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="min-w-0 space-y-4 max-xl:order-2 sm:space-y-5">
             <MpRoomSettings settings={room.settings} editable={isHost && !playing} onChange={updateSettings} />
             {me && !playing && <MpSeatSetup room={room} seat={me} roster={roster} rosterError={rosterError} onRetry={retry} />}
           </div>
 
-          <div className="space-y-4">
-            <Card title={`玩家（${room.seats.length}/${room.maxPlayers}）`} subtitle={isHost ? '你是房主' : `房主：${room.seats.find((s) => s.seatKey === room.hostSeatKey)?.name ?? '—'}`}>
+          <div className="min-w-0 space-y-4 max-xl:contents">
+            <Card
+              className="max-xl:order-1"
+              title={`玩家（${room.seats.length}/${room.maxPlayers}）`}
+              subtitle={isHost ? '你是房主' : `房主：${room.seats.find((s) => s.seatKey === room.hostSeatKey)?.name ?? '—'}`}
+            >
               <div className="space-y-2">
                 {room.seats.map((s) => (
                   <SeatRow
@@ -272,24 +310,12 @@ export default function Room() {
                 ))}
               </div>
 
+              {/* ≥ xl：准备 / 开始在玩家卡片里；更窄时在底部固定栏 */}
               {!playing && me && (
-                <div className="mt-4 space-y-2">
-                  <Button
-                    variant={me.lobbyReady ? 'secondary' : 'primary'}
-                    size="lg"
-                    className="w-full"
-                    disabled={!me.lobbyReady && !!setupError}
-                    title={!me.lobbyReady && setupError ? setupError : undefined}
-                    onClick={toggleReady}
-                  >
-                    {me.lobbyReady ? '取消准备' : '准备'}
-                  </Button>
+                <div className="mt-4 space-y-2 max-xl:hidden">
+                  {readyBtn}
                   {!me.lobbyReady && setupError && <div className="text-center text-[11px] text-bad">{setupError}</div>}
-                  {isHost && (
-                    <Button variant="gold" size="lg" className={cx('w-full', !startBlock && 'glow')} disabled={!!startBlock || starting} title={startBlock ?? '所有玩家已准备，开始游戏'} onClick={start}>
-                      {starting ? '正在创建游戏…' : '开始游戏 ▶'}
-                    </Button>
-                  )}
+                  {startBtn}
                   {isHost && startBlock && <div className="text-center text-[11px] text-faint">{startBlock}</div>}
                   {isHost && !startBlock && !starting && startRejected && (
                     <div className="text-center text-[11px] text-bad" role="alert">
@@ -302,6 +328,7 @@ export default function Room() {
             </Card>
 
             <Card
+              className="max-xl:order-3"
               title="邀请朋友"
               subtitle={
                 lanPages.length
@@ -330,13 +357,23 @@ export default function Room() {
               </div>
             </Card>
 
-            <Card title="房间聊天" bodyClassName="p-0">
+            <Card title="房间聊天" bodyClassName="p-0" className="max-xl:order-4">
               <MpChat height="h-56" />
             </Card>
           </div>
         </div>
       </div>
 
+      {/* < xl：准备 / 开始游戏固定在底部（设置与选队在上方滚动，不用先滑过两三屏才找到按钮）；右侧让出音乐按钮，底部让出 Home 横条 */}
+      {!playing && me && (
+        <div className="shrink-0 border-t border-line bg-panel/95 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] backdrop-blur xl:hidden">
+          {actionNote && <div className="mb-1.5 truncate text-[11px]">{actionNote}</div>}
+          <div className="flex gap-2 pr-20">
+            <div className="min-w-0 flex-1">{readyBtn}</div>
+            {startBtn && <div className="min-w-0 flex-1">{startBtn}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

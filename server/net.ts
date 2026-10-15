@@ -22,9 +22,18 @@ export function lanAddresses(): string[] {
   return out.sort((a, b) => rank(a) - rank(b));
 }
 
-/** 局域网访问地址（http://ip:port） */
+/**
+ * 网页地址 http://host:port；80 端口不写端口号（浏览器地址栏也是这样显示的，如 http://1.2.3.4）。
+ * IPv6 地址加方括号。
+ */
+export function httpOrigin(host: string, port: number): string {
+  const h = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  return port === 80 ? `http://${h}` : `http://${h}:${port}`;
+}
+
+/** 局域网访问地址（http://ip:port；80 端口为 http://ip） */
 export function lanUrls(port: number): string[] {
-  return lanAddresses().map((ip) => `http://${ip}:${port}`);
+  return lanAddresses().map((ip) => httpOrigin(ip, port));
 }
 
 // ---------------------------------------------------------------------------

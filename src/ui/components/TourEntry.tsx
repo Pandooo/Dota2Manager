@@ -10,6 +10,7 @@ import { getTiInfo } from '../../data/index';
 import { Badge, Button } from './common';
 import { ConfirmButton } from './ConfirmPopover';
 import { ENTRY_STATUS_CLASS, ENTRY_STATUS_LABEL, openTournamentView, rankClass, safe, teamPlacement } from './TourShared';
+import { isCoarsePointer } from '../mobile';
 
 /** store.call（报名 / 取消报名经 call 调用引擎：单机本地执行，多人发给服务器） */
 type Call = ReturnType<typeof useGameStore.getState>['call'];
@@ -71,7 +72,8 @@ export function entryControls(
 ): EntryControls {
   const me = game.settings.playerTeamId;
   const myTeam = game.teams[me];
-  const size = opts.size ?? 'xs';
+  // 触屏：xs 按钮（约 22px 高）太小，统一放大为 sm（docs/UI.md「手机适配 · 触控尺寸」）
+  const size = (opts.size ?? 'xs') === 'xs' && isCoarsePointer() ? 'sm' : opts.size ?? 'xs';
   const isTi = t.tier === 'ti';
   const isTiQual = isTiQualifierEvent(t);
   const inEvent = (t.teamIds ?? []).includes(me) || (t.qualifierTeamIds ?? []).includes(me);

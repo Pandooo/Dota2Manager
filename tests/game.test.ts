@@ -227,7 +227,7 @@ describe('game: 推进阻塞', () => {
     add(2);
     const bl = getAdvanceBlockers(state);
     expect(bl.map((b) => b.code)).toEqual(['roster_over_cap']);
-    expect(bl[0].message).toBe(`超编 2 人：本回合内放弃新秀或解约，退回 ${CONFIG.team.hardMaxRoster} 人后才能进入下一回合`);
+    expect(bl[0].message).toBe(`超编 2 人：本回合内放弃新秀或解约 2 人（降到 ${CONFIG.team.hardMaxRoster} 人以内）后才能进入下一回合`);
     expect(advance(state).ok).toBe(false);
     expect(state.phase).toBe('preseason');
     // 转会窗口锁定（TI 阶段）时不阻塞：超编只会在窗口开放的回合因抽卡出现、且必须当回合处理完

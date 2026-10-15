@@ -14,7 +14,7 @@
 4. 进入游戏后点「多人对战（局域网）」→ 创建房间 → 把 6 位**房间码**告诉朋友 → 设置起止 TI、难度、玩法 → 全员准备后「开始游戏」。
 5. 结束时在终端按 **Ctrl+C**：所有房间会先保存到 `server-data/rooms/`，下次 `npm run server` 启动后大家重新进入即可接着玩。
 
-常用参数：`npm run server -- --port 8787`（换端口）、`--data <目录>`（存档目录）、`--name 小明家`（服务器名称，显示在大厅）、`--keep-finished-hours 2`（已结束的对局在所有人离开后保留几小时）、`--keep-idle-days 14`（进行中的对局连续几天无人在线后删除，只计服务器运行时间，0 = 永不删除）、`--public`（公网模式，部署到公网服务器时使用，见 §14）、`--stats-interval-min 10`（在线统计日志间隔，见 §14）、`--help`。
+常用参数：`npm run server -- --port 8787`（换端口）、`--data <目录>`（存档目录）、`--name 小明家`（服务器名称，显示在大厅）、`--keep-finished-hours 2`（已结束的对局在所有人离开后保留几小时）、`--keep-idle-days 14`（进行中的对局连续几天无人在线后删除，只计服务器运行时间，0 = 永不删除）、`--public`（公网模式，部署到公网服务器时使用，见 §14）、`--stats-interval-min 10`（在线统计日志间隔，见 §14）、`--also-port 8686`（同时在另一个端口提供同一个服务器，换端口时过渡用，见「部署到公网服务器 › 80 端口与旧地址」）、`--help`。
 
 ### 朋友：加入
 1. 与房主连接**同一个局域网**（同一 Wi‑Fi / 路由器）。
@@ -169,25 +169,42 @@ mkdir -p /opt/dota2manager /opt/dota2manager-data && chown -R d2m:d2m /opt/dota2
 scripts/deploy.sh root@你的服务器
 ```
 
-脚本会用 rsync 同步当前工作目录的源码（不含 node_modules、dist、server-data、本地美术覆盖 `public/local/*`），在服务器上 `npm ci`（npmmirror 源）、`vite build`，把 `deploy/dota2manager.service` 安装为 systemd 服务并重启；默认监听 8686 端口，房间存档在 `/opt/dota2manager-data`，日志用 `journalctl -u dota2manager -f` 查看。云服务器需要在安全组放行该端口；加 `--no-build` 可以只同步重启。
+脚本会用 rsync 同步当前工作目录的源码（不含 node_modules、dist、server-data、本地美术覆盖 `public/local/*`），在服务器上 `npm ci`（npmmirror 源）、`vite build`，把 `deploy/dota2manager.service` 安装为 systemd 服务并重启；监听 **80 端口**（v0.4 起，过渡期同时保留 8686，见下文「80 端口与旧地址」），房间存档在 `/opt/dota2manager-data`，日志用 `journalctl -u dota2manager -f` 查看。云服务器需要在安全组放行 TCP 80（过渡期还有 8686）；加 `--no-build` 可以只同步重启。
 
-注意：服务器原本按局域网设计，没有账号体系——任何知道地址的人都能创建 / 加入房间（座位有密钥，不会被他人冒用），也没有 TLS（http）。给朋友分享时直接发 `http://<公网 IP>:8686/`。
+注意：服务器原本按局域网设计，没有账号体系——任何知道地址的人都能创建 / 加入房间（座位有密钥，不会被他人冒用），也没有 TLS（http）。给朋友分享时直接发 `http://<公网 IP>/`（80 端口不用写端口号，电脑与手机浏览器相同）。
 同一公网地址的连接数、新建连接速率、等待中的房间与每小时开局次数有上限，房间数满时会清理长时间无人在线的对局（§15）；若在本机用 nginx 等反向代理转发，启动参数加 `--trust-proxy`（按 `X-Forwarded-For` 识别来源），直接对外监听时不要加。
 systemd 单元以 `ProtectSystem=strict` 运行，只有 `/opt/dota2manager-data` 可写（程序目录运行时只读，安装与构建由 `deploy.sh` 在服务之外完成）。
 
 `deploy/dota2manager.service` 以 **`--public`（公网模式）** 启动：服务器不向任何客户端发送、也不在启动信息里列出内网地址，大厅 / 房间里的「邀请朋友打开」显示当前网页地址，界面不再出现「房主电脑运行 npm run server」「局域网地址」等说明；发给玩家的错误信息不含文件路径、调用栈等内部细节（详见 §14）。
 
+### 80 端口与旧地址（v0.4，用户需求「请发布到80端口」）
+
+- **单元配置**：`ExecStart … --port 80 --also-port 8686 --host 0.0.0.0 --public …`。80 低于 1024，是特权端口：服务仍以普通用户 `d2m` 运行，只通过
+  `AmbientCapabilities=CAP_NET_BIND_SERVICE` 授予「绑定低端口」这一项能力，`CapabilityBoundingSet=CAP_NET_BIND_SERVICE` 让进程拿不到其他任何特权；
+  `NoNewPrivileges` / `ProtectSystem=strict` / `PrivateTmp` / `ReadWritePaths` 不变。服务器上不能有其他程序占用 80 端口（如 nginx、apache），否则启动失败、日志提示端口被占用。
+  手动以普通用户在 1024 以下端口启动时会提示「没有权限监听端口 80（1024 以下的端口需要权限）……」。
+- **地址写法**：80 端口不写端口号——启动信息里的「本机访问」为 `http://localhost`，在线统计为 `curl -s http://127.0.0.1/api/status`，公网模式提示「让朋友在浏览器打开 http://<公网地址或域名>/」；
+  大厅 / 房间的邀请地址取当前网页地址，自然也不带端口。客户端手动填写服务器地址时（`src/store/net.ts` 的 `normalizeServerAddress`）：写了端口按所写（`地址:80` 不再被改成 8686），
+  带 `http://` / `https://` 的网页地址按浏览器默认端口（`http://地址/` → 80），只有不带协议头、也不带端口的纯地址（局域网房主的电脑）才默认 8686。
+- **浏览器里的数据按网址分开保存**：单机进度（IndexedDB）、多人身份（会话 ID，localStorage；进行中的对局只有原座位的身份能回到座位）、昵称与界面设置都属于「网址 + 端口」，
+  `http://<IP>:8686` 与 `http://<IP>` 在浏览器看来是两个网站。所以单元里加了 **`--also-port 8686`**：同一个服务器进程同时在 8686 提供服务（同一批房间、同一套连接限制与统计），
+  旧地址照常可用——
+  - 进行中的多人对局：回旧地址 `http://<IP>:8686/` 继续，直到对局结束；之后的新对局在新地址开。
+  - 单机进度：在旧地址「存档管理 › 导出存档文件」，到新地址主菜单「导入存档」。
+  - 过渡结束后删掉单元里的 `--also-port 8686`、重新部署，并在安全组关闭 8686。
+- **换回其他端口**：改 `--port`（如 8686）并去掉 `--also-port`；大于 1024 的端口不需要能力设置（留着也无害）。
+
 ### 查看在线人数（服务器上）
 
 ```bash
-curl -s http://127.0.0.1:8686/api/status                 # 当前在线、大厅 / 房间 / 对局中人数、房间数、峰值、运行时长、今天的汇总（只允许服务器本机访问）
+curl -s http://127.0.0.1/api/status                      # 当前在线、大厅 / 房间 / 对局中人数、房间数、峰值、运行时长、今天的汇总（只允许服务器本机访问）
 journalctl -u dota2manager | grep 在线                     # 每 10 分钟一行（只在有变化时）+ 创新高 + 每天零点的前一天汇总
 journalctl -u dota2manager --since today | grep 在线
 cat /opt/dota2manager-data/stats/online-$(date +%Y-%m).jsonl   # 每日汇总（每天一行；同一日期以最后一行为准）
 ```
 
-`/api/status` **只回答服务器本机的请求**（v0.3.1，用户决策 2026-10-15）：必须在服务器上用 `curl -s http://127.0.0.1:8686/api/status` 查询，从外网访问 `http://<公网 IP>:8686/api/status` 回复 403
-`{"ok":false,"error":"在线统计只允许在服务器本机访问"}`。想在自己电脑的浏览器里看，可以先 `ssh -L 8686:127.0.0.1:8686 root@你的服务器`，再打开 `http://127.0.0.1:8686/api/status`
+`/api/status` **只回答服务器本机的请求**（v0.3.1，用户决策 2026-10-15）：必须在服务器上用 `curl -s http://127.0.0.1/api/status` 查询（v0.4 起服务在 80 端口；兼容端口 8686 上同样可查），从外网访问 `http://<公网 IP>/api/status` 回复 403
+`{"ok":false,"error":"在线统计只允许在服务器本机访问"}`。想在自己电脑的浏览器里看，可以先 `ssh -L 18686:127.0.0.1:80 root@你的服务器`，再打开 `http://127.0.0.1:18686/api/status`
 （经 SSH 隧道的请求在服务器上来自 127.0.0.1，算本机）。大厅显示给所有人的在线人数（WebSocket `serverStats` 推送与 `/api/info` 的 `online / inGame / playing`）不受影响。
 
 ## 14. 公网服务器：在线统计与内网地址（2026-10-14）

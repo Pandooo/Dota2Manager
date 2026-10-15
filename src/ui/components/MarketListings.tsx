@@ -8,7 +8,7 @@ import {
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from './common';
 import { TeamEmblem } from './TeamEmblem';
 import { ConfirmButton } from './ConfirmPopover';
-import { Banner, TableWrap, num, safe } from './MarketKit';
+import { BODY_FLUSH, Banner, Facts, PHONE_LINK, PhoneFold, PhoneList, TableWrap, num, safe, useCompactList } from './MarketKit';
 
 export default function MarketListings({ windowOpen }: { windowOpen: boolean }) {
   const g = useGame();
@@ -17,6 +17,7 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
   const me = g.settings.playerTeamId;
   const myTeam = g.teams[me];
   const S = CONFIG.squadOps;
+  const phone = useCompactList();
 
   const listed = safe(() => listedPlayers(g), [] as Player[]);
   const starters = new Set(Object.values(myTeam?.lineup ?? {}).filter(Boolean) as string[]);
@@ -49,27 +50,135 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
     };
   };
 
+  /** 一名挂牌选手的派生数据（表格与手机卡片共用） */
+  const listingInfo = (p: Player) => {
+    const L = activeListing(g, p);
+    if (!L) return null;
+    const prog = safe(() => listingProgress(L), { roundsLeft: L.roundsLeft, totalRounds: L.roundsLeft, bidRolls: 0 });
+    const left = prog.roundsLeft;
+    // 收到过报价：到期不会自动解约（挂牌结束、选手留队），倒计时不再标红 / 标金
+    const safeAtExpiry = !!L.hadBids;
+    const listedAt = safe(() => listingListedAtLabel(L), `TI${L.season} 挂牌`);
+    const value = safe(() => marketValue(g, p), 0);
+    const ratio = value > 0 ? L.askingPrice / value : null;
+    const outlook = safe(() => listingBidOutlook(g, p.id), null);
+    const offers = safe(() => listingOffers(g, p.id), []);
+    return { L, prog, left, safeAtExpiry, listedAt, value, ratio, outlook, offers };
+  };
+  const leftCls = (left: number, safeAtExpiry: boolean) =>
+    safeAtExpiry ? 'text-mute' : left <= 1 ? 'text-bad font-semibold' : left <= S.listingReminderRounds ? 'text-gold' : 'text-mute';
+  const acceptButton = (o: TransferOffer, p: Player, className?: string) => (
+    <ConfirmButton
+      size={phone ? 'sm' : 'xs'}
+      variant="gold"
+      className={className}
+      disabled={!windowOpen}
+      title={windowOpen ? '接受报价，选手转出' : '转会窗口已锁定（TI 阶段），TI 结束后开放'}
+      confirm={sellConfirm(o, p)}
+      onConfirm={() => respond(o.id, true)}
+    >
+      接受
+    </ConfirmButton>
+  );
+  const rejectButton = (o: TransferOffer, className?: string) => (
+    <Button size={phone ? 'sm' : 'xs'} variant="danger" className={className} title="拒绝该报价" onClick={() => respond(o.id, false)}>
+      拒绝
+    </Button>
+  );
+  const unlistButton = (p: Player, className?: string) => (
+    <Button size={phone ? 'sm' : 'xs'} className={className} title="从转会名单撤下，选手继续留队" onClick={() => void call('unlistPlayer', p.id)}>
+      撤销挂牌
+    </Button>
+  );
+
   return (
     <div className="space-y-4">
       <Banner tone="gold" title={`挂牌规则：挂牌期为${durationLabel}，整个挂牌期无人报价则自动解约`}>
+        {/* 手机：规则全文默认收起（有挂牌时列表不被挤到一屏半以下）；没有挂牌时默认展开 */}
+        <PhoneFold summary="查看挂牌规则全文" defaultOpen={listed.length === 0}>
         挂牌后选手进入转会名单，其他俱乐部每回合结束时可能报价：标价越低（相对身价）、选手等级越高、越符合对方需求，越容易收到报价。
         每个常规赛回合结束时计一次（赛季初与 TI 阶段转会锁定期间不计时），挂牌在下赛季的同一时间点到期；常规赛最后一回合结束后转会窗口锁定，那一回合不会再收到新报价，未处理的报价作废。
         前 {S.listingFreshRolls} 次报价机会之后，标价高于身价的挂牌挂得越久，俱乐部的报价意愿越低（标价不高于身价不受影响；撤牌后不久重新挂牌，次数继续累计）。
         若整个挂牌期都没有收到任何报价，到期自动解约成为自由选手——不支付解约补偿、不扣俱乐部荣誉；收到过报价（含普通求购报价）但未成交，则挂牌期满后挂牌结束、选手留队。
         新加盟的选手（签约、转会、交易、抽卡等任何途径）须随队满 {S.listingMinTeamMatches} 场比赛（系列赛，不要求本人上场）且入队满 {S.listingMinTransferRounds} 个转会回合才能挂牌，在此之前其他俱乐部也不会主动求购他。
-        {status.note && <span className="ml-1 font-semibold">当前：{status.note}。</span>}
+        </PhoneFold>
+        {status.note && <span className="font-semibold sm:ml-1">当前：{status.note}。</span>}
       </Banner>
 
       <Card
         title="挂牌中的选手"
         subtitle="在选手详情中设置标价挂牌，或在「阵容」页多选后批量挂牌（标价 = 身价）"
-        bodyClassName="p-0"
+        bodyClassName={BODY_FLUSH}
         actions={<Button size="xs" variant="ghost" onClick={() => setView('squad')}>前往阵容</Button>}
       >
         {listed.length === 0 ? (
           <EmptyState text="目前没有挂牌出售的选手。">
             <span className="text-xs text-faint">想清理阵容又不想支付解约补偿？挂牌出售是更划算的选择。</span>
           </EmptyState>
+        ) : phone ? (
+          // 手机：每名挂牌选手一张卡片；收到的报价逐条列出，「接受 / 拒绝」为大按钮；「撤销挂牌」在卡片底部
+          <PhoneList>
+            {listed.map((p) => {
+              const d = listingInfo(p);
+              if (!d) return null;
+              const { L, prog, left, safeAtExpiry, value, ratio, outlook, offers } = d;
+              return (
+                <li key={p.id} className="space-y-2 px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    <TierBadge tier={safe(() => playerTier(p), 'C' as const)} />
+                    <PlayerLink player={p} className={PHONE_LINK} />
+                    <PosBadge pos={p.position} alt={p.altPositions} />
+                    {starters.has(p.id) && <Badge className="bg-info/15 text-info">首发</Badge>}
+                    <span className="ml-auto text-xs text-mute">评分 <span className="tabular text-ink">{safe(() => overallRating(p), 0).toFixed(1)}</span></span>
+                  </div>
+                  <div className="space-y-0.5 text-xs text-mute">
+                    <Facts
+                      items={[
+                        ['身价', <Gold value={value} />],
+                        ['标价', <><Gold value={L.askingPrice} className="font-semibold" />{ratio !== null && <span className={cx('ml-1 text-[10px]', ratio <= 1 ? 'text-good' : 'text-bad')}>{Math.round(ratio * 100)}%</span>}</>],
+                      ]}
+                    />
+                    <Facts
+                      items={[
+                        ['剩余', <span className={cx('tabular', leftCls(left, safeAtExpiry))}>{left <= 0 ? '已到期' : `${left} / ${prog.totalRounds} 回合${paused ? '（暂停）' : ''}`}</span>],
+                        ['报价概率', <span className="tabular text-ink">{outlook && left > 0 && status.bids ? `${Math.round(outlook.chance * 100)}%` : '—'}{outlook && left > 0 && <span className="ml-1 text-[10px] text-faint">{outlook.interested} 家有意向</span>}{outlook && left > 0 && outlook.stale < 1 && outlook.interested > 0 && status.bids && <span className="ml-1 text-[10px] text-gold">挂牌较久</span>}</span>],
+                      ]}
+                    />
+                    {safeAtExpiry && left > 0 && <div className="text-[11px] text-good">已收到过报价：挂牌期满后挂牌结束、选手留队，不会解约</div>}
+                  </div>
+                  {offers.length === 0 ? (
+                    <div className="text-xs text-faint">暂无报价</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {offers.map((o) => {
+                        const buyer = g.teams[o.fromTeamId];
+                        return (
+                          <div key={o.id} className="rounded-md border border-line bg-panel-2/50 p-2">
+                            <div className="flex items-center gap-1.5 text-xs">
+                              {buyer ? (
+                                <span className="inline-flex min-w-0 items-center gap-1">
+                                  <TeamEmblem tag={buyer.tag} color={buyer.color} teamId={buyer.id} />
+                                  <TeamLink teamId={buyer.id} name={buyer.name} className="-my-1 truncate py-1 text-ink" />
+                                </span>
+                              ) : (
+                                <span className="text-faint">未知战队</span>
+                              )}
+                              <span className="ml-auto shrink-0">报价 <Gold value={o.fee} className="font-semibold" /></span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              {acceptButton(o, p, 'min-h-10 w-full')}
+                              {rejectButton(o, 'min-h-10 w-full')}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {unlistButton(p, 'min-h-10 w-full')}
+                </li>
+              );
+            })}
+          </PhoneList>
         ) : (
           <TableWrap>
             <table className="tbl">
@@ -88,17 +197,9 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
               </thead>
               <tbody>
                 {listed.map((p) => {
-                  const L = activeListing(g, p);
-                  if (!L) return null;
-                  const prog = safe(() => listingProgress(L), { roundsLeft: L.roundsLeft, totalRounds: L.roundsLeft, bidRolls: 0 });
-                  const left = prog.roundsLeft;
-                  // 收到过报价：到期不会自动解约（挂牌结束、选手留队），倒计时不再标红 / 标金
-                  const safeAtExpiry = !!L.hadBids;
-                  const listedAt = safe(() => listingListedAtLabel(L), `TI${L.season} 挂牌`);
-                  const value = safe(() => marketValue(g, p), 0);
-                  const ratio = value > 0 ? L.askingPrice / value : null;
-                  const outlook = safe(() => listingBidOutlook(g, p.id), null);
-                  const offers = safe(() => listingOffers(g, p.id), []);
+                  const d = listingInfo(p);
+                  if (!d) return null;
+                  const { L, prog, left, safeAtExpiry, listedAt, value, ratio, outlook, offers } = d;
                   return (
                     <tr key={p.id}>
                       <td>
@@ -118,10 +219,7 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
                         )}
                       </td>
                       <td
-                        className={cx(
-                          'num text-xs',
-                          safeAtExpiry ? 'text-mute' : left <= 1 ? 'text-bad font-semibold' : left <= S.listingReminderRounds ? 'text-gold' : 'text-mute',
-                        )}
+                        className={cx('num text-xs', leftCls(left, safeAtExpiry))}
                         title={
                           left <= 0
                             ? '挂牌期已满：待处理报价处理后挂牌结束、选手留队'
@@ -171,30 +269,15 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
                                     <span className="text-faint">未知战队</span>
                                   )}
                                   <Gold value={o.fee} className="font-semibold" />
-                                  <ConfirmButton
-                                    size="xs"
-                                    variant="gold"
-                                    disabled={!windowOpen}
-                                    title={windowOpen ? '接受报价，选手转出' : '转会窗口已锁定（TI 阶段），TI 结束后开放'}
-                                    confirm={sellConfirm(o, p)}
-                                    onConfirm={() => respond(o.id, true)}
-                                  >
-                                    接受
-                                  </ConfirmButton>
-                                  <Button size="xs" variant="danger" title="拒绝该报价" onClick={() => respond(o.id, false)}>
-                                    拒绝
-                                  </Button>
+                                  {acceptButton(o, p)}
+                                  {rejectButton(o)}
                                 </div>
                               );
                             })}
                           </div>
                         )}
                       </td>
-                      <td className="text-right">
-                        <Button size="xs" title="从转会名单撤下，选手继续留队" onClick={() => void call('unlistPlayer', p.id)}>
-                          撤销挂牌
-                        </Button>
-                      </td>
+                      <td className="text-right">{unlistButton(p)}</td>
                     </tr>
                   );
                 })}

@@ -1,10 +1,12 @@
 // ============================================================================
 // 比赛页共用的小工具与小组件（Match* 前缀，仅比赛页使用）
 // ============================================================================
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import type { DraftState, GameRecord, GameState, Series, Team } from '../../engine/types';
 import { CONFIG } from '../../engine';
 import { cx } from './common';
+import { showTouchTip } from './TouchTip';
+import { isCoarsePointer } from '../mobile';
 
 export type Side = 'A' | 'B';
 export type Faction = 'radiant' | 'dire';
@@ -137,7 +139,7 @@ export function teamOrStub(game: GameState, id: string | null | undefined): Team
 /** 小标签：我方 */
 export function MineBadge({ className }: { className?: string }) {
   return (
-    <span className={cx('inline-flex items-center rounded border border-gold/50 bg-gold/15 px-1.5 text-[10px] font-bold leading-4 text-gold', className)}>
+    <span className={cx('inline-flex shrink-0 items-center whitespace-nowrap rounded border border-gold/50 bg-gold/15 px-1.5 text-[10px] font-bold leading-4 text-gold', className)}>
       我方
     </span>
   );
@@ -148,7 +150,7 @@ export function FactionBadge({ faction, className }: { faction: Faction | null; 
   return (
     <span
       className={cx(
-        'inline-flex items-center rounded border px-1.5 text-[10px] font-bold leading-4',
+        'inline-flex shrink-0 items-center whitespace-nowrap rounded border px-1.5 text-[10px] font-bold leading-4',
         faction === 'radiant' ? 'border-radiant/50 bg-radiant/15 text-radiant' : 'border-dire/50 bg-dire/15 text-dire',
         className,
       )}
@@ -156,6 +158,22 @@ export function FactionBadge({ faction, className }: { faction: Faction | null; 
       {FACTION_LABEL[faction]}
     </span>
   );
+}
+
+/**
+ * 触屏点按显示说明（docs/UI.md「手机适配 · 触屏说明」）：桌面仍靠悬停 title；触屏没有悬停，点按时在元素旁显示同一段文字。
+ * 用于只靠 title 说明的小标签 / 英雄头像（错位、状态 ▲▼、招牌英雄、禁用英雄等）。返回值直接展开到元素上。
+ */
+export function tapTip(text: string | undefined): { title?: string; onClick?: (e: MouseEvent<HTMLElement>) => void } {
+  if (!text) return {};
+  return {
+    title: text,
+    onClick: (e) => {
+      if (!isCoarsePointer()) return;
+      e.stopPropagation();
+      showTouchTip(e.currentTarget, text);
+    },
+  };
 }
 
 /** 左右对比条（A 左 B 右） */

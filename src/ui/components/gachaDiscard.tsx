@@ -2,6 +2,9 @@
 import { CONFIG, formatGold, type GachaCardKind } from '../../engine';
 import type { ConfirmSpec } from './ConfirmPopover';
 
+/** 窗口事件：让新秀抽卡页把本回合的抽卡结果（「退回」按钮）滚到眼前（底栏「处理超编」在抽卡页上点按时用） */
+export const GACHA_FOCUS_EVENT = 'd2m:gacha-focus';
+
 export function gachaDiscardConfirm(opts: { handle: string; refund: number; kind?: GachaCardKind; protoHandle?: string }): ConfirmSpec {
   const ratio = Math.round((Number(CONFIG.gacha.discardRefundRatio) || 0) * 100);
   return {

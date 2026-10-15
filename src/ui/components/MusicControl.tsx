@@ -1,7 +1,8 @@
 // 背景音乐控制（第十波 #6）：顶栏的小按钮 + 点击展开的小面板（开关、音量、音源、本地文件）。
 // 播放器见 src/ui/audio/bgm.ts（默认为浏览器实时生成的原创氛围音乐；本地文件只存在本浏览器的 IndexedDB，不上传、不进仓库）。
 // 设置按浏览器记住，不进存档，与游戏状态无关（不经 call()）。非游戏界面（主菜单 / 大厅 / 新游戏 / 结算页）用 floating 版本固定在角落：
-// 主菜单右上角空着用 'top'；新游戏 / 大厅 / 房间的右上角有返回按钮或玩家名，用 'bottom'（右下角，面板向上展开）。
+// 主菜单右上角空着用 'top'；新游戏 / 大厅 / 房间的右上角有返回按钮或玩家名，用 'bottom'（右下角，面板向上展开）；
+// 'inline' = 浮动样式但不固定位置，由页面自己摆放（手机上的生涯总结放在横幅右上角、随页面滚走，不压住下方的排行表）。
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { bgm, type BgmSnapshot, type BgmStatus } from '../audio/bgm';
@@ -51,7 +52,7 @@ function Bars() {
 
 const PANEL_W = 300;
 
-export default function MusicControl({ floating = false }: { floating?: boolean | 'top' | 'bottom' }) {
+export default function MusicControl({ floating = false }: { floating?: boolean | 'top' | 'bottom' | 'inline' }) {
   const snap = useBgm();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -69,7 +70,7 @@ export default function MusicControl({ floating = false }: { floating?: boolean 
       aria-label="背景音乐设置"
       aria-expanded={open}
       className={cx(
-        'relative inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
+        'relative inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors pointer-coarse:min-h-10 pointer-coarse:min-w-10 pointer-coarse:justify-center',
         floating ? 'border-line bg-panel/90 shadow-lg shadow-black/40 backdrop-blur' : 'border-transparent',
         open ? 'border-gold/50 text-gold' : on ? 'text-ink hover:bg-panel-2' : 'text-faint hover:bg-panel-2 hover:text-mute',
       )}
@@ -84,7 +85,20 @@ export default function MusicControl({ floating = false }: { floating?: boolean 
 
   return (
     <>
-      {floating ? <div className={cx('fixed right-3 z-50', floating === 'bottom' ? 'bottom-3' : 'top-3')}>{button}</div> : button}
+      {floating && floating !== 'inline' ? (
+        <div
+          className="fixed z-40"
+          style={
+            floating === 'bottom'
+              ? { right: 'calc(0.75rem + env(safe-area-inset-right, 0px))', bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }
+              : { right: 'calc(0.75rem + env(safe-area-inset-right, 0px))', top: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }
+          }
+        >
+          {button}
+        </div>
+      ) : (
+        button
+      )}
       {open && <MusicPanel snap={snap} anchorRef={btnRef} onClose={() => setOpen(false)} />}
     </>
   );
@@ -119,7 +133,8 @@ function MusicPanel({ snap, anchorRef, onClose }: { snap: BgmSnapshot; anchorRef
 
   // 点击外部 / Esc 关闭（确认气泡在面板外渲染：点击气泡不算外部）
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
+    // pointerdown：iOS Safari 点按页面空白处不发 mousedown
+    const onDown = (e: PointerEvent) => {
       const t = e.target as Element | null;
       if (!t || boxRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
       if (t.closest?.('[role="dialog"]')) return;
@@ -128,10 +143,10 @@ function MusicPanel({ snap, anchorRef, onClose }: { snap: BgmSnapshot; anchorRef
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    window.addEventListener('mousedown', onDown, true);
+    window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('mousedown', onDown, true);
+      window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
     };
   }, [anchorRef, onClose]);

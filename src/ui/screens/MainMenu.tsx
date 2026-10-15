@@ -127,7 +127,8 @@ function MenuButton({
       title={title}
       style={{ animationDelay: `${delay}ms` }}
       className={cx(
-        'shell-rise group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-lg border px-4 py-3 text-left transition-all',
+        // 手机：内边距与间距收紧（两列小按钮里 4 个字的标签不再折成两行）
+        'shell-rise group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-lg border px-4 py-3 text-left transition-all max-sm:gap-2.5 max-sm:px-3',
         'disabled:cursor-not-allowed disabled:opacity-40',
         primary
           ? 'border-dota-2/60 bg-gradient-to-r from-dota/90 to-dota-2/70 text-white shadow-lg shadow-dota/30 enabled:hover:from-dota enabled:hover:to-dota-2'
@@ -142,10 +143,11 @@ function MenuButton({
       />
       <span className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-md text-base', primary ? 'bg-black/25' : 'bg-panel-3 text-gold')}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-semibold tracking-wide">{label}</span>
+        <span className="block truncate text-[15px] font-semibold tracking-wide">{label}</span>
         {desc && <span className={cx('block truncate text-xs', primary ? 'text-white/75' : 'text-mute')}>{desc}</span>}
       </span>
-      <span className={cx('text-lg opacity-0 transition-all group-enabled:group-hover:translate-x-0.5 group-enabled:group-hover:opacity-100', primary ? 'text-white' : 'text-gold')}>›</span>
+      {/* 悬停才出现的箭头：没有悬停的触屏上不占位 */}
+      <span className={cx('text-lg opacity-0 transition-all group-enabled:group-hover:translate-x-0.5 group-enabled:group-hover:opacity-100 pointer-coarse:hidden', primary ? 'text-white' : 'text-gold')}>›</span>
     </button>
   );
 }
@@ -281,27 +283,32 @@ export default function MainMenu() {
       </div>
 
       {/* ---------- 内容 ---------- */}
-      <div className="relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-6 py-10">
-        {/* 窄屏单列也用 minmax(0,1fr)：截断显示的长说明不会按自身宽度把列撑出屏幕 */}
-        <div className="grid w-full max-w-5xl grid-cols-[minmax(0,1fr)] items-center gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      {/* 内容比视口高时（手机竖屏有进度卡片、横屏）：不用 items-center 居中（会把顶部推到滚动起点之上、再也滚不到），
+          改为纵向 flex + 内容 my-auto——放得下时居中，放不下时从顶部开始滚动 */}
+      {/* 横屏手机（short）：右侧让出右上角浮动的背景音乐按钮（入口列在右侧、从顶部开始） */}
+      <div className="relative z-10 flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-6 sm:px-6 sm:py-10 short:py-4 sm:short:pr-24">
+        {/* 窄屏单列也用 minmax(0,1fr)：截断显示的长说明不会按自身宽度把列撑出屏幕。
+            横屏手机（short，宽 ≥ sm）：标题与入口左右并排，标题收紧（不显示徽记与标签） */}
+        <div className="m-auto grid w-full max-w-5xl grid-cols-[minmax(0,1fr)] items-center gap-7 sm:gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] sm:short:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:short:gap-6">
           {/* 标题 */}
-          <div className="shell-rise text-center lg:text-left">
-            <div className="mb-5 flex justify-center lg:justify-start">
+          <div className="shell-rise text-center lg:text-left sm:short:text-left">
+            {/* 手机竖屏：徽记缩小、特色标签不显示，让「继续 / 新建」尽量出现在第一屏 */}
+            <div className="mb-4 flex justify-center sm:mb-5 lg:justify-start short:hidden max-sm:[&>svg]:size-16">
               <MinimapEmblem />
             </div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.55em] text-gold/80">Esports Manager Simulation</div>
+            <div className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.55em] text-gold/80 max-sm:text-[10px] max-sm:tracking-[0.3em]">Esports Manager Simulation</div>
             <h1 className="mt-2 select-none leading-none">
-              <span className="shell-title-grad block text-7xl font-black italic tracking-[0.12em] md:text-8xl">刀塔</span>
+              <span className="shell-title-grad block text-6xl font-black italic tracking-[0.12em] sm:text-7xl md:text-8xl short:text-6xl">刀塔</span>
               <span className="mt-1 inline-flex items-center gap-3">
-                <span className="text-5xl font-black tracking-[0.25em] text-ink md:text-6xl">经理</span>
+                <span className="text-4xl font-black tracking-[0.25em] text-ink sm:text-5xl md:text-6xl short:text-4xl">经理</span>
                 <span className="hidden h-[3px] w-24 rounded bg-gradient-to-r from-gold to-transparent md:block" />
               </span>
             </h1>
-            <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-mute lg:mx-0">
+            <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-mute sm:mt-5 lg:mx-0 short:mt-3 sm:short:mx-0">
               接管真实豪门俱乐部，亦或白手起家打造护国之翼。训练、转会、新秀、BP 博弈、文字直播——
               <span className="text-ink">让你的战队捧起不朽盾！</span>
             </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2 text-[11px] lg:justify-start">
+            <div className="mt-5 flex flex-wrap justify-center gap-2 text-[11px] max-sm:hidden lg:justify-start short:hidden">
               {['真实历届阵容', '版本按回合更新', '每回合随机事件', '无厘头趣事', '队长模式 BP'].map((t) => (
                 <span key={t} className="rounded-full border border-line bg-panel/70 px-2.5 py-1 text-mute backdrop-blur">
                   {t}
@@ -390,10 +397,11 @@ export default function MainMenu() {
         </div>
       </div>
 
-      <footer className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-t border-line/60 bg-bg/60 px-6 py-2.5 text-[11px] text-faint backdrop-blur">
-        {/* 版本号即「更新说明」入口（与游戏内顶栏的版本芯片打开同一个面板；有未读新版本时带红点） */}
+      {/* 手机：内边距收窄、行距收紧，并让出 Home 横条（pb 取安全区与原内边距的较大者） */}
+      <footer className="relative z-10 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 border-t border-line/60 bg-bg/60 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] text-[11px] text-faint backdrop-blur max-sm:leading-snug sm:gap-2 sm:px-6 sm:py-2.5">
+        {/* 版本号即「更新说明」入口（与游戏内顶栏的版本芯片打开同一个面板；有未读新版本时带红点）；触屏上加大点按区域（负外边距不撑高页脚） */}
         <span>
-          <ChangelogButton variant="footer" /> · 粉丝自制的 Dota 2 电竞经理模拟游戏，与 Valve Corporation 无关
+          <ChangelogButton variant="footer" className="pointer-coarse:-my-2.5 pointer-coarse:py-2.5" /> · 粉丝自制的 Dota 2 电竞经理模拟游戏，与 Valve Corporation 无关
         </span>
         <span>历届阵容与赛事基于公开资料整理，部分未来赛季为推演数据</span>
       </footer>

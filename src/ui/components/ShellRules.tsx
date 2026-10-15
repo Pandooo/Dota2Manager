@@ -185,7 +185,7 @@ export default function ShellRules() {
           <p>
             转会窗口在赛季初与常规赛开放，<B>TI 预选与正赛期间锁定</B>。首发 5 人；常规阵容上限 {CONFIG.team.maxRoster} 人，
             超出后仍可签约、求购与抽卡，也不影响推进，但<B>每名签约选手的工资照付</B>，替补的归属感下降得更快（每多 1 人更快）。
-            签约 / 求购的绝对上限为 {CONFIG.team.hardMaxRoster} 人；新秀抽卡（单抽 / 十连总是抽满）可以超出，但<B>超编时须在本回合内放弃新秀或解约，退回 {CONFIG.team.hardMaxRoster} 人后才能进入下一回合</B>。
+            签约 / 求购的绝对上限为 {CONFIG.team.hardMaxRoster} 人；新秀抽卡（单抽 / 十连总是抽满）可以超出，但<B>超编时须在本回合内放弃新秀或解约、降到 {CONFIG.team.hardMaxRoster} 人以内才能进入下一回合</B>。
           </p>
           <p>
             <B>挂牌出售</B>：新加盟的选手（签约、转会、交易、抽卡等任何途径）须<B>随队满 {CONFIG.squadOps.listingMinTeamMatches} 场比赛</B>（系列赛，不要求本人上场）<B>且入队满 {CONFIG.squadOps.listingMinTransferRounds} 个转会回合</B>（每个常规赛回合结束时计一次，赛季初与 TI 锁定期间不计）才能挂牌，

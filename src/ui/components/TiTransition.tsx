@@ -294,8 +294,9 @@ function TiQualifierBanner({ cue }: { cue: TiIntroCue }) {
     <div
       role="status"
       aria-live="polite"
-      className={cx('ti-banner fixed inset-x-0 top-14 z-[45] cursor-pointer', leaving && 'ti-banner-leave')}
-      style={{ ...themeVars(theme), '--ti-banner-ms': `${BANNER_MS}ms` } as CSSProperties}
+      className={cx('ti-banner fixed inset-x-0 z-[45] cursor-pointer', leaving && 'ti-banner-leave')}
+      // 紧贴顶栏下沿（--chrome-top = 顶栏实际高度：多人窄屏两行、刘海屏安全区都算在内，不压住顶栏第二行）
+      style={{ ...themeVars(theme), top: 'var(--chrome-top, 56px)', '--ti-banner-ms': `${BANNER_MS}ms` } as CSSProperties}
       onClick={close}
       title="点击收起"
     >
@@ -677,18 +678,21 @@ function TiAegisPopover({
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   useEffect(() => {
     const r = anchor.current?.getBoundingClientRect();
-    if (r) setPos({ left: r.left + r.width / 2, top: r.bottom + 8 });
-    const onDown = (e: MouseEvent) => {
+    // 气泡宽 w-72（288px）以按钮为中心；窄屏时夹在视口内（左右各留 8px）
+    const half = Math.min(144, window.innerWidth / 2 - 8);
+    if (r) setPos({ left: Math.min(Math.max(8 + half, r.left + r.width / 2), window.innerWidth - 8 - half), top: r.bottom + 8 });
+    // pointerdown：iOS Safari 点按页面空白处不发 mousedown
+    const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (boxRef.current?.contains(t) || anchor.current?.contains(t)) return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('mousedown', onDown);
+    window.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onClose);
     return () => {
-      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onClose);
     };
@@ -712,7 +716,7 @@ function TiAegisPopover({
       ref={boxRef}
       role="dialog"
       aria-label={label}
-      className="fade-up fixed z-[60] w-72 -translate-x-1/2 overflow-hidden rounded-xl border text-sm shadow-2xl shadow-black/50"
+      className="fade-up fixed z-[60] w-72 max-w-[calc(100vw-16px)] -translate-x-1/2 overflow-hidden rounded-xl border text-sm shadow-2xl shadow-black/50"
       style={{
         left: pos.left,
         top: pos.top,

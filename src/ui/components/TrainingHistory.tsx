@@ -2,7 +2,7 @@
 import { Fragment, useState } from 'react';
 import { CONFIG } from '../../engine';
 import type { GameState, TrainingRecord, TrainingRecordKind } from '../../engine';
-import { Button, Card, Delta, EmptyState, Gold, TeamTag, cx } from './common';
+import { Button, Card, Delta, EmptyState, Gold, TableScroll, TeamTag, cx } from './common';
 import { FOCUS_INFO, GainsTable, RecordKindChip, costBreakdown, recordWhen, sumGains } from './TrainingShared';
 
 const PAGE_SIZE = 25;
@@ -49,7 +49,7 @@ export default function TrainingHistory({ game }: { game: GameState }) {
               setSeason(e.target.value === 'all' ? 'all' : Number(e.target.value));
               setPage(0);
             }}
-            className="cursor-pointer rounded border border-line bg-panel-2 px-1.5 py-0.5 text-xs text-ink [color-scheme:dark]"
+            className="cursor-pointer rounded border border-line bg-panel-2 px-1.5 py-0.5 text-xs text-ink [color-scheme:dark] pointer-coarse:min-h-9"
           >
             <option value="all">全部赛季</option>
             {seasons.map((s) => (
@@ -67,7 +67,7 @@ export default function TrainingHistory({ game }: { game: GameState }) {
                   setPage(0);
                 }}
                 className={cx(
-                  'cursor-pointer px-2 py-0.5 transition-colors',
+                  'cursor-pointer px-2 py-0.5 transition-colors pointer-coarse:min-h-9 pointer-coarse:px-2.5',
                   kind === k ? 'bg-dota/20 text-ink' : 'bg-panel-2/50 text-mute hover:text-ink',
                 )}
               >
@@ -95,7 +95,7 @@ export default function TrainingHistory({ game }: { game: GameState }) {
               全队 战力 <Delta value={totals.power} digits={1} /> · 天梯 <Delta value={totals.mmr} /> · 灵性 <Delta value={totals.insight} digits={1} />
             </span>
           </div>
-          <div className="overflow-x-auto">
+          <TableScroll>
             <table className="tbl">
               <thead>
                 <tr>
@@ -168,7 +168,7 @@ export default function TrainingHistory({ game }: { game: GameState }) {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           {pages > 1 && (
             <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-2 text-xs text-mute">
               <Button size="xs" variant="ghost" disabled={pageIdx <= 0} onClick={() => setPage(pageIdx - 1)}>

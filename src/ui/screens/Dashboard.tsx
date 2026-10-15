@@ -71,10 +71,11 @@ function TodoRow({ icon, tone, children, count, onClick, title }: { icon: string
     <button
       onClick={onClick}
       title={title}
-      className="group flex w-full cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2 py-1.5 text-left text-sm transition-colors hover:border-line hover:bg-panel-2/70"
+      className="group flex w-full cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2 py-1.5 text-left text-sm transition-colors hover:border-line hover:bg-panel-2/70 pointer-coarse:min-h-11"
     >
       <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded text-xs font-bold', tone)}>{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {/* 手机上换行显示全文（截断后的说明只在悬停提示里，触屏看不到） */}
+      <span className="min-w-0 flex-1 sm:truncate">{children}</span>
       {count !== undefined && <span className="tabular text-xs font-semibold">{count}</span>}
       <span className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-gold">›</span>
     </button>
@@ -346,7 +347,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        {/* 单列也写 minmax(0,1fr)：隐式 auto 列会被「接下来」里截断的赛事名撑出屏幕 */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="min-w-0">
             <div className={cx('text-lg font-bold', kindStyle.text)}>{guideTitle}</div>
             <p className="mt-1 text-sm leading-relaxed text-mute">{guideText}</p>
@@ -357,7 +359,7 @@ export default function Dashboard() {
           <div className="rounded-lg border border-line bg-panel-2/50 p-3 text-xs">
             <MiniTitle
               right={
-                <button className="cursor-pointer text-[11px] text-gold hover:underline" onClick={() => setView('schedule')}>
+                <button className="cursor-pointer text-[11px] text-gold hover:underline pointer-coarse:-my-2 pointer-coarse:px-1 pointer-coarse:py-2" onClick={() => setView('schedule')}>
                   赛程 ›
                 </button>
               }
@@ -425,7 +427,8 @@ export default function Dashboard() {
         const total = urgent + info;
         return (
           <section className={cx('mb-4 overflow-hidden rounded-xl border bg-panel/90', urgent ? 'border-bad/40' : 'border-line')}>
-            <button onClick={() => setTodoOpen((o) => !o)} className="flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left hover:bg-panel-2/50">
+            {/* 窄屏：破产倒计时 / 超编提示放不下时换到下一行（不撑出屏幕） */}
+            <button onClick={() => setTodoOpen((o) => !o)} className="flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-left hover:bg-panel-2/50 pointer-coarse:min-h-11">
               <span className="relative text-sm font-semibold">
                 待处理
                 {total > 0 && <span className={cx('absolute -right-2.5 -top-1 h-2.5 w-2.5 rounded-full', urgent ? 'animate-pulse bg-bad' : 'bg-gold')} />}
@@ -443,7 +446,7 @@ export default function Dashboard() {
               )}
               {overCapNote && !todoOpen && (
                 <span className="rounded border border-bad/60 bg-bad/15 px-2 py-0.5 text-xs font-semibold text-bad" title={overCapNote}>
-                  {overCapNote.split('：')[0]}：退回 {CONFIG.team.hardMaxRoster} 人后才能进入下一回合
+                  {overCapNote.split('：')[0]}：降到 {CONFIG.team.hardMaxRoster} 人以内后才能进入下一回合
                 </span>
               )}
               <span className="ml-auto text-xs text-faint">{todoOpen ? '收起 ▴' : '展开 ▾'}</span>
@@ -509,6 +512,8 @@ export default function Dashboard() {
                 {lineupErrors.length > 0 && (
                   <TodoRow icon="☰" tone="bg-bad/20 text-bad" count={lineupErrors.length} onClick={() => setView('squad')} title={lineupErrors.join('\n')}>
                     首发阵容有问题
+                    {/* 触屏看不到悬停说明：手机上直接写出问题 */}
+                    <span className="ml-1 text-xs text-mute sm:hidden">{lineupErrors.join('；')}</span>
                   </TodoRow>
                 )}
                 {fundsShort && (
@@ -540,6 +545,7 @@ export default function Dashboard() {
                 {expiring.length > 0 && (
                   <TodoRow icon="✎" tone="bg-tier-ss/20 text-tier-ss" count={expiring.length} onClick={() => setView('squad')} title={expiring.map((p) => p.handle).join('、')}>
                     合同将于本届 TI 后到期
+                    <span className="ml-1 text-xs text-mute sm:hidden">{expiring.map((p) => p.handle).join('、')}</span>
                   </TodoRow>
                 )}
                 {lowLoyal.length > 0 && (
@@ -567,7 +573,7 @@ export default function Dashboard() {
       <EntryPlanCard className="mb-4" />
 
       {/* ======================= 回合要闻 + 世界动态 | 俱乐部概况 + 积分榜 ======================= */}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
           {/* 回合要闻（推进回合后出现，可关闭） */}
           <RoundDigest />

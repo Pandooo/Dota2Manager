@@ -11,8 +11,8 @@ import {
 import type {
   Coach, GameState, Player, Team, Tournament, TrainingFocus, TrainingGain, TrainingRecord, TrainingRecordKind, RoundInfo,
 } from '../../engine';
-import { Delta, EmptyState, PlayerLink, PosBadge, cx } from './common';
-import { Chip, ROUND_KIND_TEXT, roundKindOf, safe, type ChipTone, type RoundKind } from './SquadShared';
+import { Delta, EmptyState, PlayerLink, PosBadge, TableScroll, cx } from './common';
+import { Chip, ROUND_KIND_TEXT, roundKindOf, safe, useStickyFirstCol, type ChipTone, type RoundKind } from './SquadShared';
 
 // ---------------------------------------------------------------------------
 // 文案
@@ -307,6 +307,7 @@ export function GainsTable({
   showCurrent = true,
   showRole = true,
   empty,
+  bg,
 }: {
   game: GameState;
   gains: TrainingGain[];
@@ -315,7 +316,10 @@ export function GainsTable({
   /** 显示「首发/替补」列（按当前阵容；历史记录不显示，避免误导） */
   showRole?: boolean;
   empty?: ReactNode;
+  /** 所在容器的底色（TableScroll 的固定列与边缘渐隐用），默认 panel */
+  bg?: string;
 }) {
+  const sticky = useStickyFirstCol();
   if (gains.length === 0) return <EmptyState text={empty ?? '本次没有队员获得属性变化。'} />;
   const team = game.teams[game.settings.playerTeamId];
   const starters = new Set(POSITIONS.map((p) => team?.lineup?.[p]).filter(Boolean) as string[]);
@@ -323,7 +327,8 @@ export function GainsTable({
   const keys: GainKey[] = compact ? ['power', 'mmr', 'insight'] : GAIN_KEYS;
   const role = !compact && showRole;
   return (
-    <div className="overflow-x-auto">
+    // 手机：横向滑动，选手列固定在左侧
+    <TableScroll stickyFirst={sticky} bg={bg}>
       <table className="tbl">
         <thead>
           <tr>
@@ -377,7 +382,7 @@ export function GainsTable({
           </tr>
         </tfoot>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 

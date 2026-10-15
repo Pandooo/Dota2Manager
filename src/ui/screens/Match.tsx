@@ -2,8 +2,10 @@
 // 比赛页：赛前准备 → BP → 大老师胜率 → 文字直播 → 赛果（→ 系列赛结算）
 // 状态读取 useGame()；一切修改经 call('engineFn', ...)（单机本地执行 / 多人发给服务器）；直播播放进度仅为本地 UI 状态。
 // 「下一步」统一放在底部吸附操作栏（MatchDock），页面内不再重复放置主按钮。
+// 手机（docs/UI.md「手机适配」）：横幅收紧（去掉队标方块、步骤只显示当前步骤名）；触屏 BP 为「点按选中 → 底栏确认」，
+// 选中的英雄只是本地界面状态（draftSel），确认时才经 call('playerDraftAction') 执行。
 // ============================================================================
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useCall, useCallSilent, useGame, useGameStore } from '../../store/gameStore';
 import type { GameRecord, GameState, Series, Team, Tournament } from '../../engine/types';
 import type { DraftSuggestion } from '../../engine';
@@ -12,9 +14,10 @@ import {
   isTeamEliminated, playerNextSeries, validateLineup,
 } from '../../engine';
 import { Badge, Button, Card, EmptyState, Hint, PageHeader, TeamLink, TeamTag, cx } from '../components/common';
+import { useCoarsePointer } from '../mobile';
 import MatchDraft from '../components/MatchDraft';
 import MatchDock from '../components/MatchDock';
-import { heroCn } from '../components/MatchHero';
+import { heroBrief, heroCn } from '../components/MatchHero';
 import MatchLive, { useLivePlayback, type Playback } from '../components/MatchLive';
 import MatchPre from '../components/MatchPre';
 import MatchSeriesSummary from '../components/MatchSeriesSummary';
@@ -35,6 +38,9 @@ export default function Match() {
   const callSilent = useCallSilent();
   const setView = useGameStore((s) => s.setView);
   const [finished, setFinished] = useState<FinishedSeries | null>(null);
+  // 触屏 BP：先点按选中英雄（显示说明），再在底栏确认；BP 前进一步后选中自动失效（按 draftKey 区分）
+  const coarse = useCoarsePointer();
+  const [draftSel, setDraftSel] = useState<{ key: string; heroId: string } | null>(null);
 
   const myId = game.settings.playerTeamId;
   const am = game.activeMatch;
@@ -48,6 +54,16 @@ export default function Match() {
   // ---- 以下 hooks 必须无条件调用（hooks 规则） ----
   const isLive = !!am && !!rec && (am.phase === 'live' || am.phase === 'result');
   const playback = useLivePlayback(isLive ? rec : null, am?.phase === 'result');
+
+  // 阶段切换（赛前 → BP → 直播 → 下一局 / 系列赛结算）时主区回到顶部：手机上页面很长，
+  // 否则会停在上一阶段的滚动位置（如 BP 英雄池中部），看不到新阶段的对阵横幅与记分板
+  const phaseKey = am ? `${am.seriesId}|${am.gameIndex}|${am.phase}` : finished ? `done|${finished.seriesId}` : 'none';
+  const lastPhase = useRef(phaseKey);
+  useEffect(() => {
+    if (lastPhase.current === phaseKey) return;
+    lastPhase.current = phaseKey;
+    document.querySelector('main')?.scrollTo?.({ top: 0 });
+  }, [phaseKey]);
 
   // BP 推荐：按 BP 进度缓存（引擎推荐为确定性结果，且不修改游戏状态）
   const draft = am?.phase === 'draft' ? am.draft : null;
@@ -285,6 +301,12 @@ export default function Match() {
       const total = d.sequence?.length || 20;
       const verb = step?.type === 'ban' ? '禁用' : '选择';
       const top = myTurn ? suggestions[0] : undefined;
+      const selHero =
+        coarse && myTurn && draftSel && draftSel.key === draftKey && d.available.includes(draftSel.heroId) ? draftSel.heroId : null;
+      const pick = (heroId: string) => {
+        setDraftSel(null);
+        void callSilent('playerDraftAction', heroId);
+      };
       body = (
         <MatchDraft
           game={game}
@@ -294,7 +316,9 @@ export default function Match() {
           radiant={draftRadiant}
           manual={am.manualDraft}
           suggestions={myTurn ? suggestions : []}
-          onAction={(heroId) => void callSilent('playerDraftAction', heroId)}
+          onAction={pick}
+          selected={selHero}
+          onSelect={coarse ? (heroId) => setDraftSel(heroId ? { key: draftKey, heroId } : null) : undefined}
         />
       );
       dock = done ? (
@@ -303,6 +327,22 @@ export default function Match() {
           sub={scoreText(score)}
           primary={{ key: 'play', label: '开始比赛 ▶', onClick: startGame, title: '锁定阵容，查看大老师胜率并进入文字直播' }}
           hint="双方阵容已锁定"
+        />
+      ) : myTurn && selHero ? (
+        // 触屏已选中英雄：底栏写明英雄信息（属性 / 适合位置 / 版本强度），主按钮确认
+        <MatchDock
+          status={`第 ${d.actions.length + 1}/${total} 步 · 我方${verb} · ${heroCn(selHero)}`}
+          sub={heroBrief(selHero, game.heroMeta?.[selHero])}
+          secondary={{ key: 'unselect', label: '取消', variant: 'ghost', onClick: () => setDraftSel(null), title: '取消选中，重新挑选' }}
+          primary={{
+            key: `confirm-${selHero}`,
+            label: `${verb} ${heroCn(selHero)}`,
+            variant: step?.type === 'ban' ? 'primary' : 'gold',
+            onClick: () => pick(selHero),
+            title: `确认${verb}（不可撤销）`,
+          }}
+          hint="确认后不可撤销"
+          hintTone="gold"
         />
       ) : myTurn ? (
         <MatchDock
@@ -314,12 +354,12 @@ export default function Match() {
                   key: 'suggest',
                   label: `采纳首推 · ${verb} ${heroCn(top.heroId)}`,
                   variant: step?.type === 'ban' ? 'primary' : 'gold',
-                  onClick: () => void callSilent('playerDraftAction', top.heroId),
+                  onClick: () => pick(top.heroId),
                   title: top.reason || `${verb}推荐英雄`,
                 }
               : { key: 'suggest', label: `请在上方英雄池中${verb}`, disabled: true, onClick: () => {}, title: '暂无推荐' }
           }
-          hint="也可在上方推荐或英雄池中自选"
+          hint={coarse ? '也可点按英雄选中后确认' : '也可在上方推荐或英雄池中自选'}
         />
       ) : (
         <MatchDock
@@ -364,7 +404,7 @@ export default function Match() {
         sub={`${playback.n}/${playback.total} · ${scoreText(score)}`}
         primary={{ key: 'skip', label: '跳过直播 · 查看赛果 ⏭', variant: 'primary', onClick: playback.skip, title: '快捷键：空格' }}
         extra={{ key: 'pause', label: playback.paused ? '▶ 继续播放' : '❚❚ 暂停', onClick: playback.togglePause }}
-        hint="空格键也可跳过"
+        hint={coarse ? undefined : '空格键也可跳过'}
       />
     );
   } else {
@@ -387,14 +427,16 @@ export default function Match() {
 
   return (
     <MatchPage dock={dock}>
+      {/* 横屏手机（short，内容区只有约 290px 高）：标题行收紧、副标题隐藏（横幅已写 Bo 与局数），让 BP 看板与直播尽量留在第一屏 */}
       <PageHeader
+        className="short:mb-2"
         title={
           <span className="flex items-center gap-2">
             {tour.name}
             <Badge className="bg-gold/15 text-gold">{TOURNAMENT_TIER_LABEL[tour.tier] ?? tour.tier}</Badge>
           </span>
         }
-        subtitle={[stage?.name, series.label, `Bo${series.bestOf}`, `第 ${gameNo} 局`].filter(Boolean).join(' · ')}
+        subtitle={<span className="short:hidden">{[stage?.name, series.label, `Bo${series.bestOf}`, `第 ${gameNo} 局`].filter(Boolean).join(' · ')}</span>}
         actions={
           <Button variant="ghost" size="sm" onClick={goDashboard} title="比赛进度会保留，可在总览的赛事面板中「继续比赛」">
             ← 返回总览
@@ -462,21 +504,23 @@ function MatchBanner({
       className="overflow-hidden rounded-xl border border-line bg-panel/90 shadow-lg shadow-black/20"
       style={{ backgroundImage: `linear-gradient(90deg, ${teamA.color}2e, transparent 32%, transparent 68%, ${teamB.color}2e)` }}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-6 py-4">
+      {/* 手机：收紧内边距与比分字号，隐藏队标方块与赛区文字（TeamTag 已带队徽），队名截断 */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4 short:py-2">
         <BannerTeam team={teamA} mine={mySide === 'A'} faction={factionA} wins={score.a} pips={pips} />
         <div className="text-center">
-          <div className="text-4xl font-black tabular tracking-wider">
+          <div className="text-3xl font-black tabular tracking-wider sm:text-4xl short:text-2xl!">
             <span className={score.a > score.b ? 'text-ink' : 'text-mute'}>{score.a}</span>
-            <span className="mx-2 text-faint">:</span>
+            <span className="mx-1 text-faint sm:mx-2">:</span>
             <span className={score.b > score.a ? 'text-ink' : 'text-mute'}>{score.b}</span>
           </div>
-          <div className="mt-0.5 text-[11px] text-faint">
+          <div className="mt-0.5 whitespace-nowrap text-[11px] text-faint">
             Bo{bestOf} · 第 {gameNo} 局
           </div>
         </div>
         <BannerTeam team={teamB} mine={mySide === 'B'} faction={factionB} wins={score.b} pips={pips} right />
       </div>
-      <ol className="flex flex-wrap items-center gap-y-1 border-t border-line bg-panel-2/30 px-5 py-2 text-xs">
+      {/* 手机：只显示当前步骤的名称（其余为序号圆点），连线缩短，保持一行；横屏矮视口隐藏（底栏已写明阶段） */}
+      <ol className="flex flex-wrap items-center gap-y-1 border-t border-line bg-panel-2/30 px-3 py-2 text-xs sm:px-5 short:hidden">
         {STEPS.map((s, i) => {
           const doneStep = i < stepIndex;
           const cur = i === stepIndex;
@@ -491,14 +535,14 @@ function MatchBanner({
                 >
                   {doneStep ? '✓' : i + 1}
                 </span>
-                {s}
+                <span className={cx(!cur && 'max-sm:hidden')}>{s}</span>
                 {cur && i === 3 && !playback.done && (
                   <span className="tabular text-faint">
                     （{playback.n}/{playback.total}）
                   </span>
                 )}
               </span>
-              {i < STEPS.length - 1 && <span className={cx('mx-3 h-px w-8', doneStep ? 'bg-good/50' : 'bg-line')} />}
+              {i < STEPS.length - 1 && <span className={cx('mx-1.5 h-px w-3 sm:mx-2 sm:w-5 lg:mx-3 lg:w-8', doneStep ? 'bg-good/50' : 'bg-line')} />}
             </li>
           );
         })}
@@ -525,7 +569,7 @@ function BannerTeam({
   return (
     <div className={cx('flex min-w-0 items-center gap-3', right ? 'flex-row' : 'flex-row-reverse text-right')}>
       <div
-        className="grid h-14 w-14 shrink-0 place-items-center rounded-xl text-sm font-black tracking-wide text-white shadow-lg ring-1 ring-black/40"
+        className="hidden h-14 w-14 shrink-0 place-items-center rounded-xl text-sm font-black tracking-wide text-white shadow-lg ring-1 ring-black/40 sm:grid short:hidden!"
         style={{ background: `linear-gradient(135deg, ${team.color}, ${team.color}88)`, textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
       >
         {team.tag.slice(0, 4)}
@@ -537,10 +581,10 @@ function BannerTeam({
           <span className="text-xs" title={REGION_LABEL[team.region] ?? team.region}>
             <TeamTag color={team.color} tag={team.tag} />
           </span>
-          <span className="text-[11px] text-faint">{REGION_LABEL[team.region] ?? team.region}</span>
+          <span className="text-[11px] text-faint max-sm:hidden">{REGION_LABEL[team.region] ?? team.region}</span>
         </div>
-        <div className="truncate text-lg font-bold">
-          {team.id === 'tbd' ? team.name : <TeamLink teamId={team.id} name={team.name} />}
+        <div className="truncate text-base font-bold sm:text-lg">
+          {team.id === 'tbd' ? team.name : <TeamLink teamId={team.id} name={team.name} className="inline-block max-w-full truncate align-bottom" />}
         </div>
         <div className={cx('mt-1 flex gap-1', !right && 'justify-end')}>
           {Array.from({ length: pips }).map((_, i) => (

@@ -1,11 +1,13 @@
 // ============================================================================
 // 比赛页 · 系列赛结算（系列赛结束、activeMatch 清空后展示）
+// 手机（< sm）：头部收紧、按钮撑满一行；各局回顾由 7 列表格改为每局一张小卡片（胜负 · 击杀 · 时长 · 胜率 / 阵容 · MVP）。
 // ============================================================================
 import type { GameRecord, GameState } from '../../engine/types';
 import { TOURNAMENT_TIER_LABEL, isTeamEliminated, playerNextSeries } from '../../engine';
 import { Badge, Button, Card, EmptyState, TeamTag, cx } from './common';
 import { HeroAvatar, heroCn } from './MatchHero';
 import { MineBadge, fmtDuration, gameWinnerId, pct, safe, seriesScore, teamOrStub } from './MatchShared';
+import { useIsPhone } from '../mobile';
 
 export default function MatchSeriesSummary({
   game,
@@ -27,6 +29,7 @@ export default function MatchSeriesSummary({
   onDetails?: () => void;
   onNext: () => void;
 }) {
+  const phone = useIsPhone();
   const myId = game.settings.playerTeamId;
   const t = game.tournaments[tournamentId];
   const s = t?.series?.[seriesId];
@@ -61,7 +64,7 @@ export default function MatchSeriesSummary({
     <div className="space-y-4">
       <section
         className={cx(
-          'fade-up overflow-hidden rounded-xl border p-6 shadow-xl shadow-black/30',
+          'fade-up overflow-hidden rounded-xl border p-4 shadow-xl shadow-black/30 sm:p-6',
           outcome === 'win'
             ? 'border-gold/60 bg-gradient-to-br from-gold/20 via-panel to-panel'
             : outcome === 'lose'
@@ -69,29 +72,30 @@ export default function MatchSeriesSummary({
               : 'border-info/50 bg-gradient-to-br from-info/15 via-panel to-panel',
         )}
       >
-        <div className="text-[11px] tracking-[0.3em] text-faint">
+        {/* 手机：字距收窄（宽字距下长赛事名会把「第 1 轮」拆到两行） */}
+        <div className="text-[11px] tracking-[0.3em] text-faint max-sm:tracking-[0.08em]">
           {t.name} · {TOURNAMENT_TIER_LABEL[t.tier] ?? t.tier} · {s.label} · Bo{s.bestOf}
         </div>
-        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-6">
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:gap-6">
           <div className="min-w-0 text-right">
             <div className="flex items-center justify-end gap-1.5">
               {mySide === 'A' && <MineBadge />}
               <TeamTag color={teamA.color} tag={teamA.tag} />
             </div>
-            <div className="truncate text-lg font-bold">{teamA.name}</div>
+            <div className="truncate text-base font-bold sm:text-lg">{teamA.name}</div>
           </div>
           <div className="text-center">
-            <div className={cx('pop-in text-5xl font-black tabular', tone)}>
+            <div className={cx('pop-in whitespace-nowrap text-4xl font-black tabular sm:text-5xl', tone)}>
               {sc.a} : {sc.b}
             </div>
-            <div className={cx('mt-1 text-lg font-bold tracking-widest', tone)}>{headline}</div>
+            <div className={cx('mt-1 whitespace-nowrap text-base font-bold tracking-widest sm:text-lg', tone)}>{headline}</div>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <TeamTag color={teamB.color} tag={teamB.tag} />
               {mySide === 'B' && <MineBadge />}
             </div>
-            <div className="truncate text-lg font-bold">{teamB.name}</div>
+            <div className="truncate text-base font-bold sm:text-lg">{teamB.name}</div>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
@@ -107,7 +111,7 @@ export default function MatchSeriesSummary({
             <Badge>等待其他比赛结果</Badge>
           )}
         </div>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <div className="mt-4 flex flex-wrap justify-center gap-2 max-sm:[&>*]:grow">
           {next && (
             <Button variant="gold" size="lg" onClick={onNext}>
               进入下一场 ▶
@@ -127,6 +131,44 @@ export default function MatchSeriesSummary({
       <Card title="各局回顾" subtitle={`共 ${games.length} 局`} bodyClassName="p-0">
         {games.length === 0 ? (
           <EmptyState text="没有对局记录" />
+        ) : phone ? (
+          <ul>
+            {games.map((g, i) => {
+              const win = gameWinnerId(g) === myId;
+              const side = g.teamA === myId ? 'A' : 'B';
+              const myK = side === 'A' ? g.killsA : g.killsB;
+              const opK = side === 'A' ? g.killsB : g.killsA;
+              const myProb = side === 'A' ? g.winProbA : 1 - g.winProbA;
+              const mvp = g.mvpPlayerId ? game.players[g.mvpPlayerId] : undefined;
+              const picks = (g.draft ?? []).filter((a) => a.type === 'pick' && a.side === side);
+              return (
+                <li key={i} className="border-b border-line/60 px-4 py-2.5 last:border-b-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="text-mute">第 {i + 1} 局</span>
+                    <span className={cx('font-bold', win ? 'text-good' : 'text-bad')}>{win ? '胜' : '负'}</span>
+                    <span className="tabular">
+                      击杀 {myK}:{opK}
+                    </span>
+                    <span className="tabular text-faint">{fmtDuration(g.durationMin)}</span>
+                    <span className={cx('ml-auto text-xs tabular', myProb >= 0.5 ? 'text-good' : 'text-bad')}>
+                      胜率 {Number.isFinite(myProb) ? pct(myProb) : '—'}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2 text-xs">
+                    <span className="flex items-center gap-0.5">
+                      {picks.map((a, j) => (
+                        <HeroAvatar key={j} heroId={a.heroId} size="sm" title={heroCn(a.heroId)} tip />
+                      ))}
+                      {picks.length === 0 && <span className="text-faint">—</span>}
+                    </span>
+                    <span className="ml-auto min-w-0 truncate text-faint">
+                      MVP {mvp ? <span className="font-semibold text-gold">{mvp.handle}</span> : '—'}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -169,7 +211,7 @@ export default function MatchSeriesSummary({
                       <td>
                         <span className="flex items-center gap-0.5">
                           {picks.map((a, j) => (
-                            <HeroAvatar key={j} heroId={a.heroId} size="xs" title={heroCn(a.heroId)} />
+                            <HeroAvatar key={j} heroId={a.heroId} size="xs" title={heroCn(a.heroId)} tip />
                           ))}
                           {picks.length === 0 && <span className="text-faint">—</span>}
                         </span>

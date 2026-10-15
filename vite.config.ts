@@ -33,7 +33,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   build: {
-    // 分包后主包约 0.79 MB（界面为主，中文文案多；DotaPedia、新秀抽卡、选秀、生涯总结按需加载）；超过 800 kB 时再提示，优先把低频页面改为按需加载
+    // 分包后主包约 0.75 MB（界面为主，中文文案多；DotaPedia、新秀抽卡、选秀、生涯总结、新游戏向导、多人大厅 / 房间按需加载）；超过 800 kB 时再提示，优先把低频页面改为按需加载
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: { manualChunks },

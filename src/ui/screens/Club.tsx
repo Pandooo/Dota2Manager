@@ -3,8 +3,9 @@ import { Fragment, useState } from 'react';
 import { useGame } from '../../store/gameStore';
 import type { GameState, TournamentHistoryEntry, TournamentSettlement, TournamentTier } from '../../engine/types';
 import { TI_YEAR, formatGold, formatRank } from '../../engine';
-import { Badge, Card, Delta, EmptyState, Gold, Hint, Stat, TeamTag, cx } from '../components/common';
+import { Badge, Card, Delta, EmptyState, Gold, Hint, Stat, TableScroll, TeamTag, cx } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
+import { useStickyFirstCol } from '../components/SquadShared';
 import {
   HonorBreakdownGrid, Segmented, TeamName, TourTierBadge, honorBreakdownText, openTournamentView, rankClass,
 } from '../components/TourShared';
@@ -119,7 +120,7 @@ function TrophyCabinet({ game, trophies }: { game: GameState; trophies: Tourname
       ) : (
         <div className="space-y-4">
           {ti.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {ti.map((h) => (
                 <button
                   key={`${h.season}-${h.tournamentId}`}
@@ -150,7 +151,7 @@ function TrophyCabinet({ game, trophies }: { game: GameState; trophies: Tourname
                   <TourTierBadge tier={g.tier} />
                   <span className="text-xs text-faint">× {g.list.length}</span>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {g.list.map((h) => {
                     const pl = h.placements?.[h.championId];
                     return (
@@ -186,13 +187,15 @@ function TrophyCabinet({ game, trophies }: { game: GameState; trophies: Tourname
 // 赛季总结
 // ---------------------------------------------------------------------------
 function SeasonTable({ game }: { game: GameState }) {
+  const sticky = useStickyFirstCol();
   const seasons = (game.history?.seasons ?? []).slice().sort((a, b) => b.ti - a.ti);
   return (
     <Card title="赛季总结" subtitle="每届 TI 结束后记录" bodyClassName="p-0">
       {seasons.length === 0 ? (
         <EmptyState text="第一个赛季尚未结束。TI 结算后将在这里留下赛季总结。" />
       ) : (
-        <div className="overflow-x-auto">
+        // 手机：横向滑动，赛季列固定在左侧
+        <TableScroll stickyFirst={sticky}>
           <table className="tbl">
             <thead>
               <tr>
@@ -252,7 +255,7 @@ function SeasonTable({ game }: { game: GameState }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </Card>
   );
@@ -282,17 +285,18 @@ function SettlementTable({ game, settlements }: { game: GameState; settlements: 
       {rows.length === 0 ? (
         <EmptyState text="还没有参加过任何赛事。" />
       ) : (
-        <div className="max-h-[560px] overflow-y-auto">
+        // 手机：「等级」「出场费」「积分」不显示，其余放不下时横向滑动；点行展开荣誉明细与赛事成长
+        <TableScroll className="max-h-[560px] overflow-y-auto">
           <table className="tbl">
             <thead>
               <tr>
                 <th>赛季</th>
                 <th>赛事</th>
-                <th>等级</th>
+                <th className="max-sm:hidden">等级</th>
                 <th>名次</th>
                 <th className="num">奖金</th>
-                <th className="num">出场费</th>
-                <th className="num">积分</th>
+                <th className="num max-sm:hidden">出场费</th>
+                <th className="num max-sm:hidden">积分</th>
                 <th className="num" title="悬停查看明细，点击展开">荣誉</th>
               </tr>
             </thead>
@@ -323,7 +327,7 @@ function SettlementTable({ game, settlements }: { game: GameState; settlements: 
                           )}
                         </span>
                       </td>
-                      <td>{m.tier ? <TourTierBadge tier={m.tier} /> : <span className="text-faint">—</span>}</td>
+                      <td className="max-sm:hidden">{m.tier ? <TourTierBadge tier={m.tier} /> : <span className="text-faint">—</span>}</td>
                       <td>
                         <span className={rankClass(s.rankFrom)}>{formatRank(s.rankFrom, s.rankTo)}</span>
                         <span className="ml-1 text-[11px] text-faint">/ {s.teams}</span>
@@ -331,10 +335,10 @@ function SettlementTable({ game, settlements }: { game: GameState; settlements: 
                       <td className="num">
                         <Gold value={s.prize ?? 0} />
                       </td>
-                      <td className="num">
+                      <td className="num max-sm:hidden">
                         <Gold value={s.appearanceFee ?? 0} className="text-gold/70" />
                       </td>
-                      <td className="num">{Math.round(s.points ?? 0)}</td>
+                      <td className="num max-sm:hidden">{Math.round(s.points ?? 0)}</td>
                       <td className="num" title={s.honor ? honorBreakdownText(s.honor) : undefined}>
                         {s.honor ? <Delta value={Math.round(s.honor.total)} /> : '—'}
                       </td>
@@ -342,7 +346,7 @@ function SettlementTable({ game, settlements }: { game: GameState; settlements: 
                     {expanded && (
                       <tr>
                         <td colSpan={8} className="bg-panel-2/40 !whitespace-normal">
-                          <div className="grid gap-4 py-1 md:grid-cols-2">
+                          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 py-1 md:grid-cols-2">
                             {s.honor ? <HonorBreakdownGrid h={s.honor} /> : <Hint>无荣誉明细</Hint>}
                             <div>
                               <div className="mb-1 text-[11px] text-faint">赛事成长</div>
@@ -370,7 +374,7 @@ function SettlementTable({ game, settlements }: { game: GameState; settlements: 
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </Card>
   );

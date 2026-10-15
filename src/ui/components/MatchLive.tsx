@@ -1,6 +1,8 @@
 // ============================================================================
 // 比赛页 · 大老师胜率 + 文字直播 + 赛果
 // 直播播放进度完全是本地 UI 状态，不修改游戏状态。「跳过 / 继续」在底部吸附操作栏（MatchDock）。
+// < lg（docs/UI.md「手机适配」）：记分板与文字直播排在最前（记分板附一行大老师胜率），大老师点评与双方阵容、关键数据放在后面；
+// 直播框高度不超过 55% 视口，每条事件在手机上分两行（时间 · 类型 · 击杀比 / 正文）。≥ lg 布局不变。
 // ============================================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameRecord, GameState, InMatchEvent, LiveEvent, LiveEventType } from '../../engine/types';
@@ -227,9 +229,12 @@ export default function MatchLive({
   );
 
   const stats = keyStats(revealed);
+  const dpA = Number.isFinite(rec.eval?.dotaPlusWinRateA) ? rec.eval.dotaPlusWinRateA : 0.5;
+  const myDp = mySide === 'A' ? dpA : 1 - dpA;
 
   return (
-    <div className="space-y-4">
+    // < lg 为单列 flex，用 order 调整顺序（记分板 → 直播 → 大老师与阵容 → 关键数据 / 突发）；≥ lg 与原来一样
+    <div className="flex flex-col gap-4 lg:block lg:space-y-4">
       {done && (
         <div ref={resultRef}>
           <ResultBanner game={game} rec={rec} gameNo={gameNo} mySide={mySide} scoreBefore={scoreBefore} />
@@ -237,7 +242,7 @@ export default function MatchLive({
       )}
 
       {/* ------------------------- 大老师胜率 + 双方阵容 ------------------------- */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 max-lg:order-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <DotaPlusCard rec={rec} mySide={mySide} teams={teams} />
         <Card title="双方阵容" subtitle={facA ? `${teamA.tag}：${FACTION_LABEL[facA]} · ${teamB.tag}：${facB ? FACTION_LABEL[facB] : ''}` : undefined} bodyClassName="p-3 space-y-3">
           {(['A', 'B'] as Side[]).map((s) => (
@@ -247,11 +252,11 @@ export default function MatchLive({
       </div>
 
       {/* ------------------------------ 记分板 ------------------------------ */}
-      <section className="overflow-hidden rounded-xl border border-line bg-panel/90 shadow-lg shadow-black/20">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-5 py-4">
+      <section className="overflow-hidden rounded-xl border border-line bg-panel/90 shadow-lg shadow-black/20 max-lg:order-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4">
           <ScoreSide team={teamA} faction={facA} kills={killsA} mine={mySide === 'A'} color={colorA} />
           <div className="text-center">
-            <div className="font-mono text-3xl font-bold tabular tracking-wider">{done ? fmtDuration(rec.durationMin) : clock}</div>
+            <div className="font-mono text-2xl font-bold tabular tracking-wider sm:text-3xl">{done ? fmtDuration(rec.durationMin) : clock}</div>
             <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px]">
               {done ? (
                 <span className="text-gold">比赛结束</span>
@@ -267,7 +272,17 @@ export default function MatchLive({
           </div>
           <ScoreSide team={teamB} faction={facB} kills={killsB} mine={mySide === 'B'} color={colorB} right />
         </div>
-        <div className="border-t border-line px-5 pb-2 pt-3">
+        {/* < lg：大老师点评卡片排在直播之后，这里先给出一行胜率 */}
+        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-1.5 text-xs sm:px-5 lg:hidden">
+          <span className="text-mute">大老师胜率（我方）</span>
+          <span className={cx('font-bold tabular', myDp >= 0.5 ? 'text-good' : 'text-bad')}>
+            {Math.round(Math.max(0, Math.min(1, myDp)) * 100)}%
+            <span className="ml-1.5 font-normal text-faint">
+              {Math.abs(myDp - 0.5) < 0.03 ? '势均力敌' : myDp > 0.5 ? '我方 BP 占优' : '对手 BP 占优'}
+            </span>
+          </span>
+        </div>
+        <div className="border-t border-line px-3 pb-2 pt-3 sm:px-5">
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="text-mute">经济差</span>
             <span className="tabular font-semibold" style={{ color: goldLeader ? sideColor(goldLeader) : undefined }}>
@@ -276,7 +291,7 @@ export default function MatchLive({
           </div>
           <MatchGoldChart points={goldPoints} colorA={colorA} colorB={colorB} height={92} />
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-panel-2/40 px-5 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-panel-2/40 px-3 py-2 sm:px-5">
           <span className="text-xs text-faint">播放速度</span>
           {([1, 2, 4] as const).map((s) => (
             <Button
@@ -286,14 +301,22 @@ export default function MatchLive({
               disabled={done}
               title={done ? '直播已结束' : `${s} 倍速`}
               onClick={() => playback.setSpeed(s)}
+              className="pointer-coarse:min-h-9 pointer-coarse:min-w-11"
             >
               {s}x
             </Button>
           ))}
-          <Button size="xs" variant="ghost" disabled={done} title={done ? '直播已结束' : '暂停/继续播放'} onClick={playback.togglePause}>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={done}
+            title={done ? '直播已结束' : '暂停/继续播放'}
+            onClick={playback.togglePause}
+            className="pointer-coarse:min-h-9"
+          >
             {playback.paused ? '▶ 继续' : '❚❚ 暂停'}
           </Button>
-          <span className="ml-auto text-[11px] text-faint">
+          <span className="ml-auto text-[11px] text-faint pointer-coarse:hidden">
             <kbd className="rounded border border-line bg-panel-3 px-1 font-mono text-[10px]">Space</kbd> 跳过
           </span>
           <div className="h-1 w-full overflow-hidden rounded-full bg-panel-3">
@@ -303,8 +326,9 @@ export default function MatchLive({
       </section>
 
       {/* ------------------------------ 直播 + 侧栏 ------------------------------ */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 max-lg:contents lg:grid-cols-[minmax(0,1fr)_300px]">
         <Card
+          className="max-lg:order-2"
           title="文字直播"
           subtitle={`${teamA.tag} vs ${teamB.tag} · 第 ${gameNo} 局`}
           bodyClassName="p-0"
@@ -316,11 +340,19 @@ export default function MatchLive({
             </div>
           ) : (
             <div className="relative">
-              <ol ref={feedRef} onScroll={onFeedScroll} className="h-[440px] space-y-0.5 overflow-y-auto px-3 py-2">
+              {/* < lg 不拦截滚动链：滑到直播框的顶 / 底后继续滑会滚动页面（手机上直播框占了大半屏，不会「卡住」） */}
+              <ol
+                ref={feedRef}
+                onScroll={onFeedScroll}
+                className="h-[min(440px,55dvh)] space-y-0.5 overflow-y-auto overscroll-contain px-2 py-2 max-lg:overscroll-auto sm:px-3 lg:h-[440px]"
+              >
                 {revealed.length === 0 && (
                   <li className="flex h-full flex-col items-center justify-center gap-1 text-sm text-mute">
                     <span className="animate-pulse">选手入场，比赛即将开始…</span>
-                    <span className="text-[11px] text-faint">先看看上方的大老师胜率预测</span>
+                    <span className="text-[11px] text-faint">
+                      <span className="max-lg:hidden">先看看上方的大老师胜率预测</span>
+                      <span className="lg:hidden">大老师胜率见上方记分板，点评在直播下方</span>
+                    </span>
                   </li>
                 )}
                 {revealed.map((e, i) => (
@@ -339,7 +371,7 @@ export default function MatchLive({
           )}
         </Card>
 
-        <div className="space-y-4">
+        <div className="space-y-4 max-lg:order-4">
           <Card title="关键数据" bodyClassName="p-3">
             <div className="mb-1.5 grid grid-cols-[1fr_auto_1fr] text-[11px] text-faint">
               <span className="truncate font-semibold" style={{ color: colorA }}>
@@ -448,18 +480,18 @@ function ScoreSide({
   right?: boolean;
 }) {
   return (
-    <div className={cx('flex min-w-0 items-center gap-4', right && 'flex-row-reverse text-right')}>
+    <div className={cx('flex min-w-0 items-center gap-2 sm:gap-4', right && 'flex-row-reverse text-right')}>
       <div className="min-w-0">
         <div className={cx('flex items-center gap-1.5', right && 'flex-row-reverse')}>
           <FactionBadge faction={faction} />
           {mine && <MineBadge />}
         </div>
-        <div className="mt-1 truncate text-base font-bold">{team.name}</div>
-        <div className="text-[11px] text-faint">
+        <div className="mt-1 truncate text-sm font-bold sm:text-base">{team.name}</div>
+        <div className="truncate text-[11px] text-faint">
           <TeamTag color={team.color} tag={team.tag} />
         </div>
       </div>
-      <div key={kills} className="fade-up text-5xl font-black tabular" style={{ color }}>
+      <div key={kills} className="fade-up shrink-0 text-3xl font-black tabular sm:text-5xl" style={{ color }}>
         {kills}
       </div>
     </div>
@@ -479,9 +511,10 @@ function FeedRow({
 }) {
   const st = styleOf(e.type);
   return (
+    // 手机：第一行「时间 · 类型 ……… 击杀比」，正文另起一行占满宽度（不再挤成 3–4 行的窄列）
     <li
       className={cx(
-        'fade-up flex items-start gap-2.5 rounded-r-md border-l-2 py-1.5 pl-2.5 pr-2',
+        'fade-up flex flex-wrap items-start gap-x-2.5 gap-y-0.5 rounded-r-md border-l-2 py-1.5 pl-2.5 pr-2 sm:flex-nowrap',
         e.type === 'incident' && 'bg-gold/5',
         e.type === 'gg' && 'bg-gold/10',
         latest && 'bg-panel-2/70',
@@ -493,7 +526,7 @@ function FeedRow({
         <span>{st.icon}</span>
         {st.label}
       </span>
-      <span className={cx('min-w-0 flex-1 text-[13px] leading-5', st.strong ? 'font-semibold text-ink' : 'text-ink/90')}>
+      <span className={cx('min-w-0 flex-1 text-[13px] leading-5 max-sm:order-last max-sm:basis-full', st.strong ? 'font-semibold text-ink' : 'text-ink/90')}>
         {e.side && (
           <span className="mr-1 text-[11px] font-bold" style={{ color }}>
             [{teams[e.side].tag}]
@@ -501,7 +534,7 @@ function FeedRow({
         )}
         {e.text}
       </span>
-      <span className="shrink-0 pt-0.5 text-[11px] tabular text-faint">
+      <span className="shrink-0 pt-0.5 text-[11px] tabular text-faint max-sm:ml-auto">
         {e.killsA}–{e.killsB}
       </span>
     </li>
@@ -576,13 +609,13 @@ function DraftRecap({ game, rec, side, team, mine }: { game: GameState; rec: Gam
   const bans = draft.filter((a) => a.side === side && a.type === 'ban');
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-1.5 text-xs">
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs">
         <FactionBadge faction={factionOf(rec.radiant, side)} />
         <TeamTag color={team.color} tag={team.tag} />
         {mine && <MineBadge />}
         <span className="ml-auto flex items-center gap-0.5">
           {bans.map((b, i) => (
-            <HeroAvatar key={i} heroId={b.heroId} size="xs" banned />
+            <HeroAvatar key={i} heroId={b.heroId} size="xs" banned tip />
           ))}
         </span>
       </div>
@@ -646,11 +679,11 @@ function ResultBanner({
   return (
     <section
       className={cx(
-        'fade-up relative overflow-hidden rounded-xl border p-5 shadow-xl shadow-black/30',
+        'fade-up relative overflow-hidden rounded-xl border p-4 shadow-xl shadow-black/30 sm:p-5',
         win ? 'border-gold/60 bg-gradient-to-r from-gold/20 via-panel to-panel' : 'border-bad/50 bg-gradient-to-r from-bad/20 via-panel to-panel',
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-4 sm:gap-x-8">
         <div>
           <div className="text-[11px] tracking-[0.3em] text-faint">第 {gameNo} 局 · 赛果</div>
           <div className={cx('pop-in text-5xl font-black tracking-[0.2em]', win ? 'text-gold' : 'text-bad')}>{win ? '胜利' : '失败'}</div>
@@ -699,7 +732,7 @@ function ResultBanner({
           )}
         </div>
 
-        <div className="min-w-[240px] flex-1">
+        <div className="min-w-0 flex-1 basis-full sm:min-w-[240px] sm:basis-auto">
           <div className="flex items-baseline justify-between text-[11px] text-faint">
             <span>赛前综合胜率揭晓（我方）</span>
             <span className={cx('text-lg font-black tabular transition-opacity duration-700', shown ? 'opacity-100' : 'opacity-0', myProb >= 0.5 ? 'text-good' : 'text-bad')}>

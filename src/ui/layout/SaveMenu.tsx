@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { getSaveStatus, getSession, onSaveStatus, saveProgressNow, type SaveStatus } from '../../store/session';
 import { Button, cx } from '../components/common';
+import { downloadText, saveFileName } from '../components/ShellKit';
 
 function statusText(s: SaveStatus): string {
   if (s.state === 'saving') return '正在保存…';
@@ -25,16 +26,16 @@ export default function SaveMenu({ onDone }: { onDone: () => void }) {
   const session = getSession();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 与生涯总结的「导出存档」同一写法：链接挂到页面上再点击、延迟释放（立即释放会让 iOS Safari 取消下载），文件名带战队简称与时间
   const download = () => {
+    const { game, toast } = useGameStore.getState();
     const json = exportJson();
-    if (!json) return;
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dota2-manager-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!json || !game) {
+      toast('导出失败：没有进行中的游戏', false);
+      return;
+    }
+    downloadText(json, saveFileName(game.teams[game.settings.playerTeamId]?.tag));
+    toast('存档已导出');
   };
 
   const saveNow = () => {

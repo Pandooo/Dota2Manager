@@ -2,7 +2,7 @@
 
 ## 技术约定
 - React 19 + Tailwind v4（主题 token 见 `src/index.css` 的 `@theme`：`bg panel panel-2 panel-3 line ink mute faint dota dota-2 gold radiant dire good bad info tier-*`）。
-- 通用组件统一从 `src/ui/components/common.tsx` 引入：`Button Card PageHeader EmptyState Stat Badge TierBadge PosBadge RegionBadge StatBar AttrRow Gold Delta PlayerLink TeamLink TeamTag Tabs Modal Hint cx`。**不要重复造轮子**，确需新的通用组件时在自己负责的文件内实现。
+- 通用组件统一从 `src/ui/components/common.tsx` 引入：`Button Card PageHeader EmptyState Stat Badge TierBadge PosBadge RegionBadge StatBar AttrRow Gold Delta PlayerLink TeamLink TeamTag Tabs Modal TableScroll Hint cx`（手机适配的约定见文末「手机适配」）。**不要重复造轮子**，确需新的通用组件时在自己负责的文件内实现。
 - 状态：
   - 读：`const game = useGame()`（任何引擎操作后自动重渲染）。
   - 写：`const call = useCall(); call('someOp', ...args)`（引擎函数名 + 除 state 外的参数，类型由引擎签名推导）。单机在本地执行并自动存档；多人模式作为白名单 RPC（`src/shared/protocol.ts` RPC_WHITELIST）发给服务器。返回 `Promise`，需要结果时 `.then(res => …)`；返回 `OpResult` 时自动 toast 提示；成功时不提示用 `useCallSilent()`。
@@ -34,9 +34,10 @@
   - 休赛 / 观赛回合：`⚔ 训练（剩余次数）`+ 焦点切换气泡、`加练 · 价格`、`训练赛 ▴`（推荐对手气泡，直接约练；本回合已约过的对手显示为禁用的「本回合已约过」）、`训练详情`（展开总览训练卡片）；
   - 赛事回合：`快速模拟本场 vs 对手`、`快速模拟整项赛事`（就近确认）、`进入比赛 · 手动 BP`、`赛事详情`（展开总览赛事卡片）；首发不合法时 `自动排阵`；可出场不足 5 人时 `补齐首发（临时替补）` / `弃权本场`（就近确认）；比赛进行中为 `继续比赛 ▶`；
   - 有阻塞推进的待决事件时：`! 待决事件 n` 徽标，点开气泡直接选择（默认选项标「默认」）。
-  - 布局：≥1280px 一行显示；更窄时次要操作收进「更多 ▴」。`BarRow` 按实际宽度测量，某一栏放不下时按 `demote` / `compact` 顺序逐步换成紧凑写法或收进「更多」，不会压住主按钮。新增按钮时给出 `demote` / `compact`；按钮上的绝对定位装饰（如红点）不能超出所在栏，否则测量会误判为放不下。
+  - 布局：≥1280px 一行显示；更窄时次要操作收进「更多 ▴」。`BarRow` 按实际宽度测量，某一栏放不下时按 `demote` / `compact` 顺序逐步换成紧凑写法或收进「更多」，不会压住主按钮。新增按钮时给出 `demote` / `compact`（v0.4 起左侧每个操作都有 `demote`，测量总能收敛；收进「更多」时用 `menu` 写法，不要在「更多」里再嵌套第二个气泡）；按钮上的绝对定位装饰（如红点）不能超出所在栏，否则测量会误判为放不下。主按钮 `relative z-10`：万一两侧溢出也只会被主按钮盖住。
+  - 手机（< 640px）不用 `BarRow`，改为 `PhoneBar` 三行布局；sm–lg 之间在操作行上方补一行提示。见下文「手机适配 · 底栏」。
 - **总览内嵌卡片（不弹窗）**：训练（`TrainingModal.tsx` 的 `TrainingCard`）与赛事（`TournamentModal.tsx` 的 `TournamentCard`）是总览「本回合」中可原地展开 / 收起的卡片。展开状态 = `store.trainingOpen / tournamentOpen`；任何页面调用 `setTrainingOpen(true) / setTournamentOpen(true)` 都会回到总览、展开并滚动到卡片（`store.cardFocus`）。赛事回合开始时赛事卡片自动展开（本方仍有比赛要打，`store.syncTournamentCard` + `TourModalLogic`），回合内由玩家决定；卡片内：进入比赛 → 比赛页（BP → 大老师胜率 → 文字直播 → 赛果）→ 返回总览，卡片自动显示下一场；也可「快速模拟本场 / 本赛事」。只有查看完整分组与对阵图时才进入「赛事 › 赛事中心」。
-- **回合通知**（`PopupHost.tsx`）：`game.popups`（赛事结算、赛季总结、版本更新、新秀选秀结果（只在选秀开启或旧存档出现，按需加载）、消息）不再弹窗——总览顶部为「通知」卡片（`NoticesCard`，最新在前、点击原处展开、「全部已读」= `callSilent('dismissPopups', n)`），其他页面在左下角（侧栏底部）显示徽标（`NoticeBadge`，点击回总览）。只有游戏结束（生涯总结）界面仍逐条弹窗（默认导出 `PopupHost`）。
+- **回合通知**（`PopupHost.tsx`）：`game.popups`（赛事结算、赛季总结、版本更新、新秀选秀结果（只在选秀开启或旧存档出现，按需加载）、消息）不再弹窗——总览顶部为「通知」卡片（`NoticesCard`，最新在前、点击原处展开、「全部已读」= `callSilent('dismissPopups', n)`），其他页面在左下角（侧栏底部）显示徽标（`NoticeBadge`，点击回总览；< md 没有侧栏时不显示，改为顶栏 ☰ 上的蓝点与导航抽屉「总览」上的计数）。只有游戏结束（生涯总结）界面仍逐条弹窗（默认导出 `PopupHost`）。
 - **转会报价弹窗**（`src/ui/components/MarketBidModal.tsx`，选手交易 2026-10-14）：默认纯现金（`bidForPlayer`）；「加入本队选手抵价」区块勾选本队正式队员后改为 `call('tradeForPlayer', 目标, 现金, 抵价 id[])`。
   估值、说明、拒收原因、对方可接收人数、总额与接受概率一律来自引擎只读函数 `tradeValuation`（候选逐人单独估值）/ `tradeQuote`（已选组合 + 现金，与实际成交同一函数），界面不复算系数；
   不能抵价的候选禁用并用 `title` 说明；有抵价选手时现金滑块下限为 0；对方因阵容超员要放走的替补（`tradeQuote().releases`）写在合计框下与确认气泡里；
@@ -44,18 +45,22 @@
   记录后要手动触发一次重渲染（store 的 `version++` 发生在 `call` 的 Promise 回调之前）。
   入口有两个且行为一致：转会市场 → 转会求购的「报价」，以及选手详情弹窗（`PlayerModal` 的 `BidActions`）的「报价求购…」。后者在弹窗里再开弹窗，
   须用 `createPortal(…, document.body)` 挂载（弹窗容器的 `fade-up` 动画带 transform，fixed 子元素会被限制在容器内）。
-- **弹窗叠放**：`Modal` 维护打开顺序，Esc 只关闭最上层的一个；点击遮罩只关闭被点的那一层（portal 里的事件沿 React 树冒泡到外层弹窗面板时被其 `stopPropagation` 挡住）。
+- **弹窗叠放**：`Modal` 维护打开顺序，Esc 只关闭最上层的一个；点击遮罩只关闭被点的那一层：按下与抬起都落在遮罩本身上才关闭（`pointerdown` 记下是否按在遮罩上 + `click` 时 `target === currentTarget`），
+  portal 里的嵌套弹窗冒泡上来的事件 target 不是外层遮罩，不会关闭外层；从面板里拖到遮罩上松开也不关闭。
 - **二次确认**：一律用按钮旁的确认气泡（`src/ui/components/ConfirmPopover.tsx`），不用 Modal、不用 `window.confirm`：
   - 按钮直接写 `<ConfirmButton confirm={{ title?, message, confirmLabel?, danger? }} onConfirm={() => call(...)}>…</ConfirmButton>`（`confirm` 为 null 时直接执行，适合「只有某些情况才需确认」，如没有现任教练时签约教练不确认、替换才确认）；非按钮触发元素用 `useConfirmPopover()` + `<ConfirmPopover>`。
   - 气泡优先出现在按钮上方，「确定」按钮落在原按钮附近，减少鼠标移动；Enter 确定，Esc / 点击外部取消；危险操作（解约、弃权、踢人）用 `danger`。
+  - 气泡**从不盖住触发按钮**（v0.4）：先在顶栏与底栏之间找上方 / 下方放得下的位置（`--chrome-top / --chrome-bottom`）；两栏之间放不下（横屏矮视口）时可以压住顶栏 / 底栏，
+    放在空间较大的一侧并限制高度——标题与正文在气泡内滚动，「确定 / 取消」始终可见；两侧都不到 120px 时才在视口中居中。打开后 350ms 内点按「确定」无效（连点 / 幽灵点击不会直接花钱）。
+    小三角指向按钮中心。`ConfirmButton` 的 `wrapClassName` 给外层锚点 span 加类名（手机上让按钮占满一行：`wrapClassName="max-sm:flex-1"` 或在网格单元里配 `className="w-full"`）。
   - 底栏「更多」菜单里的确认项用 `MenuConfirm`（确认后收起菜单）。
 - **TI 转场**（第八波，`src/ui/components/TiTransition.tsx` + 纯函数 `src/ui/tiTheme.ts`）：进入 TI 正赛回合播放全屏转场（不朽之盾升起 → 发光 → 消失，约 3.2 秒，点击 / 空格跳过，减少动态效果时只淡入淡出）；TI 预选回合为顶部横幅（回合开始即出现；回合通知是总览内的卡片，不再挡住它）；TI 正赛回合顶栏 / 底栏点缀该届主题色（`tis.json` 的 `theme`）。由 store 的 `syncTiIntro` 在任何状态变化后检查，每个存档 × 座位 × 届次只触发一次（「已看过」记在 localStorage `d2m:tiIntroSeen`）；页面在后台时等回到页面再播放。只读，不修改游戏状态，多人模式下每个座位的客户端各自触发。
   - 冠军盾（第十波 #7）：`AegisSvg` 为重新绘制的**原创**矢量图（圆盾 · 24 瓣扇贝雕纹盾缘 · 铆钉与叶纹 · 四道棱脊与卷草纹 · 中央凸台 + 八角刻面主宝石），银灰金属底按该届主题着色；不得描摹或加入官方冠军盾图片。`AegisArt` = 本地覆盖图片优先（见下「本地美术覆盖」），否则 `AegisSvg`。
   - 顶栏徽记 `TiAegisBadge`（TI 预选与 TI 正赛回合）：单机在顶栏绝对居中（≥ lg 显示），多人排在玩家条之前；主题色光晕；点击在下方展开小气泡（portal 到 body，点击外部 / Esc 收起）：「The International {年份}」、城市与主题、当前阶段、本队参赛情况。
 - **队徽**（第十波 #4，`src/ui/components/TeamEmblem.tsx` + 纯函数 `src/ui/emblem.ts`）：`TeamTag` 的色块换成按「简称 + 品牌配色」确定性生成的原创风格化队徽（外形 / 装饰纹由简称哈希决定，首字母取自简称，辅色取 `branding.json` 的 `color2` 或由主色推导；默认尺寸 1.3em 随文字缩放）。换品牌（简称 / 配色变化）后自然换成新队徽。战队名旁的色块同样换成 `TeamEmblem`（赛事对阵 / 赛程的 `TourShared.TeamName`（待定席位仍为灰色色块）、总览积分榜、转会市场三处战队单元格、BP 顺序、新秀选秀、世界动态战队标签、战队弹窗标题、DotaPedia 战队页标题 28px、新游戏确认页 48px、多人新建俱乐部预览 48px）；赛区 / 图表配色与新闻滚动条的小圆点不属于队徽，保持色块。新增展示战队的地方优先用 `TeamTag` / `TeamEmblem`，不要再写纯色块。真实队标属于商标，不得加入仓库。`TeamTag` 新增可选 `teamId`（用于本地队标）；未传时只有放了本地队标才按「简称 + 主色」在当前存档里反查 id（每个状态版本建一次索引）。DotaPedia 战队信息框的「品牌沿革」行 = `TeamBrandHistoryRow`（本局无品牌变化时不显示）。
-- **背景音乐**（第十波 #6，`src/ui/components/MusicControl.tsx` + 播放器 `src/ui/audio/bgm.ts`）：顶栏「荣誉」右侧的音符按钮（非游戏界面没有顶栏，固定在角落：主菜单与生涯总结在右上角；新游戏 / 大厅 / 房间的右上角有返回按钮或玩家名，改在右下角，面板向上展开），点击在按钮下方（放不下时上方）展开小面板（portal 到 body，点击外部 / Esc 收起）：开关、音量滑块、音源（内置原创氛围音乐 / 本地文件）、选择 / 更换 / 移除本地文件（移除用确认气泡）。设置按浏览器记在 localStorage `d2m:bgm`，本地文件存在 IndexedDB，不进存档、不经 `call()`。不得加入任何 Valve 音频。
+- **背景音乐**（第十波 #6，`src/ui/components/MusicControl.tsx` + 播放器 `src/ui/audio/bgm.ts`）：顶栏「荣誉」右侧的音符按钮（非游戏界面没有顶栏，固定在角落：主菜单与生涯总结在右上角；新游戏 / 大厅 / 房间的右上角有返回按钮或玩家名，改在右下角，面板向上展开；手机上的生涯总结用 `floating="inline"` 放在横幅右上角、随页面滚走，不压住排行表），点击在按钮下方（放不下时上方）展开小面板（portal 到 body，点击外部 / Esc 收起）：开关、音量滑块、音源（内置原创氛围音乐 / 本地文件）、选择 / 更换 / 移除本地文件（移除用确认气泡）。设置按浏览器记在 localStorage `d2m:bgm`，本地文件存在 IndexedDB，不进存档、不经 `call()`。不得加入任何 Valve 音频。
 - **更新说明与 New 徽标**（2026-10-14，`src/ui/components/ChangelogPanel.tsx` + `NewBadge.tsx`，数据与纯函数 `src/ui/changelog.ts`）：两个入口打开同一个面板——游戏内顶栏右上角（音乐按钮左侧，单机 / 多人同一位置）的版本芯片 `<ChangelogButton />`（≥ sm 显示 `v{APP_VERSION}`，< sm 显示「更新」二字），以及主菜单页脚的版本号 `<ChangelogButton variant="footer" />`（与页脚文字同字号，悬停变金色）。版本号由 `vite.config.ts` 的 `define` 注入 package.json 的 `version`（全局 `__APP_VERSION__`，声明在 `src/vite-env.d.ts`），代码里只读 `changelog.ts` 的 `APP_VERSION`，不要写死版本号。有未读新版本时两个入口都带红点；点击打开 Modal「更新说明」（`max-w-lg`，属于内容面板，不是本回合事务）：按版本倒序列出 `CHANGELOG`（版本、日期、条目），当前版本置顶展开、旧版本折叠可展开，带 `feature` 的条目附「入口：…」。底部「标为已读」把最新版本记为已读（`d2m:changelog:seen`），红点与全部 New 徽标一起消失。**打开面板不自动算已读**：徽标的作用是引导玩家在界面里找到新功能，一打开面板就全部消失徽标就没有意义；红点则提醒玩家还没确认过这个版本。
-  - `NewBadge`：小号金色描边、深色底的「New」（放在金色按钮里也能看清）。放在入口元素**内部**，默认 `dismissOn="click"`——点击徽标的父元素（按钮 / 标签）后消失，适合按钮、`HubShell` 标签的 `badge`；非可点击入口用 `dismissOn="view"`——在屏幕上连续可见约 1 秒算「看过」，离开页面 / 关闭弹窗后不再显示（卡片标题、章节标题、表头、详情行标签）；自定义时机用 `useNewFeature(key)` 的 `{ show, dismiss }`。顶栏这类放不下的地方加 `narrow="corner"`：< sm 时改为父元素右上角的角标、不占行内宽度（父元素需 `relative`，如顶栏音乐按钮）。显示条件 = 功能所属版本高于已读版本且 key 不在 `d2m:newbadge:dismissed` 中（纯函数 `featureIsNew`）。当前接入：v0.3.0——转会报价弹窗「加入本队选手抵价」（`trade`，`dismissOn="none"`，展开 / 收起抵价列表时经 `useNewFeature` 关闭）、总览「赛事报名」卡片标题（`seasonEntry`，同样在展开 / 收起卡片时关闭）、阵容页统计格「荣誉势头」（`momentum`，`view`；`Stat` 标签是大写样式，徽标加 `normal-case`）、「转会 › 新秀抽卡」标签（`gacha`，与原有的状态徽标并列）、「DotaPedia › 名人堂」标签（`hallOfFame`）、多人大厅「服务器」卡片的在线人数行（`onlineStats`，`view`，经 `ServerStatsLine` 的 `badge`）；v0.2.1 / v0.2——阵容页「位置」表头与选手详情「位置」行（`altPositions`）、选手详情「挂牌出售」与阵容页「批量挂牌」（`listing`）、DotaPedia「羁绊图鉴」标签（`synergies`）、战队词条「使命」章节（`missions`）、顶栏音乐按钮（`bgm`）、财务「选手奖金分成」卡片（`prizeShare`）。
+  - `NewBadge`：小号金色描边、深色底的「New」（放在金色按钮里也能看清）。放在入口元素**内部**，默认 `dismissOn="click"`——点击徽标的父元素（按钮 / 标签）后消失，适合按钮、`HubShell` 标签的 `badge`；非可点击入口用 `dismissOn="view"`——在屏幕上连续可见约 1 秒算「看过」，离开页面 / 关闭弹窗后不再显示（卡片标题、章节标题、表头、详情行标签）；自定义时机用 `useNewFeature(key)` 的 `{ show, dismiss }`。顶栏这类放不下的地方加 `narrow="corner"`：< sm 时改为父元素右上角的角标、不占行内宽度（父元素需 `relative`，如顶栏音乐按钮）。显示条件 = 功能所属版本高于已读版本且 key 不在 `d2m:newbadge:dismissed` 中（纯函数 `featureIsNew`）。当前接入：v0.3.0——转会报价弹窗「加入本队选手抵价」（`trade`，`dismissOn="none"`，展开 / 收起抵价列表时经 `useNewFeature` 关闭）、总览「赛事报名」卡片标题（`seasonEntry`，同样在展开 / 收起卡片时关闭）、阵容页统计格「荣誉势头」（`momentum`，`view`；`Stat` 标签是大写样式，徽标加 `normal-case`）、「转会 › 新秀抽卡」标签（`gacha`，与原有的状态徽标并列）、「DotaPedia › 名人堂」标签（`hallOfFame`）、多人大厅「服务器」卡片的在线人数行（`onlineStats`，`view`，经 `ServerStatsLine` 的 `badge`）；v0.2.1 / v0.2——阵容页「位置」表头与选手详情「位置」行（`altPositions`）、选手详情「挂牌出售」与阵容页「批量挂牌」（`listing`）、DotaPedia「羁绊图鉴」标签（`synergies`）、战队词条「使命」章节（`missions`）、顶栏音乐按钮（`bgm`）、财务「选手奖金分成」卡片（`prizeShare`）。v0.4.0 没有新增徽标：手机适配是全局改动（导航抽屉、底栏、弹窗、表格），没有单一入口可标，更新说明里按「手机适配 · …」分条写明。
   - **给新功能加 New 徽标（接入步骤）**：
     1. 在 `src/ui/changelog.ts` 的 `FEATURES` **顶部**加一条 `{ key: 'myFeature', version: '0.3.0', label: '俱乐部 › 财务的「某某」' }`：`key` 为稳定的英文标识（发布后不要改名，localStorage 记录的就是它）；`version` = 该功能首次发布的版本；`label` = 面向玩家的入口位置说明（面板里显示为「入口：…」）。`FeatureKey` 类型由 `FEATURES` 自动推导，`<NewBadge feature>` 写错 key 时 `tsc` 会报错。
     2. 在 `CHANGELOG` 中该版本的条目里引用它：`{ text: '……', feature: 'myFeature' }`。该版本条目还不存在时按发版约定一并添加（AGENTS.md「提交」：版本条目加在 `CHANGELOG` 顶部，最新版本必须等于 package.json 的 `version`）。
@@ -63,7 +68,7 @@
     4. 运行 `npx vitest run tests/changelog.test.ts`：校验 key 唯一、功能版本存在于更新说明、每个功能都被所属版本的条目引用、条目引用的功能版本一致。
     不需要改其他文件：面板、红点、已读、徽标消失逻辑都是通用的。
   - 状态按浏览器存 localStorage（读写都 try/catch，其他标签页的改动经 `storage` 事件同步），不进存档、不经 `call()`，多人模式每个客户端各自记录。发版约定见 AGENTS.md「提交」；`tests/changelog.test.ts` 校验数据合法性与「最新版本 = package.json version」。
-- **顶栏的窄屏布局**（`src/ui/layout/TopBar.tsx`，375px 起不溢出）：俱乐部按钮（「回到总览」）`shrink-0`，不被挤压；< sm 时隐藏 D2 标志（简称 + 队徽即按钮）；俱乐部全名单机 ≥ sm、多人 ≥ xl 才显示，过长时截断（完整名称在悬停提示里）。右侧金币 / 荣誉 / 版本芯片 / 音乐 / 存档不换行，< sm 时间距收紧、版本芯片显示「更新」、音乐按钮的 New 徽标改为角标。多人 < lg（1024px）时玩家条与「聊天 / 离开」移到顶栏第二行（玩家条横向滚动），第一行与单机相同；聊天面板按顶栏实际高度贴在其下方。第一行的 `overflow-x-auto`（隐藏滚动条）只是兜底：超长简称 + 320px 这类极端情况下该行横向滚动，而不是撑破页面。新增顶栏项时在 375px（单机与多人）下量一遍：`header` 内各行的 `scrollWidth` 应等于 `clientWidth`。
+- **顶栏的窄屏布局**（`src/ui/layout/TopBar.tsx`，375px 起不溢出）：俱乐部按钮（「回到总览」）`shrink-0`，不被挤压；< sm 时隐藏 D2 标志（简称 + 队徽即按钮）；俱乐部全名单机 ≥ sm、多人 ≥ xl 才显示，过长时截断（完整名称在悬停提示里）。右侧金币 / 荣誉 / 版本芯片 / 音乐 / 存档不换行，< sm 时间距收紧、音乐按钮的 New 徽标改为角标，版本芯片与「存档」收进导航抽屉底部（v0.4，见「手机适配 · 导航」）。多人 < lg（1024px）时玩家条与「聊天 / 离开」移到顶栏第二行（玩家条横向滚动），第一行与单机相同；聊天面板按顶栏实际高度贴在其下方。第一行的 `overflow-x-auto`（隐藏滚动条）只是兜底：超长简称 + 320px 这类极端情况下该行横向滚动，而不是撑破页面。新增顶栏项时在 375px（单机与多人）下量一遍：`header` 内各行的 `scrollWidth` 应等于 `clientWidth`。
 - **赛季中报名 / 退赛与补充邀请**（第十四波，`src/ui/components/TourEntry.tsx` + `EntryPlanCard.tsx`）：
   - 报名状态标签与按钮统一由 `entryControls` 生成（赛程页回合表、赛事中心头部、总览「赛事报名」卡片共用）。「婉拒 / 取消报名」读取引擎只读查询 `withdrawPenaltyOf(game, id)`：
     要扣荣誉时按钮文字带扣分（如「婉拒 −20」），点击弹出就近确认气泡（`ConfirmButton`，写明扣分、原因与「当前荣誉 → 扣后」），确定按钮为「婉拒（荣誉 −20）」；
@@ -91,17 +96,20 @@
 
 - **新秀抽卡**（2026-10-14 取代选秀；「转会 › 新秀抽卡」，`src/ui/screens/Gacha.tsx`（`TransferHub` 按需加载，不进主包），只读 `gachaView / gachaLog / gachaPullBlock / gachaDiscardBlock / gachaHistory`）：
   顶部四格（卡池剩余 / 价格 / SSR 保底进度 / 本赛季已抽）；「抽卡」卡片右上角为单抽 / 十连的 `ConfirmButton`（按钮文字带价格，禁用时 `title` 为 `gachaPullBlock` 的原因：窗口锁定 / 金币不足 / 已超编；
-  阵容人数不禁用十连——总是抽满，抽完会超过绝对上限时确认气泡用红字写明「抽完后阵容 15/12 人，超编 3 人：抽完后需在本回合内退回 12 人……」（`gachaOverCapAfter`；
+  阵容人数不禁用十连——总是抽满，抽完会超过绝对上限时确认气泡用红字写明「抽完后阵容 15/12 人，超编 3 人：需在本回合内放弃本回合抽到的新秀或解约 3 人（降到 12 人以内）……」（`gachaOverCapAfter`；
   开启自动处理时另写明「按下一回合会自动退回本回合抽到的新秀中评分最低的 N 名（不论等级）」），按钮 `title` 同样注明），
-  超编时页面顶部为红色横幅「超编 N 人」（`rosterOverCapNotice`：本回合内放弃新秀或解约，退回 12 人后才能进入下一回合；开启自动处理时说明按下一回合会先自动退回评分最低的新秀；按钮「去阵容页解约」；
+  超编时页面顶部为红色横幅「超编 N 人」（`rosterOverCapNotice`：「超编 3 人：本回合内放弃新秀或解约 3 人（降到 12 人以内）后才能进入下一回合」——写明要退回几个人、降到多少，v0.4 起不再写成容易误读的「退回 12 人」；开启自动处理时说明按下一回合会先自动退回评分最低的新秀；按钮「去阵容页解约」；
   与推进阻塞同口径，只在转会窗口开放时显示——锁定期（旧选秀 / 旧存档超过 12 人）改为显示常规上限的蓝色提示）；
-  超编是推进阻塞（`roster_over_cap`）：总览「待处理」第一行红色项（收起时标题行也显示）、底栏情境按钮「处理超编 · N 人」（打开抽卡页；放不下时先换成「超编 N 人」，再收进「更多」：
+  超编是推进阻塞（`roster_over_cap`）：总览「待处理」第一行红色项（收起时标题行也显示）、底栏情境按钮「处理超编 · N 人」（打开抽卡页；已在抽卡页时经窗口事件 `GACHA_FOCUS_EVENT`（`gachaDiscard.tsx`）把「抽卡」卡片 / 页面顶部滚到眼前；放不下时先换成「退回 N 人」（手机操作条同样用这个带动词的写法），再收进「更多」：
   `compact` 1.8 / `demote` 2.7），懒人模式下底栏提示改为「超编 N 人：将自动退回新秀 …（返还 …）」；
   卡片内是本回合的结果（`ResultTile`：等级大徽章 + 等级配色、真实 / 请神徽章 `GachaKindBadge`（请神显示原型 ID）、退回按钮——同一回合内可退回，返还比例取 CONFIG）；
   退回的确认文案由 `src/ui/components/gachaDiscard.tsx` 的 `gachaDiscardConfirm` 生成，抽卡页与选手详情共用（「退回 / 保留」）。
   「卡池构成」表（各等级 真实 / 请神 / 虚构 / 剩余 / 下一抽概率 / 本季入池（真/请/虚）——入池张数，不是已抽出的张数）与剩余真实新秀、请神原型（有 DotaPedia 词条的可点击打开，
   没有词条的 DotA1 传奇只显示文字，与名人堂页一致）；第 1 回合后真实新秀已离池时注明「之后只有请神与虚构新秀」；本赛季抽卡记录；规则（概率与数值全部取自 CONFIG，不要写死；
   含工资上限、转售冷却、真实新秀只在赛季初可抽、AI 资金不足时可能不抽）；往届汇总。从总览 / 侧栏直接进入本页时同样清掉「新秀抽卡」标签的 New 徽标。
+  手机（< sm）与横屏矮视口（max-height 480px）的顺序（v0.4）：标题 → 卡池关闭 / 超编横幅 → 「抽卡」卡片（单抽 / 十连为卡片内两个通栏大按钮，下方一行写卡池剩余、保底与资金）→ 四格（手机上只显示数字）→ 卡池 → 记录 → 规则 → 往届；
+  抽卡成功后把「抽卡」卡片滚到顶部（超编横幅会把结果往下推）。手机上结果为两列紧凑卡片（等级 + 名字 + 卡种 / 位置 + 战力天赋 + 通栏「退回」；年龄、工资点名字看详情），
+  超编横幅只留 `rosterOverCapNotice` 一句，处理方式收进「怎么处理」；剩余真实新秀 / 请神原型、规则全文收进 `PhoneFold`；卡池表「本季入池」列、记录表「价格」列手机上隐藏。桌面布局不变。
   转售冷却期内的新秀：选手详情「挂牌出售」按钮禁用（`title` 为 `gachaResaleLockText`，写明还差几个转会回合），阵容页批量挂牌跳过并在按钮说明里列出
   （`gachaResaleLockBrief`「入队 6 / 18 个转会回合（抽卡新秀）」）；报价弹窗的抵价说明写明按签字费估值。
   加盟门槛（v0.3.1，任何途径新加盟的选手随队满 `CONFIG.squadOps.listingMinTeamMatches` 场比赛**且**入队满 `listingMinTransferRounds` 个转会回合才能挂牌，优先于转售冷却）：
@@ -128,8 +136,112 @@
   选手词条有「名人堂与请神」章节与信息框的「抽卡出身 / 请神原型 / 名人堂」行（`pediaPlayerPage` 的 `gacha / summon / hallOfFame`）。
 - **报价弹窗的接受概率**（`MarketBidModal`）：交易模式下只有对方拒收抵价选手 / 已拒绝此价位时显示 0%；只是现金不够（或对方负担不起抵价选手工资，可调整现金解决）时仍按总额估算，
   阻塞原因另在横幅里说明。纯现金报价金币不足时，横幅提示「可展开下方「加入本队选手抵价」，用本队选手抵价减少现金」。
+  手机（v0.4）：底部按钮行为「报价后余额」单独一行 + 「取消」与占满剩余宽度的提交按钮（文字不换行）；金额输入框 `inputMode="numeric"`；触屏上滑块、快捷价位、「展开 / 收起」、抵价勾选行加高；
+  不能再勾选的抵价行在触屏上把原因（「一次最多 3 名选手抵价」等，桌面在悬停提示里）直接写在行内。
+- **转会市场的手机布局**（v0.4，`Market.tsx` + `Market*.tsx`，共用件在 `MarketKit.tsx`；「转会市场」标签与「新秀抽卡」一样由 `TransferHub` 按需加载，市场各页约 55 kB 不进主包）：
+  `useCompactList()`（手机竖屏 < sm 与横屏矮视口）时宽表格换成卡片列表，桌面 / 平板仍是表格：
+  - `PhoneList` / `PhoneRow`（第一行：等级 + 名字 `PHONE_LINK` + 位置等徽章；下面是 `Facts` 的「标签 数值」行；右侧为 `size="sm"` 的操作按钮，`min-h-10 min-w-16`）；
+    报价、挂牌这类行少、要做决定的卡片把「接受 / 拒绝」做成 `grid-cols-2` 的两个大按钮，「撤销挂牌」通栏。
+  - 筛选：`PhoneFilters`（搜索框 + 「筛选（n）」开关，其余筛选项默认收起、展开为两列；下方 `SortSelect` 排序——卡片没有表头可点）。
+  - 页面顶部五个数字格在手机上合成一块概要（金币 · 阵容 · 荣誉 · 工资 · 待处理报价，阵容超限的提醒写在下面）；临时替补的三格只放数字，说明合成格子下方一行。
+  - 「我的挂牌」的规则横幅正文在手机上收进 `PhoneFold`（没有挂牌时默认展开）。`PhoneFold`：桌面原样显示，手机上为 `<details>`。
+  - `Card` 的 `bodyClassName="p-0"` 实际不生效（`cx` 追加在 `p-4` 后，Tailwind 把 `.p-0` 排在 `.p-4` 前），桌面一直是 16px 内边距；市场与抽卡页用 `BODY_FLUSH`（`p-0 max-sm:p-0! short:p-0!`）
+    只在手机 / 横屏矮视口真正贴边，桌面保持不变。`TableWrap` 带 `.table-scroll`（两侧被遮住的列有渐隐阴影）；`Banner` 在手机上操作按钮总是单独一行；`Field` 控件与分页按钮触屏上加高。
+  - 消息中心的待决事件卡片（如「真实新秀」）在手机上正文超过 90 字时先收起为 4 行（「展开全文」），选项与说明直接可见。
 - **多人大厅 / 房间顶栏的窄屏**（375px）：大厅的「‹ 主菜单」、标题、连接状态 `shrink-0 whitespace-nowrap`，服务器名与「玩家」字样 < sm 隐藏；房间页「‹ 离开房间」< sm 为「‹ 离开」、
   房间码字距收窄（`tracking-[0.08em]`，≥ sm 0.25em）。公网服务器（`serverMode === 'public'`）不显示 `?as=` 多开测试提示。主菜单网格用 `minmax(0,1fr)` 列（截断的长说明不撑宽列）。
+
+## 手机适配（v0.4）
+
+用户需求「优化游戏页面适合手机玩」。公共框架在 `src/index.css`（「手机适配」一节）、`src/ui/mobile.ts`（断点与钩子）、`src/ui/components/TouchTip.tsx`、
+`common.tsx`（`Button` / `Modal` / `Tabs` / `TableScroll` / `useToastPlacement`）、`layout/`（`TopBar` / `SideNav` / `ActionBar` / `HubKit`）。各页面按下面的约定适配，桌面（≥ 1024px）外观不变。
+
+- **断点**（与 Tailwind 默认一致，`mobile.ts` 的 `BREAKPOINT`）：
+  - `< sm`（640px）= 手机布局：底栏三行（`PhoneBar`）、`Modal` 为底部抽屉、游戏内提示在底栏上方、顶栏的「更新」芯片与「存档」收进导航抽屉。
+  - `< md`（768px）= 没有侧栏：顶栏最左侧 ☰ 打开导航抽屉；`NoticeBadge` 不显示。横屏手机（`short` 且 < lg）同样没有侧栏（`useSideNav()`，见「导航」）。
+  - `≥ lg`（1024px）= 桌面布局。`short` 自定义变体 = `@media (max-height: 480px)`（横屏手机）：顶栏 44px、底栏与侧栏行距收紧、sm–lg 的补充提示行隐藏。
+  - 判断用 CSS 变体（`max-sm:` / `sm:` / `md:` / `short:` / `pointer-coarse:`）优先；需要换结构时用 `useIsPhone()` / `useMinWidth(px)` / `useCoarsePointer()`（同一查询共用一个 `MediaQueryList`，可以放心在每个按钮里调用）。
+  - 窄屏单列网格一律写 `grid-cols-[minmax(0,1fr)]`（见「技术约定」）；`main` 在手机上的内边距为 `px-3 py-4`（≥ sm `px-6 py-5`），要「出血」到边缘的元素按同样的断点取负外边距（如 `MatchDock`：`-mx-3 sm:-mx-6`）。
+- **视口与安全区**：`index.html` 设 `viewport-fit=cover`、`theme-color`、`apple-mobile-web-app-*`（状态栏 `black-translucent`）与 `manifest.webmanifest`（独立窗口、竖屏、深色底，图标见下）；不注册 Service Worker。
+  - `#root` 高度 `100dvh`（随移动浏览器工具栏伸缩）；页面本身不滚动（`body` `overscroll-behavior: none`），滚动发生在 `main` 等容器里（`overscroll-contain`）。
+  - 根容器 `pt-safe px-safe`（刘海 / 状态栏与横屏刘海）；**贴底的栏自己让出底部**：`ActionBar` 与 `MatchDock` 用 `pb-safe`（背景铺到 Home 横条下方）。新增贴底的 fixed 元素用 `env(safe-area-inset-bottom)` 或 `--chrome-bottom` 定位。工具类：`pt-safe` / `pb-safe` / `px-safe` / `no-scrollbar`（`index.css` 的 `@utility`）。
+  - CSS 变量：`--chrome-top` = 顶栏底边到视口顶部（多人窄屏两行时约 106px），`--chrome-bottom` = 底栏（或比赛页 `MatchDock`）顶边到视口底部，都含安全区，由 `useChromeVar` 写在 `<html>` 上、卸载时移除。
+    提示（`useToastPlacement`）、TI 预选横幅、底部抽屉、「查看生涯总结」浮动按钮据此避开两条栏；新增浮层同样用 `calc(var(--chrome-bottom, 0px) + 8px)` 之类的写法，不要写死 `top-16` / `bottom-24`。
+  - 应用图标 `public/icons/`：由原创冠军盾矢量图（`TiTransition.tsx` 的 `AegisSvg`，默认主题）渲染（`icon-192/512.png` 为圆角深色底，`icon-maskable-*.png` 为满版底、盾在 60% 安全区内，`apple-touch-icon.png` 180px，`favicon-32.png` / `icon.svg` 为标签页图标）。不得换成 Valve 美术。
+- **导航**（`layout/SideNav.tsx`）：< md 与横屏手机（矮视口 `short` 且 < lg）时 App 不渲染侧栏，顶栏最左侧为 ☰（`NavToggle`）。是否有侧栏一律用 `mobile.ts` 的 `useSideNav()`（App、TopBar 的 ☰、抽屉的自动收起共用；横屏手机只有约 390px 高，160px 的侧栏会把内容挤窄；≥ lg 的窗口再矮也保留侧栏）。点开为左侧抽屉（`NavDrawer`，portal 到 body，z-[55]）：与侧栏同一份入口、徽标与 `open()` 逻辑（`useNavModel`），
+  每个入口下方直接写出说明（触屏没有悬停），顶部为俱乐部与「TI 赛季 · 回合」，底部为顶栏放不下的入口（单机「存档管理」、「更新说明」，由 TopBar 通过 `footer` 传入，`DrawerRow`）。
+  导航后、点遮罩、Esc、出现侧栏（`useSideNav()` 变为 true）时收起。抽屉顶部的俱乐部全名与简称相同（如 OG）时只写一次。☰ 的提示点：有「需处理」徽标（待决事件、首发问题、报价、资金为负 / 荣誉告急）时为红色脉冲点，只有新通知（或手机上有未读的更新说明）时为蓝点。
+  选择抽屉而不是底部标签栏：底部已有操作栏，再加一行标签会多占约 52px 高度，且与「下一回合」抢拇指区域。顶栏 < md 显示简写进度「5/18」「TI 预选」。
+- **底栏**（`layout/ActionBar.tsx`）：
+  - 手机 `PhoneBar`：第一行一行提示（`HintLine`：右侧提示，阻塞为红色；没有提示时为「回合类型 · 赛事 · 日期 · 距 TI」；点按展开全文，点在提示里的按钮上则执行按钮）；
+    第二行情境操作条（非次要操作的 `compactEl ?? el`，`shrink-0`，横向滑动、隐藏滚动条）；第三行「自动」开关（竖排，与主按钮等高）+ 通栏主按钮（`h-12`，手机上用 `Main.short`，多人为「准备（1/2）」，动词放进小字）+「更多」（只放 `secondary` 操作，菜单项 `max-sm:py-3`）。
+    主按钮被禁用时小字写原因。
+  - 底栏的气泡（训练焦点、训练赛、待决事件、更多）在手机上是底栏上方的通栏抽屉（`BarPopover`，`--chrome-bottom` 定位，内容超高时滚动）；≥ sm 仍在按钮上方，宽度夹在视口内、高度不超过按钮上方空间。
+    待决事件在手机上正文不截断，每个选项的说明直接写在选项下方。
+  - 新增情境操作：给 `compactEl`（手机上用它）、`demote`、`menu`；不要依赖悬停说明传达必要信息。`compactEl` 的文字要带动词（如「退回 3 人」，不要只写「超编 3 人」）；点按后如果当前页面就是目标页、看不出变化，要让页面把相关内容滚到眼前。
+- **弹窗**（`common.tsx` 的 `Modal`）：手机上为底部抽屉（贴底、全宽、顶部圆角、最高为视口减去状态栏，`sheet-up` 动画），标题栏固定、正文滚动（`overscroll-contain`），
+  关闭按钮 40×40；底部按钮行可换行，并让出 Home 横条（`pb-[max(0.75rem,env(safe-area-inset-bottom))]`）。≥ sm 为居中面板，最高 `100dvh - 2rem`。宽度参数（`max-w-*`）照旧。
+  确认气泡（`ConfirmPopover`）宽度不超过视口，触屏上「确定 / 取消」为常规尺寸按钮。所有「点外部关闭」一律监听 `pointerdown`（iOS Safari 点按非可点击元素不发 `mousedown`）。
+- **提示（toast）**：`ToastHost` / `MpToastHost` 共用 `useToastPlacement` 与 `ToastCard`：默认在顶栏下方（`--chrome-top`）；手机游戏内在底栏上方，自下而上出现（不压住多人顶栏第二行的「聊天 / 离开 / 托管」）。
+  层级 `z-[75]`：高于弹窗（z-50）与底栏的通栏抽屉（`BarPopover` z-[70]——手机上在训练赛抽屉里约练后，结果提示要在抽屉之上），低于确认气泡（z-[80]）。
+  手机上超过 4 行的提示（如十连结果）先收起并写「点按展开全文」：第一次点按展开并留住（store 的 `holdToast`，改为 12 秒后消失），再点关闭；桌面不收起。
+- **触控尺寸**：`Button` 在触屏（`pointer-coarse`）上的最小高度 xs 32px / sm 36px / md 40px（lg 本来约 44px）；顶栏按钮、音乐按钮至少 40px；底部抽屉的菜单项约 46px。
+  自写的可点元素（`<button className=…>`）在触屏上同样保证至少 36–40px 高（`pointer-coarse:min-h-10`），相邻的危险操作之间留出间距。
+- **触屏说明**（`components/TouchTip.tsx`）：触屏没有悬停，`title` 看不到。`Button` 在触屏上「`disabled` + 有 `title`」时改为 `aria-disabled` + 半透明（原生禁用的按钮收不到点击），
+  点按时在按钮旁显示 `title`（禁用原因），不执行操作、不冒泡、不提交表单——所以 AGENTS.md「按钮禁用时用 `title` 说明原因」在手机上同样有效，**禁用的按钮请用 `Button`（或 `ConfirmButton`）而不是裸 `<button disabled>`**。
+  其他只靠 `title` 说明的关键信息，或者直接写在界面上（如导航抽屉的入口说明、待决事件的选项说明），或者点按时调用 `showTouchTip(元素, 文字)`。「自动」开关在触屏上每次切换都会显示一句说明。
+- **输入框**：触屏上 `input / select / textarea` 字号至少 16px（`index.css` 全局规则，iOS 聚焦时不再放大页面）；触屏不要 `autoFocus` 输入框（会立刻弹出软键盘，如多人聊天）。
+- **悬停效果**：Tailwind v4 的 `hover:` 只在有悬停能力的设备生效；自写 CSS 的悬停规则放进 `@media (hover: hover)`（`.tbl` 行高亮、新闻滚动条悬停暂停）。
+- **标签行**：`HubShell` 与 `Tabs` 在手机上不换行、横向滑动（隐藏滚动条），`HubShell` 的标题单独一行；新加的标签不需要额外处理。
+- **表格**（`common.tsx` 的 `TableScroll`，样式 `index.css` 的 `.table-scroll` / `.tbl-cards`）：
+  - 宽表格包在 `<TableScroll>` 里横向滑动，两侧有被遮住的列时显示渐隐阴影；`stickyFirst` 让第一列（选手 / 战队名）固定在左侧；`bg` 传卡片底色（默认 `panel`）。不要再用 `overflow-hidden` 包表格（右侧的列在手机上会被裁掉、滑不到）。
+    长说明列给 `whiteSpace: normal` 与最小宽度，让它换行而不是把表撑得更宽。
+  - 战队详情（`TeamModal`）的阵容与「近期战绩」表都在 `TableScroll` 里；近期战绩的赛事名在手机上换行（`max-sm:whitespace-normal!`、按钮 `text-left`），等级与名次列总在屏幕内，桌面仍单行截断。
+  - 列多、行少的表（详情、对比）可以在手机上改成卡片：`<table className="tbl tbl-cards">`，每个 `td` 加 `data-label="列名"`（作为左侧小标题，不带 `data-label` 的单元格为卡片标题行）；≥ sm 仍是普通表格。
+  - 行数很多、主要看两三列的表（排名、市场）优先在手机上隐藏次要列（`max-sm:hidden`）+ 点击行看详情，而不是横向滑很远。
+  - 首列固定只在 < lg 开启：`<TableScroll stickyFirst={useStickyFirstCol()}>`（`SquadShared`）。桌面表格放得下，固定列的实色底与分隔线会让悬停高亮缺一格。
+    要固定两列（勾选框 + 选手、名次 + 俱乐部）时在格子上写 `max-sm:sticky max-sm:left-… max-sm:bg-panel`（见 `Squad` 的 `STICKY_*`、`GameOver` 的排行榜），合计行不要用跨列的首格（固定后会盖住滑过来的列）。
+  - `index.css` 的 `.tbl` 规则不在 `@layer` 里，优先于 Tailwind 工具类：要在单元格上改 `z-index` / `white-space`、在表格上改 `width` 时加 `!`（如表头固定格 `max-sm:z-[3]!`、
+    说明列换行 `max-sm:whitespace-normal!`、按内容宽度排开 `max-sm:w-max!`——否则 `width: 100%` 会把各列压到最小宽度，标签折成多行）。
+  - 名称列不是第一列（前面有「#」）时用 `PediaKit` 的 `STICKY_TH` / `STICKY_TD`（只在 < sm 生效）固定名称列，「#」列加 `PHONE_HIDE`，名次并入名称单元格（`sm:hidden` 的小号序号）；
+    可排序的表在手机上另放 `PediaSortSelect`（下拉选排序项 + 升降序按钮，≥ sm 不显示），表头滑出屏幕也能排序（DotaPedia 战队 / 选手 / 英雄）。
+  - 每行信息分散在七八列、按行阅读的表（DotaPedia 赛事列表、单局纪录、战队「赛事战绩」）在手机上换成两三行的列表（`sm:hidden` 的列表 + `hidden sm:block` 的表格）。
+  - `Card` / `PSection` 的 `bodyClassName="p-0"`：桌面上默认的 `p-4` 一直覆盖它（保持不变）；手机上按原意去掉内边距（`max-sm:p-0`），表格卡片多出 32px 宽。
+- **赛事与比赛页**（v0.4 match）：
+  - 比赛页（`Match.tsx`）阶段切换（赛前 → BP → 直播 → 下一局 / 结算）时 `main` 回到顶部；横幅在手机上去掉队标方块与赛区文字，流程步骤只写当前步骤名，横屏矮视口隐藏步骤行。
+  - `MatchDock`：< sm 两行（阶段 + 提示 / 附加按钮，次要按钮 + 通栏主按钮）；sm–lg 主按钮最小 240px、右栏至少容得下附加按钮（`minmax(min-content,1fr)`）；≥ lg 与桌面一致（主按钮 360px）；`short:` 收紧高度。
+    主按钮换成另一个动作（`primary.key` 变化，如直播播完时「跳过直播」→「继续 · 第 N 局」）后 600ms 内不响应点按、半透明显示（`usePrimarySwapGuard`）：想跳过直播的一下恰好落在播完之后，不会直接进入下一局而错过赛果。
+  - BP（`MatchDraft.tsx`）：< lg 用 `useMinWidth(1024)` 换成吸附在主区顶部的紧凑看板（`sticky -top-4 sm:-top-5`，抵消 `main` 的上内边距；`short:static`）+ 横向推荐条 + 不嵌套滚动的英雄池，BP 顺序（横向条）与完整禁选位放在最后。
+    触屏（`useCoarsePointer`）为「点按选中 → 再点一次或点底栏按钮确认」：选中的英雄是比赛页的本地状态（按 BP 进度失效），底栏写明英雄简介（`heroBrief`）；鼠标仍为单击直接禁选。
+    英雄池搜索：BP 前进一步（可用英雄减少）后搜索没有结果时自动清空（搜到的英雄被禁 / 选走后不必再点「清除筛选」）；仍有结果时保留。
+  - 直播（`MatchLive.tsx`）：< lg 用 flex `order` 把记分板（附一行大老师胜率）与直播排在最前，直播框 `h-[min(440px,55dvh)]`，事件行在手机上分两行；触屏不显示「空格跳过」提示。
+    直播框 < lg 为 `overscroll-auto`：滑到框的顶 / 底后继续滑动会滚动页面（它是「页面内的滚动框」规则的例外，所以不拦截滚动链）；≥ lg 仍为 `overscroll-contain`。
+  - 横屏手机（`short` 且 < lg）：没有侧栏（☰ 抽屉）；比赛页标题行 `short:mb-2`、副标题隐藏（横幅已写 Bo 与局数）、横幅比分缩小、不显示队标方块，BP 看板与直播尽量留在第一屏（看板在 `short` 下仍不吸附：内容区只有约 290px 高）。
+  - 只靠 `title` 说明的小元素：`MatchShared.tsx` 的 `tapTip(文字)`（展开到元素上：桌面为 `title`，触屏点按显示 `TouchTip`）；英雄头像传 `tip`（`<HeroAvatar tip />`）。
+  - 报名按钮（`entryControls`）在触屏上 `xs` 自动放大为 `sm`；长规则说明在手机上收进 `<details>`「规则说明」；`Segmented` 触屏最小 36px、不折行。
+  - 横屏手机（`short`）不显示左下角浮动通知徽标；< lg 的横屏手机没有侧栏，新通知数在 ☰ 的蓝点与导航抽屉「总览」上（≥ lg 的矮窗口写在侧栏「总览」上）。
+  - 系列赛结算卡片顶部的赛事说明行在手机上字距收窄（`max-sm:tracking-[0.08em]`）。
+- **页面上的做法**（俱乐部 / 战队 / 总览 / 主菜单 / 新游戏 / 生涯总结，v0.4）：
+  - 主菜单与新游戏的内容区：内容可能比视口高的居中布局用 `flex-col` + 内容 `m-auto`（不要 `items-center` 居中滚动容器，顶部会被推到滚动起点之上）；横屏（`short`）主菜单标题与入口左右并排。
+  - 新游戏向导：手机上顶栏一行（标志 + 步骤 + ✕），底栏为「第 n/3 步 · 未完成项」一行小字 +「返回 / 通栏主按钮」，右侧让出右下角浮动的音乐按钮；换步骤时回到顶部。
+  - 阵容首发卡片在手机上压缩（选手名并入位置行、战力 / 天梯 / 年龄为一行小字）；训练赛表与推荐训练赛只留简称 / 倍数 / 费用 / 「约练」（≥ sm 仍为「约训练赛」）。
+  - 只在悬停里的说明（待处理的首发问题与到期选手、训练卡片概况、选手潜力说明、通知摘要、账目说明）在手机上直接写出或换行显示全文。
+  - inline-flex 按钮里不要用「文字 + 隐藏的文字」拼标签（拆开的文字之间会多出 `gap`，桌面宽度会变），写两套完整文字分别 `sm:hidden` / `hidden sm:inline`。
+  - 链接按钮（`PlayerLink` / `TeamLink` 是 `<button>`，原子行内盒）放进要截断的窄格子时，把截断加在按钮本身：`className="block max-w-full truncate text-left"`；只在外层 span 上 `truncate` 时按钮会被硬裁掉、没有省略号（生涯总结「最佳选手」）。
+  - 主菜单入口按钮在手机上 `max-sm:px-3 max-sm:gap-2.5`、标签 `truncate`，悬停才出现的「›」在触屏上不占位（`pointer-coarse:hidden`），两列的「导入存档 / 玩法说明」在 360px 下不折行；英文副标题 `whitespace-nowrap` 且手机上字距收窄。新游戏终点 TI 格子的「2027 · 推演」不折行。
+  - 存档管理「导出存档文件」与生涯总结「导出存档」同一写法：`ShellKit` 的 `downloadText`（链接挂到页面上再点击、1 秒后释放 blob 地址——立即释放会让 iOS Safari 取消下载）+ `saveFileName(简称)`，成功后提示「存档已导出」。
+- **页面内的滚动框**：手机 / 平板上不要在页面里再套 `max-h-* overflow-y-auto` 的滚动框（滑动会被它吞掉、页面滚不动）：只在桌面加（`lg:max-h-[460px] lg:overflow-y-auto`），
+  窄屏改为先列前 N 行 +「显示全部」（历史地位榜、TI 冠军、选手榜、多人选队列表）。
+- **DotaPedia 词条**：< lg 时信息框（`Infobox`）只显示醒目区域与 `summary` 要点行，其余收进「完整信息」；目录（`PediaToc`）是一行可横向滑动的章节标签。
+  只放在 `title` 里的说明用 `tipOnTap(text)`（触屏点按时显示 TouchTip）；`PStat` 带 `title` 时自动如此。图表（`PediaCharts`）触屏点按柱子 / 数据点时在图下方显示该点的说明。
+- **多人**：大厅 < lg 按「玩家 → 加入房间 → 房间列表 → 创建房间 → 服务器（地址设置默认收起）」排列，连接中断 / 已断开时「服务器」卡片（立即重连、错误原因）提到最前；
+  大厅顶栏的连接状态在手机上用简写（`ConnBadge short`：「重连中 16 秒」「未连接」，完整的「连接中断，16 秒后第 7 次重连…」在服务器卡片里），玩家名不再被挤成一个字；
+  房间列表的名称行可换行：放不下时「进行中 / 我的座位」等徽标换到下一行，房间名不被挤成「甲的…」；房间 < xl 玩家列表在最前、非房主的对局设置只显示一行摘要，
+  「准备 / 开始游戏」固定在底部栏（右侧让出音乐按钮）。公网服务器的「手动地址」提示与占位为网页地址（`http://地址/`）或「地址:端口」（v0.4 公网服务器改用 80 端口，见 MULTIPLAYER.md「80 端口与旧地址」）；
+  局域网仍提示 `192.168.1.5:8686`（不带协议头、不带端口的纯地址默认 8686，`http://地址/` 按 80）。游戏内聊天面板 z-[48]（弹窗之下），点外部 / Esc 关闭，「离开」先收起聊天；消息列表按高度固定、横屏时限高。
+  手机上其他玩家的快讯只显示最新一条，带单独的 ✕（点快讯本身仍打开消息中心）。
+- **新页面自查**（375×812、360×740、390×844、414×896，横屏 844×390；浏览器测试用独立的源）：`document.documentElement.scrollWidth` 等于视口宽度、`main.scrollWidth` 等于 `main.clientWidth`（不要靠 `overflow-x: hidden` 盖住问题，找出撑宽的元素），
+  按钮至少 36px 高、拇指能点到，没有只靠悬停才能看到的必要信息，浮层不压住顶栏 / 底栏。
 
 ## 本地美术覆盖（`public/local/`，第十波 #4 / #7）
 真实队标与官方冠军盾图片属于商标 / 版权美术，**不得提交到仓库**；界面默认使用原创生成的队徽与矢量冠军盾。用户可在本机放入自己的图片覆盖显示（目录被 `.gitignore` 忽略，只提交 `public/local/README.txt` 使用说明）：

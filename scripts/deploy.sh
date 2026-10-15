@@ -8,7 +8,8 @@
 # 服务器端约定（首次部署前手工准备一次，见 docs/MULTIPLAYER.md「部署到公网服务器」）：
 #   - 已安装 Node.js 20+（node / npm 在 PATH 中），已创建系统用户 d2m；
 #   - 应用目录 /opt/dota2manager（属主 d2m），房间存档目录 /opt/dota2manager-data（属主 d2m）；
-#   - systemd 单元 deploy/dota2manager.service 由本脚本安装 / 更新。
+#   - systemd 单元 deploy/dota2manager.service 由本脚本安装 / 更新（v0.4 起监听 80 端口，云服务器安全组需放行 TCP 80，
+#     且服务器上不能有其他程序占用 80 端口，如 nginx / apache）。
 #
 # 不会上传：node_modules、dist、server-data、.git、本地美术覆盖 public/local/*（只上传其中的 README.txt）等本地产物。
 set -euo pipefail
@@ -55,4 +56,4 @@ ssh "$HOST" "set -euo pipefail
   systemctl --no-pager --lines=5 status dota2manager || true
 "
 
-echo "== 完成。浏览器打开 http://<服务器地址>:8686/ 即可进入。"
+echo "== 完成。浏览器打开 http://<服务器地址>/ 即可进入（80 端口，不用写端口号）。"

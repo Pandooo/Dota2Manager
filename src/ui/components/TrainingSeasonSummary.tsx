@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { POSITIONS, trainingSummary } from '../../engine';
 import type { FocusTrainingStats, GameState, TrainingSummary } from '../../engine';
-import { Card, Delta, EmptyState, Gold, PlayerLink, PosBadge, Stat, cx } from './common';
-import { Chip, safe } from './SquadShared';
+import { Card, Delta, EmptyState, Gold, PlayerLink, PosBadge, Stat, TableScroll, cx } from './common';
+import { Chip, safe, useStickyFirstCol } from './SquadShared';
 import { FOCUS_INFO, FOCUS_ORDER } from './TrainingShared';
 
 const fmt = (v: number, d: number) => (Number.isFinite(v) ? v.toFixed(d) : '—');
@@ -12,6 +12,7 @@ export default function TrainingSeasonSummary({ game }: { game: GameState }) {
   const records = game.history?.training ?? [];
   const seasons = [...new Set([game.season.ti, ...records.map((r) => r.season)])].sort((a, b) => b - a);
   const [season, setSeason] = useState(game.season.ti);
+  const sticky = useStickyFirstCol();
   const sum = safe(() => trainingSummary(game, season), null as TrainingSummary | null);
   const me = game.settings.playerTeamId;
   const team = game.teams[me];
@@ -23,7 +24,7 @@ export default function TrainingSeasonSummary({ game }: { game: GameState }) {
     <select
       value={season}
       onChange={(e) => setSeason(Number(e.target.value))}
-      className="cursor-pointer rounded border border-line bg-panel-2 px-1.5 py-0.5 text-xs text-ink [color-scheme:dark]"
+      className="cursor-pointer rounded border border-line bg-panel-2 px-1.5 py-0.5 text-xs text-ink [color-scheme:dark] pointer-coarse:min-h-9"
     >
       {seasons.map((s) => (
         <option key={s} value={s}>
@@ -70,7 +71,7 @@ export default function TrainingSeasonSummary({ game }: { game: GameState }) {
   return (
     <div className="space-y-4">
       <Card title="赛季训练汇总" subtitle={`TI${season} 赛季 · 全部训练（含训练赛与回合结束自动训练）`} actions={seasonSelect}>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Stat
             label="训练次数"
             value={sum.sessions}
@@ -110,9 +111,10 @@ export default function TrainingSeasonSummary({ game }: { game: GameState }) {
         </div>
       </Card>
 
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      {/* 单列也写 minmax(0,1fr)：隐式 auto 列会被宽表格撑出屏幕 */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card title="选手累计收益" subtitle="所选赛季训练带来的属性变化；「快照变化」含赛事、版本与事件等全部因素" bodyClassName="p-0">
-          <div className="overflow-x-auto">
+          <TableScroll stickyFirst={sticky}>
             <table className="tbl">
               <thead>
                 <tr>
@@ -166,11 +168,11 @@ export default function TrainingSeasonSummary({ game }: { game: GameState }) {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </Card>
 
         <Card title="各焦点平均收益" subtitle="每次训练的全队合计 / 每名队员平均（训练赛已含倍数加成）" bodyClassName="p-0">
-          <div className="overflow-x-auto">
+          <TableScroll stickyFirst={sticky}>
             <table className="tbl">
               <thead>
                 <tr>
@@ -195,7 +197,7 @@ export default function TrainingSeasonSummary({ game }: { game: GameState }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <p className="px-4 py-2.5 text-xs leading-relaxed text-mute">
             金色为该列最高。收益受阵容人数、年龄与软上限影响：老将多、属性接近上限时，同一焦点的收益会逐渐下降，可据此调整焦点或约练更强的对手。
           </p>

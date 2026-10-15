@@ -1,12 +1,15 @@
 // DotaPedia · 英雄：按赛季的出场 / 胜率 / 禁用 / K/D/A 表（来自已记录的对局），点击英雄查看分赛季趋势与常用选手
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
 import { heroById, pediaHeroStats, pediaHeroTrend, pediaSeasons, tiYear } from '../../engine';
 import type { GameState, PediaHeroRow } from '../../engine';
-import { Card, EmptyState, cx } from '../components/common';
+import { Card, EmptyState, TableScroll, cx } from '../components/common';
 import { SortTh, sortList, useSort } from '../components/SquadShared';
 import { TourSelect } from '../components/TourShared';
-import { PPlayer, PStat, PTeam, PediaEntryGuard, PediaInput, fmt1, fmtKda, fmtPct, openPedia, safe, usePediaSel } from '../components/PediaKit';
+import {
+  PHONE_HIDE, PPlayer, PStat, PTeam, PediaEntryGuard, PediaInput, PediaSortSelect, STICKY_TD, STICKY_TH, fmt1, fmtKda, fmtPct, openPedia, safe, usePediaSel,
+} from '../components/PediaKit';
+import { BREAKPOINT, matchesQuery } from '../mobile';
 import { MeterBar, PBarChart, PLineChart, type ChartDatum } from '../components/PediaCharts';
 
 type SortKey = 'name' | 'picks' | 'pickRate' | 'winRate' | 'bans' | 'kda' | 'kills';
@@ -54,7 +57,7 @@ export default function PediaHeroes() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <PediaInput value={q} onChange={setQ} placeholder="按中文 / 英文名筛选" className="w-48" />
+        <PediaInput value={q} onChange={setQ} placeholder="按中文 / 英文名筛选" className="w-full sm:w-48" />
         <TourSelect value={season} onChange={setSeason} title="赛季">
           <option value="all">全部赛季</option>
           {seasons.map((s) => (
@@ -70,28 +73,42 @@ export default function PediaHeroes() {
           <option value="50">≥ 50 场</option>
           <option value="100">≥ 100 场</option>
         </TourSelect>
+        <PediaSortSelect
+          sort={sort}
+          options={[
+            { key: 'picks', label: '出场' },
+            { key: 'pickRate', label: '出场率' },
+            { key: 'winRate', label: '胜率' },
+            { key: 'bans', label: '被禁' },
+            { key: 'kda', label: 'KDA' },
+            { key: 'kills', label: '场均击杀' },
+            { key: 'name', label: '英雄名', defaultDir: 'asc' },
+          ]}
+        />
         <span className="ml-auto text-xs text-faint">
           出场率 = 出场 / 对局数；被禁只统计有完整 BP 的对局{totalBans === 0 ? '（暂无）' : ''}
         </span>
       </div>
 
-      <div className={cx('grid gap-4', sel && 'xl:grid-cols-[minmax(0,1fr)_380px]')}>
+      {/* < xl：英雄详情排在列表之前（点选后滚动到详情），不用滑到上百行之后才看到 */}
+      <div className={cx('grid grid-cols-[minmax(0,1fr)] gap-4', sel && 'xl:grid-cols-[minmax(0,1fr)_380px]')}>
         <Card bodyClassName="p-0" className="min-w-0">
           {sorted.length === 0 ? (
             <EmptyState text={rows.length ? '没有符合条件的英雄' : '还没有已记录的对局'} />
           ) : (
-            <div className="overflow-x-auto">
+            // 手机：英雄列固定在左侧，序号、出场率、胜-负、K / D / A 隐藏（可用上方的排序选择）
+            <TableScroll>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th className="num">#</th>
-                    <SortTh k="name" sort={sort} defaultDir="asc">英雄</SortTh>
+                    <th className={cx('num', PHONE_HIDE)}>#</th>
+                    <SortTh k="name" sort={sort} defaultDir="asc" className={STICKY_TH}>英雄</SortTh>
                     <SortTh k="picks" sort={sort}>出场</SortTh>
-                    <SortTh k="pickRate" sort={sort} className="num">出场率</SortTh>
+                    <SortTh k="pickRate" sort={sort} className={cx('num', PHONE_HIDE)}>出场率</SortTh>
                     <SortTh k="winRate" sort={sort} className="num">胜率</SortTh>
-                    {!sel && <th className="num">胜-负</th>}
+                    {!sel && <th className={cx('num', PHONE_HIDE)}>胜-负</th>}
                     <SortTh k="bans" sort={sort} className="num">被禁</SortTh>
-                    {!sel && <SortTh k="kills" sort={sort} className="num" title="场均 击杀 / 阵亡 / 助攻">K / D / A</SortTh>}
+                    {!sel && <SortTh k="kills" sort={sort} className={cx('num', PHONE_HIDE)} title="场均 击杀 / 阵亡 / 助攻">K / D / A</SortTh>}
                     <SortTh k="kda" sort={sort} className="num">KDA</SortTh>
                   </tr>
                 </thead>
@@ -103,27 +120,27 @@ export default function PediaHeroes() {
                       onClick={() => openPedia('hero', sel === r.heroId ? null : r.heroId, { replace: true, scroll: false })}
                       title="点击查看分赛季趋势与常用选手"
                     >
-                      <td className="num text-faint">{i + 1}</td>
-                      <td>
+                      <td className={cx('num text-faint', PHONE_HIDE)}>{i + 1}</td>
+                      <td className={STICKY_TD}>
                         <span className="font-medium text-ink">{r.cn}</span>
-                        <span className="ml-1.5 text-[11px] text-faint">{r.name}</span>
+                        <span className="ml-1.5 text-[11px] text-faint max-sm:hidden">{r.name}</span>
                       </td>
-                      <td className={sel ? 'w-28' : 'w-40'}>
+                      <td className={cx(sel ? 'w-28' : 'w-40', 'max-sm:min-w-24')}>
                         <div className="flex items-center gap-2">
                           <span className="w-10 text-right tabular">{r.picks}</span>
                           <MeterBar value={r.picks} max={topPicks} className="flex-1" />
                         </div>
                       </td>
-                      <td className="num text-mute">{fmtPct(r.pickRate)}</td>
+                      <td className={cx('num text-mute', PHONE_HIDE)}>{fmtPct(r.pickRate)}</td>
                       <td className={cx('num', r.picks >= 20 && r.winRate >= 0.55 && 'text-good', r.picks >= 20 && r.winRate <= 0.45 && 'text-bad')}>{fmtPct(r.winRate)}</td>
                       {!sel && (
-                        <td className="num text-mute">
+                        <td className={cx('num text-mute', PHONE_HIDE)}>
                           {r.wins}-{r.picks - r.wins}
                         </td>
                       )}
                       <td className="num text-mute">{r.bans || '—'}</td>
                       {!sel && (
-                        <td className="num text-mute">
+                        <td className={cx('num text-mute', PHONE_HIDE)}>
                           {r.picks > 0 ? `${fmt1(r.kills / r.picks)} / ${fmt1(r.deaths / r.picks)} / ${fmt1(r.assists / r.picks)}` : '—'}
                         </td>
                       )}
@@ -132,7 +149,7 @@ export default function PediaHeroes() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </Card>
         {sel && (
@@ -160,6 +177,11 @@ function HeroDetail({ game, heroId, row, ti }: { game: GameState; heroId: string
   }, [game, version, heroId]);
   const picks: ChartDatum[] = trend.map((t) => ({ key: String(t.ti), label: `TI${t.ti}`, value: t.picks, highlight: t.ti === ti, tip: `TI${t.ti}：出场 ${t.picks}（${fmtPct(t.pickRate)}）· 被禁 ${t.bans}` }));
   const wr: ChartDatum[] = trend.map((t) => ({ key: String(t.ti), label: `TI${t.ti}`, value: t.picks > 0 ? t.winRate * 100 : NaN, highlight: t.ti === ti, tip: `TI${t.ti}：${t.wins} 胜 / ${t.picks} 场（${fmtPct(t.winRate)}）` }));
+  // < xl：详情排在列表之前，点选英雄后滚动到详情（列表很长，否则看不到点选的结果）
+  const anchor = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!matchesQuery(`(min-width: ${BREAKPOINT.xl}px)`, true)) anchor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [heroId]);
   return (
     <Card
       title={
@@ -170,12 +192,13 @@ function HeroDetail({ game, heroId, row, ti }: { game: GameState; heroId: string
       }
       subtitle={ti !== undefined ? `表格为 TI${ti} 赛季；趋势与常用选手为全部赛季` : '全部赛季'}
       actions={
-        <button type="button" className="cursor-pointer text-xs text-mute hover:text-ink" onClick={() => openPedia('hero', null, { replace: true, scroll: false })}>
+        <button type="button" className="cursor-pointer text-xs text-mute hover:text-ink pointer-coarse:min-h-9 pointer-coarse:px-2" onClick={() => openPedia('hero', null, { replace: true, scroll: false })}>
           关闭
         </button>
       }
-      className="h-fit xl:sticky xl:top-0"
+      className="h-fit max-xl:order-first xl:sticky xl:top-0"
     >
+      <div ref={anchor} className="scroll-mt-16" />
       {row ? (
         <div className="grid grid-cols-2 gap-2">
           <PStat label="出场" value={row.picks} sub={`出场率 ${fmtPct(row.pickRate)}`} />

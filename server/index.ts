@@ -1,7 +1,7 @@
 // ============================================================================
 // 刀塔经理 · 多人服务器（命令行入口；局域网或公网）
 // 用法：npm run server [-- --port 8686] [--data ./server-data] [--host 0.0.0.0] [--dist ./dist] [--name 房主的电脑]
-//                      [--keep-finished-hours 2] [--keep-idle-days 14] [--public] [--trust-proxy] [--stats-interval-min 10]
+//                      [--keep-finished-hours 2] [--keep-idle-days 14] [--public] [--trust-proxy] [--stats-interval-min 10] [--also-port 8686]
 //       npm run mp   （先 vite build 前端，再启动服务器）
 // 局域网：朋友在浏览器打开启动时打印的局域网地址即可加入；公网（--public）：不打印、不下发任何内网地址。
 // WebSocket 路径为 /ws；在线统计见 GET /api/status（只回答服务器本机的请求）。
@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import { registerNodeRosterLoader } from '../scripts/nodeData';
 import { DEFAULT_SERVER_PORT, WS_PATH } from '../src/shared/protocol';
 import { startServer, type RunningServer } from './app';
+import { httpOrigin } from './net';
 import { DEFAULT_FINISHED_ROOM_TTL_MS, DEFAULT_IDLE_ROOM_TTL_MS } from './rooms';
 import { DEFAULT_STATS_LOG_INTERVAL_MS } from './stats';
 
@@ -35,7 +36,11 @@ function parseArgs(argv: string[]): Record<string, string | true> {
 const HELP = `刀塔经理 · 多人服务器（局域网 / 公网）
 
 用法：npm run server -- [选项]
-  --port <端口>     监听端口（默认 ${DEFAULT_SERVER_PORT}，也可用环境变量 PORT）
+  --port <端口>     监听端口（默认 ${DEFAULT_SERVER_PORT}，也可用环境变量 PORT）。公网服务器可用 80，玩家打开 http://<地址>/ 不用写端口；
+                    1024 以下的端口需要绑定权限（systemd 单元见 deploy/dota2manager.service 的 AmbientCapabilities）
+  --also-port <端口[,端口…]>
+                    同时在这些端口提供同一个服务器（同一批房间）。换端口时过渡用：例如改用 80 端口后加 --also-port 8686，
+                    旧地址仍能打开，玩家可以在旧地址继续进行中的多人对局、导出单机存档（浏览器存档按地址分开保存）
   --host <地址>     监听地址（默认 0.0.0.0，局域网内可访问）
   --data <目录>     房间存档目录（默认 ./server-data）
   --dist <目录>     前端构建产物目录（默认 <项目>/dist）
@@ -85,6 +90,18 @@ async function main(): Promise<void> {
     console.error(`端口无效：${portArg}`);
     process.exit(1);
   }
+  const alsoArg = args['also-port'];
+  const extraPorts: number[] = [];
+  if (alsoArg !== undefined) {
+    for (const part of (typeof alsoArg === 'string' ? alsoArg : '').split(',')) {
+      const p = Number(part.trim());
+      if (!part.trim() || !Number.isInteger(p) || p < 1 || p > 65535) {
+        console.error(`参数 --also-port 无效：${String(alsoArg)}（需为 1–65535 的端口，多个用逗号分隔）`);
+        process.exit(1);
+      }
+      if (p !== port && !extraPorts.includes(p)) extraPorts.push(p);
+    }
+  }
   const dataDir = args['no-save'] ? null : resolve(typeof args.data === 'string' ? args.data : 'server-data');
   const keepFinishedHours = numberArg(args, 'keep-finished-hours');
   const keepIdleDays = numberArg(args, 'keep-idle-days');
@@ -98,6 +115,7 @@ async function main(): Promise<void> {
   try {
     server = await startServer({
       port,
+      extraPorts,
       host: typeof args.host === 'string' ? args.host : undefined,
       dataDir,
       distDir: typeof args.dist === 'string' ? resolve(args.dist) : undefined,
@@ -109,25 +127,39 @@ async function main(): Promise<void> {
       statsLogIntervalMs: statsMin !== undefined ? statsMin * 60_000 : undefined,
     });
   } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    if (e.code === 'EADDRINUSE') console.error(`端口 ${port} 已被占用：可能服务器已经在运行，或换一个端口：npm run server -- --port ${port + 1}`);
-    else if (e.code === 'EACCES') console.error(`没有权限监听端口 ${port}，请换一个大于 1024 的端口`);
-    else console.error(`服务器启动失败：${e.message}`);
+    const e = err as NodeJS.ErrnoException & { port?: number };
+    // 监听失败的可能是 --also-port 的端口，按错误里的端口报
+    const bad = typeof e.port === 'number' ? e.port : port;
+    if (e.code === 'EADDRINUSE') {
+      console.error(bad === port
+        ? `端口 ${bad} 已被占用：可能服务器已经在运行，或换一个端口：npm run server -- --port ${bad + 1}`
+        : `兼容端口 ${bad}（--also-port）已被占用：可能服务器已经在运行，或换一个兼容端口、去掉 --also-port`);
+    } else if (e.code === 'EACCES') {
+      console.error(bad < 1024
+        ? `没有权限监听端口 ${bad}（1024 以下的端口需要权限）：Linux 上以 systemd 运行时给服务加 AmbientCapabilities=CAP_NET_BIND_SERVICE（见 deploy/dota2manager.service），或换一个大于 1024 的端口，如 --port ${DEFAULT_SERVER_PORT}`
+        : `没有权限监听端口 ${bad}，请换一个端口`);
+    } else console.error(`服务器启动失败：${e.message}`);
     process.exit(1);
   }
 
-  const statsUrl = `http://127.0.0.1:${server.port}/api/status`;
+  const statsUrl = `${httpOrigin('127.0.0.1', server.port)}/api/status`;
+  // 给朋友的网页地址写法：80 端口不用写端口号
+  const publicPage = server.port === 80 ? 'http://<公网地址或域名>/' : `http://<公网地址或域名>:${server.port}/`;
+  const alsoLine = server.extraPorts.length
+    ? [`  兼容端口：   ${server.extraPorts.join('、')}（--also-port；与上面是同一个服务器、同一批房间，旧地址仍能打开）`]
+    : [];
   const lines = publicMode
     ? [
       '',
       '  刀塔经理 · 多人服务器已启动（公网模式）',
       '',
       `  本机访问：   ${server.url}`,
+      ...alsoLine,
       '  内网地址：   （公网模式下不显示，也不会发给客户端）',
       '',
       `  WebSocket：  ${WS_PATH}    房间存档：${dataDir ?? '（不保存）'}`,
       `  在线统计（只允许本机访问）：curl -s ${statsUrl}`,
-      `  让朋友在浏览器打开服务器的公网地址或域名（端口 ${server.port}），在入口页选择「多人对战」即可加入。`,
+      `  让朋友在浏览器打开 ${publicPage}，在入口页选择「多人对战」即可加入。`,
       '',
     ]
     : [
@@ -135,6 +167,7 @@ async function main(): Promise<void> {
       '  刀塔经理 · 局域网多人服务器已启动',
       '',
       `  本机访问：   ${server.url}`,
+      ...alsoLine,
       ...(server.lanUrls.length
         ? server.lanUrls.map((u, i) => `  ${i === 0 ? '局域网访问：' : '            '} ${u}`)
         : [typeof args.host === 'string' && args.host !== '0.0.0.0'

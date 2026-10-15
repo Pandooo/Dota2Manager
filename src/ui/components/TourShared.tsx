@@ -351,7 +351,7 @@ export function TourSelect({
   );
 }
 
-/** 小型分段切换 */
+/** 小型分段切换（窄屏放不下时整组横向滑动，按钮文字不折行；触屏上按钮至少 32px 高） */
 export function Segmented<K extends string>({
   options,
   value,
@@ -364,14 +364,15 @@ export function Segmented<K extends string>({
   className?: string;
 }) {
   return (
-    <div className={cx('inline-flex rounded-md border border-line bg-panel-2 p-0.5', className)}>
+    <div className={cx('no-scrollbar inline-flex max-w-full overflow-x-auto rounded-md border border-line bg-panel-2 p-0.5', className)}>
       {options.map((o) => (
         <button
           key={o.key}
           title={o.title}
           onClick={() => onChange(o.key)}
           className={cx(
-            'cursor-pointer rounded px-2.5 py-1 text-xs transition-colors',
+            // 触屏：至少 36px 高（docs/UI.md「手机适配 · 触控尺寸」），选项文字不折行
+            'shrink-0 cursor-pointer whitespace-nowrap rounded px-2.5 py-1 text-xs transition-colors pointer-coarse:min-h-9',
             value === o.key ? 'bg-panel-3 text-ink shadow-sm' : 'text-mute hover:text-ink',
           )}
         >

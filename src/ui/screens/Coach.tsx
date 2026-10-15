@@ -7,10 +7,10 @@ import {
 } from '../../engine';
 import type { Coach as CoachT, GameState, Team, Tier } from '../../engine';
 import {
-  AttrRow, Button, Card, EmptyState, Gold, PlayerLink, TeamLink, TierBadge, cx,
+  AttrRow, Button, Card, EmptyState, Gold, PlayerLink, TableScroll, TeamLink, TierBadge, cx,
 } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
-import { Chip, Flag, MiniBar, SortTh, countryName, fmt1, safe, sortList, useSort } from '../components/SquadShared';
+import { Chip, Flag, MiniBar, SortTh, countryName, fmt1, safe, sortList, useSort, useStickyFirstCol } from '../components/SquadShared';
 import { ConfirmButton } from '../components/ConfirmPopover';
 
 type SortKey = 'name' | 'age' | 'tier' | 'insight' | 'talent' | 'resilience' | 'salary' | 'fee';
@@ -29,6 +29,7 @@ export default function Coach() {
   const call = useCall();
   const setView = useGameStore((s) => s.setView);
   const sort = useSort<SortKey>('tier', 'desc');
+  const sticky = useStickyFirstCol();
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [affordOnly, setAffordOnly] = useState(false);
   const [newOnly, setNewOnly] = useState(false);
@@ -87,7 +88,7 @@ export default function Coach() {
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <CurrentCoachCard game={game} team={team} coach={coach} windowOpen={windowOpen} onFire={() => void call('fireCoach')} />
         <ExplainCard game={game} />
       </div>
@@ -131,8 +132,8 @@ export default function Coach() {
               新到
               <span className="ml-0.5 text-faint">{newCount}</span>
             </FilterBtn>
-            <label className="ml-1 flex cursor-pointer items-center gap-1 text-mute">
-              <input type="checkbox" checked={affordOnly} onChange={(e) => setAffordOnly(e.target.checked)} className="accent-[#c23c2a]" />
+            <label className="ml-1 flex cursor-pointer items-center gap-1 text-mute pointer-coarse:min-h-9">
+              <input type="checkbox" checked={affordOnly} onChange={(e) => setAffordOnly(e.target.checked)} className="accent-[#c23c2a] pointer-coarse:size-4" />
               负担得起
             </label>
           </div>
@@ -153,12 +154,13 @@ export default function Coach() {
         ) : rows.length === 0 ? (
           <EmptyState text="没有符合筛选条件的教练。" />
         ) : (
-          <div className="max-h-[560px] overflow-auto">
+          // 手机：横向滑动，教练名列固定在左侧（签约按钮在最右列）；「年龄」列不显示
+          <TableScroll stickyFirst={sticky} className="max-h-[560px] overflow-y-auto">
             <table className="tbl">
               <thead>
                 <tr>
                   <SortTh k="name" sort={sort} defaultDir="asc">教练</SortTh>
-                  <SortTh k="age" sort={sort} className="num" defaultDir="asc">年龄</SortTh>
+                  <SortTh k="age" sort={sort} className="num max-sm:hidden" defaultDir="asc">年龄</SortTh>
                   <SortTh k="tier" sort={sort}>等级</SortTh>
                   <SortTh k="insight" sort={sort} className="num">灵性</SortTh>
                   <SortTh k="talent" sort={sort} title="训练时提升队员天赋的幅度（0–10；每个休赛回合第一次训练全额，额外训练按比例折算）">天赋提升</SortTh>
@@ -198,7 +200,7 @@ export default function Coach() {
                           )}
                         </span>
                       </td>
-                      <td className="num">{ageOf(game, c)}</td>
+                      <td className="num max-sm:hidden">{ageOf(game, c)}</td>
                       <td>
                         <TierBadge tier={c.tier} />
                       </td>
@@ -250,7 +252,7 @@ export default function Coach() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
       </Card>
     </div>
@@ -396,7 +398,7 @@ function ExplainCard({ game }: { game: GameState }) {
           AI 战队只在没有主教练时聘请，不会把好教练全部签走。
         </li>
       </ul>
-      <div className="mt-3 overflow-x-auto">
+      <TableScroll className="mt-3">
         <table className="tbl">
           <thead>
             <tr>
@@ -426,7 +428,7 @@ function ExplainCard({ game }: { game: GameState }) {
             })}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </Card>
   );
 }
@@ -484,7 +486,7 @@ function FilterBtn({
       disabled={disabled}
       title={disabled ? (title ?? '该等级暂无可签约教练') : title}
       className={cx(
-        'cursor-pointer rounded border px-1.5 py-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+        'cursor-pointer rounded border px-1.5 py-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:min-h-9 pointer-coarse:px-2.5',
         active
           ? tone === 'gold' ? 'border-gold bg-gold/15 text-ink' : 'border-dota bg-dota/15 text-ink'
           : tone === 'gold' ? 'border-gold/40 text-gold hover:text-ink' : 'border-line text-mute hover:text-ink',

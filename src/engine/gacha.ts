@@ -564,7 +564,7 @@ export function gachaPullBlock(state: GameState, count: number): string | null {
   const hard = CONFIG.team.hardMaxRoster;
   const size = rosterSize(state, team.id);
   if (size > hard) {
-    return `阵容已超编（${size}/${hard} 人）：先在本回合内放弃新秀或解约，退回 ${hard} 人后才能继续抽卡`;
+    return `阵容已超编（${size}/${hard} 人）：先在本回合内放弃新秀或解约 ${size - hard} 人（降到 ${hard} 人以内）后才能继续抽卡`;
   }
   const cost = gachaCost(state, count);
   if (num(team.gold, 0) < cost) return `金币不足：${count === 10 ? '十连' : '单抽'}需要 ${formatGold(cost)}`;
@@ -592,7 +592,7 @@ export function gachaPull(state: GameState, count: number): OpResult & { results
   const hard = CONFIG.team.hardMaxRoster;
   const over = Math.max(0, rosterSize(state, me) - hard);
   const overNote = over > 0
-    ? `阵容 ${rosterSize(state, me)}/${hard} 人，超编 ${over} 人：本回合内放弃新秀或解约，退回 ${hard} 人后才能进入下一回合`
+    ? `阵容 ${rosterSize(state, me)}/${hard} 人，超编 ${over} 人：本回合内放弃新秀或解约 ${over} 人（降到 ${hard} 人以内）后才能进入下一回合`
     : '';
   addNews(
     state,

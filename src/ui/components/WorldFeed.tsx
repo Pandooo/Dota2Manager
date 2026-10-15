@@ -40,7 +40,7 @@ export function NewsChips({
           }}
           title={`查看战队 ${t.name}`}
           className={cx(
-            'inline-flex cursor-pointer items-center gap-1 rounded border px-1.5 py-px text-[11px] leading-4 transition-colors hover:border-gold/60 hover:text-gold',
+            'inline-flex cursor-pointer items-center gap-1 rounded border px-1.5 py-px text-[11px] leading-4 transition-colors hover:border-gold/60 hover:text-gold pointer-coarse:py-1',
             t.isPlayer ? 'border-gold/40 bg-gold/10 text-ink' : 'border-line bg-panel-2/80 text-mute',
             t.disbanded && 'line-through opacity-60',
           )}
@@ -57,7 +57,7 @@ export function NewsChips({
             openPlayer(p.id);
           }}
           title={`查看选手 ${p.handle}`}
-          className="inline-flex cursor-pointer items-center rounded border border-line/70 bg-panel/60 px-1.5 py-px text-[11px] leading-4 text-mute transition-colors hover:border-gold/60 hover:text-gold"
+          className="inline-flex cursor-pointer items-center rounded border border-line/70 bg-panel/60 px-1.5 py-px text-[11px] leading-4 text-mute transition-colors hover:border-gold/60 hover:text-gold pointer-coarse:py-1"
         >
           {p.handle}
         </button>
@@ -116,7 +116,7 @@ export default function WorldFeed({
       actions={
         <button
           onClick={() => setShowAll((v) => !v)}
-          className="cursor-pointer text-[11px] text-faint hover:text-ink"
+          className="cursor-pointer text-[11px] text-faint hover:text-ink pointer-coarse:min-h-9 pointer-coarse:px-1"
           title={showAll ? '只看重要动态' : '包括八卦、小道消息等全部世界新闻'}
         >
           {showAll ? '只看要闻' : '显示全部'}
@@ -144,9 +144,10 @@ export default function WorldFeed({
                     style={{ background: color ?? 'var(--color-line)' }}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 max-sm:items-start">
                       <Badge className={NEWS_CATEGORY_STYLE[n.category]}>{n.tags?.includes('weekly') ? '周报' : NEWS_CATEGORY_LABEL[n.category] ?? n.category}</Badge>
-                      <span className={cx('truncate text-[13px]', n.read ? 'text-mute' : 'text-ink', n.important && 'font-semibold')}>{n.title}</span>
+                      {/* 手机：标题可换成两行（一行只放得下五六个字） */}
+                      <span className={cx('break-words text-[13px] max-sm:line-clamp-2 sm:truncate', n.read ? 'text-mute' : 'text-ink', n.important && 'font-semibold')}>{n.title}</span>
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <NewsChips n={n} maxTeams={3} maxPlayers={2} />

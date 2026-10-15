@@ -1,5 +1,6 @@
 // ============================================================================
 // 赛事中心：小组积分表 / 淘汰赛对阵图 / 系列赛方块
+// 手机（< sm）：小组积分表隐藏「小局 / 净胜」两列（积分始终可见），表格可横向滑动；对阵图本来就横向滑动。
 // ============================================================================
 import { useState } from 'react';
 import type { GameState, GroupStanding, Series, Stage, Tournament } from '../../engine/types';
@@ -177,7 +178,7 @@ function BracketSection({
   return (
     <div>
       {title && <div className={cx('mb-2 text-xs font-semibold tracking-wider', titleClass ?? 'text-mute')}>{title}</div>}
-      <div className="flex items-stretch gap-6 overflow-x-auto pb-2">
+      <div className="flex items-stretch gap-6 overflow-x-auto overscroll-x-contain pb-2">
         {columns.map((col) => (
           <div key={col.title} className="flex shrink-0 flex-col">
             <div className="mb-1.5 w-44 truncate text-center text-[11px] text-faint" title={col.title}>
@@ -367,14 +368,15 @@ function GroupCard({
           已赛 {played}/{seriesList.length}
         </div>
       </div>
+      <div className="overflow-x-auto">
       <table className="tbl">
         <thead>
           <tr>
             <th className="w-8">#</th>
             <th>战队</th>
             <th className="num" title="系列赛 胜-平-负">胜-平-负</th>
-            <th className="num" title="小局 胜-负">小局</th>
-            <th className="num" title="小局净胜">净胜</th>
+            <th className="num max-sm:hidden" title="小局 胜-负">小局</th>
+            <th className="num max-sm:hidden" title="小局净胜">净胜</th>
             <th className="num" title={`积分：胜 ${PTS_WIN} / 平 ${PTS_DRAW}`}>积分</th>
           </tr>
         </thead>
@@ -395,10 +397,10 @@ function GroupCard({
                 <td className="num">
                   {r.wins}-{r.draws}-{r.losses}
                 </td>
-                <td className="num text-mute">
+                <td className="num text-mute max-sm:hidden">
                   {r.gameWins}-{r.gameLosses}
                 </td>
-                <td className={cx('num', diff > 0 ? 'text-good' : diff < 0 ? 'text-bad' : 'text-faint')}>
+                <td className={cx('num max-sm:hidden', diff > 0 ? 'text-good' : diff < 0 ? 'text-bad' : 'text-faint')}>
                   {diff > 0 ? '+' : ''}
                   {diff}
                 </td>
@@ -408,10 +410,11 @@ function GroupCard({
           })}
         </tbody>
       </table>
+      </div>
       {seriesList.length > 0 && (
         <div className="border-t border-line">
           <button
-            className="w-full cursor-pointer px-3 py-1.5 text-left text-xs text-mute hover:text-ink"
+            className="w-full cursor-pointer px-3 py-1.5 text-left text-xs text-mute hover:text-ink pointer-coarse:py-2.5"
             onClick={() => setShowMatches((v) => !v)}
           >
             {showMatches ? '▾ 收起比赛' : `▸ 查看比赛（${seriesList.length} 场）`}

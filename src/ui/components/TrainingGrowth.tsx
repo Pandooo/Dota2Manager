@@ -68,14 +68,14 @@ export default function TrainingGrowth({ game }: { game: GameState }) {
       title="成长曲线"
       subtitle="每回合结束时的选手基础属性快照（不含临时状态，各图纵轴独立）· 虚线为赛季分界 · 悬停查看数值"
       actions={
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="flex overflow-hidden rounded-md border border-line">
             {METRICS.map((m) => (
               <button
                 key={m}
                 onClick={() => setMetric(m)}
                 className={cx(
-                  'cursor-pointer px-2.5 py-1 transition-colors',
+                  'cursor-pointer px-2.5 py-1 transition-colors pointer-coarse:min-h-9',
                   metric === m ? 'bg-dota/20 text-ink' : 'bg-panel-2/50 text-mute hover:text-ink',
                 )}
               >
@@ -84,7 +84,7 @@ export default function TrainingGrowth({ game }: { game: GameState }) {
             ))}
           </div>
           {former.length > 0 && (
-            <label className="flex cursor-pointer items-center gap-1 text-mute">
+            <label className="flex cursor-pointer items-center gap-1 text-mute pointer-coarse:min-h-9">
               <input type="checkbox" checked={showFormer} onChange={(e) => setShowFormer(e.target.checked)} className="accent-[#c23c2a]" />
               已离队（{former.length}）
             </label>
@@ -95,7 +95,7 @@ export default function TrainingGrowth({ game }: { game: GameState }) {
       {!hasData ? (
         <EmptyState text="还没有成长快照：每个回合结束时自动记录一次，推进回合后即可看到曲线。" />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {entries.map((e) => (
             <PlayerCurve key={e.id} game={game} entry={e} metric={metric} />
           ))}

@@ -193,14 +193,17 @@ export default function MarketBidModal({
         </span>
       }
       footer={
+        // 手机：余额单独一行，「取消」与提交按钮在下一行（提交按钮占满剩余宽度、44px 高）；按钮文字不换行
         <>
-          <span className="mr-auto self-center text-xs text-mute">
+          <span className="basis-full self-center whitespace-nowrap text-xs text-mute sm:mr-auto sm:basis-auto">
             报价后余额 <Gold value={gold - fee} />
           </span>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="ghost" className="whitespace-nowrap max-sm:min-h-11" onClick={onClose}>取消</Button>
           {trading ? (
             <ConfirmButton
               variant="primary"
+              wrapClassName="max-sm:flex-1"
+              className="whitespace-nowrap max-sm:min-h-11 max-sm:w-full"
               disabled={!!block}
               title={block ?? '提交交易报价，对方将立即答复'}
               confirm={{
@@ -214,7 +217,13 @@ export default function MarketBidModal({
               提交交易 · 总额 {formatGold(total)}
             </ConfirmButton>
           ) : (
-            <Button variant="primary" disabled={!!block} title={block ?? '提交报价，对方将立即答复'} onClick={submitCash}>
+            <Button
+              variant="primary"
+              className="whitespace-nowrap max-sm:min-h-11 max-sm:flex-1"
+              disabled={!!block}
+              title={block ?? '提交报价，对方将立即答复'}
+              onClick={submitCash}
+            >
               提交报价 {formatGold(fee)}
             </Button>
           )}
@@ -250,7 +259,7 @@ export default function MarketBidModal({
             ['加盟后工资', <Gold key="s" value={info.newSalary} />],
           ].map(([label, v], i) => (
             <div key={i} className="rounded-md border border-line bg-panel-2/40 px-2 py-1.5">
-              <div className="text-[10px] text-faint">{label}</div>
+              <div className="text-[11px] text-faint sm:text-[10px]">{label}</div>
               <div className="font-semibold">{v}</div>
             </div>
           ))}
@@ -275,6 +284,8 @@ export default function MarketBidModal({
             <div className="flex items-center gap-2">
               <input
                 type="number"
+                inputMode="numeric"
+                aria-label={trading ? '现金部分' : '报价金额'}
                 value={text}
                 min={minFee}
                 max={info.max}
@@ -288,7 +299,7 @@ export default function MarketBidModal({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') setBoth(text === '' ? minFee : Number(text) || minFee);
                 }}
-                className="h-8 w-32 rounded-md border border-line bg-panel-2 px-2 text-right text-sm tabular text-gold outline-none focus:border-dota/70"
+                className="h-8 w-32 rounded-md border border-line bg-panel-2 px-2 text-right text-sm tabular text-gold outline-none focus:border-dota/70 pointer-coarse:h-10"
               />
               <span className={cx('w-14 text-right text-xs tabular', ratio >= 1 ? 'text-good' : 'text-bad')} title="报价总额 / 建议转会费">
                 ×{ratio.toFixed(2)}
@@ -302,9 +313,10 @@ export default function MarketBidModal({
             step={CONFIG.market.feeRounding}
             value={Math.max(minFee, Math.min(info.max, fee))}
             onChange={(e) => setBoth(Number(e.target.value))}
-            className="w-full cursor-pointer accent-[#e5b24d]"
+            aria-label="报价滑块"
+            className="w-full cursor-pointer accent-[#e5b24d] pointer-coarse:h-10"
           />
-          <div className="mt-1 flex justify-between text-[10px] text-faint tabular">
+          <div className="mt-1 flex justify-between text-[11px] text-faint tabular sm:text-[10px]">
             <span>{trading ? '0（全部以选手抵价）' : `${formatGold(info.min)}（×${MIN_MULT}）`}</span>
             <span>{formatGold(info.max)}（×{MAX_MULT}）</span>
           </div>
@@ -314,7 +326,7 @@ export default function MarketBidModal({
                 key={m}
                 onClick={() => setBoth(info.suggested * m)}
                 className={cx(
-                  'cursor-pointer rounded border px-2 py-0.5 text-xs tabular transition-colors',
+                  'cursor-pointer rounded border px-2 py-0.5 text-xs tabular transition-colors pointer-coarse:min-h-9 pointer-coarse:px-3',
                   !trading && Math.abs(ratio - m) < 0.01 ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink',
                 )}
               >
@@ -324,7 +336,7 @@ export default function MarketBidModal({
             {trading && (
               <button
                 onClick={() => setBoth(Math.max(0, info.suggested - playersValue))}
-                className="cursor-pointer rounded border border-line px-2 py-0.5 text-xs tabular text-mute transition-colors hover:text-ink"
+                className="cursor-pointer rounded border border-line px-2 py-0.5 text-xs tabular text-mute transition-colors hover:text-ink pointer-coarse:min-h-9 pointer-coarse:px-3"
                 title="现金 = 建议转会费 − 抵价合计（不足时为 0）"
               >
                 现金补足到建议价
@@ -347,7 +359,7 @@ export default function MarketBidModal({
                 setTradeOpen((o) => !o);
                 tradeNew.dismiss();
               }}
-              className="cursor-pointer text-xs text-mute hover:text-ink"
+              className="shrink-0 cursor-pointer whitespace-nowrap text-xs text-mute hover:text-ink pointer-coarse:-my-1 pointer-coarse:min-h-10 pointer-coarse:px-2"
               title={showTradeList ? '收起选手列表' : '展开本队选手列表，勾选用于抵价的选手'}
             >
               {showTradeList ? '收起 ▴' : '展开 ▾'}
@@ -381,14 +393,14 @@ export default function MarketBidModal({
                       <li key={c.id}>
                         <label
                           className={cx(
-                            'flex items-start gap-2 py-1.5 text-xs',
+                            'flex items-start gap-2 py-1.5 text-xs pointer-coarse:py-2.5',
                             disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-panel-2/40',
                           )}
                           title={reason ?? (shown?.notes.length ? shown.notes.join('；') : undefined)}
                         >
                           <input
                             type="checkbox"
-                            className="mt-0.5 accent-[#e5b24d]"
+                            className="mt-0.5 accent-[#e5b24d] pointer-coarse:h-5 pointer-coarse:w-5"
                             checked={on}
                             disabled={disabled}
                             onChange={() => toggleOffered(c.id)}
@@ -411,6 +423,8 @@ export default function MarketBidModal({
                                 <span className="text-bad">{shown?.refused ?? it?.refused ?? '无法估值'}</span>
                               )}
                             </span>
+                            {/* 触屏看不到 title：不能再勾选的原因（人数上限）直接写在行内；拒收原因上一行已显示 */}
+                            {reason && reason !== it?.refused && <span className="mt-0.5 hidden text-[11px] text-bad pointer-coarse:block">{reason}</span>}
                           </span>
                         </label>
                       </li>
@@ -437,24 +451,24 @@ export default function MarketBidModal({
 
         {/* 估算 */}
         <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-md border border-line px-3 py-2">
-            <div className="text-[11px] text-faint">对方接受（估算）</div>
+          <div className="rounded-md border border-line px-2 py-2 sm:px-3">
+            <div className="text-[11px] text-faint max-sm:leading-tight">对方接受（估算）</div>
             {total <= rejectedFee ? (
               <span className="text-xs text-bad" title="本回合对方已拒绝过不低于此总额的报价">已拒绝此价位</span>
             ) : (
               <PctBadge value={accept} title={trading ? '按报价总额（现金 + 抵价估值）/ 身价、选手在原队重要度与归属感估算' : '按报价/身价、选手在原队重要度与归属感估算'} />
             )}
           </div>
-          <div className="rounded-md border border-line px-3 py-2">
-            <div className="text-[11px] text-faint">选手意愿</div>
+          <div className="rounded-md border border-line px-2 py-2 sm:px-3">
+            <div className="text-[11px] text-faint max-sm:leading-tight">选手意愿</div>
             {playerRefused ? (
               <span className="text-xs text-bad" title="本回合谈判结果已固定，下回合可再谈">本回合拒绝</span>
             ) : (
               <PctBadge value={info.will} title="俱乐部荣誉越高，选手越愿意加盟" />
             )}
           </div>
-          <div className="rounded-md border border-line px-3 py-2">
-            <div className="text-[11px] text-faint">综合成功率（估算）</div>
+          <div className="rounded-md border border-line px-2 py-2 sm:px-3">
+            <div className="text-[11px] text-faint max-sm:leading-tight">综合成功率（估算）</div>
             <PctBadge value={overall} />
           </div>
         </div>

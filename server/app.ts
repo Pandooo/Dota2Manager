@@ -2,14 +2,14 @@
 // 组装 HTTP（静态前端 + /healthz、/api/info、/api/status（仅本机））+ WebSocket（/ws）服务器。
 // index.ts 是命令行入口；e2e/测试直接调用 startServer。
 // ============================================================================
-import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { DEFAULT_SERVER_PORT, PROTOCOL_VERSION, WS_PATH } from '../src/shared/protocol';
 import { defaultEngine, type MpEngine } from './engine';
-import { clientAddress, isLoopbackRequest, isPrivateAddress, isPrivateOrigin, lanUrls as computeLanUrls } from './net';
+import { clientAddress, httpOrigin, isLoopbackRequest, isPrivateAddress, isPrivateOrigin, lanUrls as computeLanUrls } from './net';
 import { RoomStore } from './persistence';
 import { RoomManager, type Conn } from './rooms';
 import { createStaticHandler } from './static';
@@ -22,6 +22,11 @@ export const PROJECT_ROOT = resolve(here, '..');
 export interface ServerOptions {
   /** 端口（0 = 随机） */
   port?: number;
+  /**
+   * 另外同时监听的端口（--also-port；同一进程、同一批房间与统计，只是多一个入口）。用于换端口时的过渡：
+   * 公网服务器改用 80 端口后，旧地址 http://<地址>:8686 仍能打开，玩家留在旧地址下的浏览器存档与多人身份不会「消失」。
+   */
+  extraPorts?: number[];
   /** 监听地址（默认 0.0.0.0，局域网可访问） */
   host?: string;
   /** 数据目录（房间存档在 <dataDir>/rooms）；null = 不持久化 */
@@ -85,9 +90,11 @@ export interface ServerOptions {
 
 export interface RunningServer {
   port: number;
-  /** http://localhost:<port> */
+  /** 另外监听的端口（--also-port；实际端口，0 已换成随机分配的端口） */
+  extraPorts: number[];
+  /** http://localhost:<port>（80 端口为 http://localhost） */
   url: string;
-  /** ws://localhost:<port>/ws */
+  /** ws://localhost:<port>/ws（80 端口为 ws://localhost/ws） */
   wsUrl: string;
   /** 局域网访问地址（公网模式下为空，不打印也不发给客户端） */
   lanUrls: string[];
@@ -97,6 +104,8 @@ export interface RunningServer {
   /** 在线统计（GET /api/status） */
   stats: ServerStats;
   http: Server;
+  /** 另外监听端口的 HTTP 服务器（与 extraPorts 一一对应） */
+  extraHttp: Server[];
   /** 同步写出所有未落盘的房间 */
   flushSync(): number;
   /** 关闭服务器（保存房间、断开连接） */
@@ -129,7 +138,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   // 局域网地址只在监听所有网卡时有意义：--host 127.0.0.1 时朋友无法访问，指定了具体地址时只给出该地址；公网模式不提供
   const wildcard = host === '0.0.0.0' || host === '::' || host === '';
   const loopback = /^(127\.|localhost$|::1$)/.test(host);
-  const computeNow = (): string[] => (wildcard ? computeLanUrls(port) : loopback ? [] : [`http://${host.includes(':') ? `[${host}]` : host}:${port}`]);
+  const computeNow = (): string[] => (wildcard ? computeLanUrls(port) : loopback ? [] : [httpOrigin(host, port)]);
   const lanUrlsNow = publicMode ? (): string[] => [] : (opts.lanUrls ?? computeNow);
   const rooms = new RoomManager({
     engine,
@@ -158,7 +167,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   }
 
   const serveStatic = createStaticHandler(distDir);
-  const http = createServer((req, res) => {
+  const handleRequest = (req: IncomingMessage, res: ServerResponse): void => {
     try {
       const path = (req.url ?? '/').split('?')[0];
       const json = (data: unknown, code = 200) => {
@@ -194,14 +203,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('服务器内部错误');
     }
-  });
-  http.on('clientError', (_err, socket) => {
+  };
+  const handleClientError = (_err: Error, socket: Duplex): void => {
     try {
       socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
     } catch {
       /* ignore */
     }
-  });
+  };
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -219,7 +228,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\n\r\n`);
     socket.destroy();
   };
-  http.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+  const handleUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
     const path = (req.url ?? '').split('?')[0];
     if (path !== WS_PATH) return reject(socket, '404 Not Found');
     if (rooms.conns.size >= maxConnections) return reject(socket, '503 Service Unavailable');
@@ -239,7 +248,16 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
     }
     socket.on('error', () => undefined);
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
-  });
+  };
+  // 主端口与 --also-port 的各个端口共用同一套处理（同一批房间、连接限制与统计）
+  const makeHttp = (): Server => {
+    const srv = createServer(handleRequest);
+    srv.on('clientError', handleClientError);
+    srv.on('upgrade', handleUpgrade);
+    return srv;
+  };
+  const http = makeHttp();
+  const extraHttp = (opts.extraPorts ?? []).map(() => makeHttp());
   // 过期的新建记录定期清掉（地址很多时不常驻内存）
   const addrSweeper = setInterval(() => {
     const now = Date.now();
@@ -321,34 +339,50 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   const sweeper = setInterval(() => rooms.sweep(), 60_000);
   sweeper.unref?.();
 
-  await new Promise<void>((resolveListen, reject) => {
+  const listenOn = (srv: Server, p: number): Promise<number> => new Promise<number>((resolveListen, reject) => {
     const onError = (err: Error) => {
-      http.off('listening', onListening);
+      srv.off('listening', onListening);
       reject(err);
     };
     const onListening = () => {
-      http.off('error', onError);
-      resolveListen();
+      srv.off('error', onError);
+      const a = srv.address();
+      resolveListen(a && typeof a === 'object' ? a.port : p);
     };
-    http.once('error', onError);
-    http.once('listening', onListening);
-    http.listen(port, host);
+    srv.once('error', onError);
+    srv.once('listening', onListening);
+    srv.listen(p, host);
   });
-  const addr = http.address();
-  if (addr && typeof addr === 'object') port = addr.port;
-  http.on('error', (err) => log(`HTTP 服务器错误：${err.message}`));
+  const stopTimers = () => {
+    if (heartbeat) clearInterval(heartbeat);
+    clearInterval(sweeper);
+    clearInterval(addrSweeper);
+  };
+  const extraPorts: number[] = [];
+  try {
+    port = await listenOn(http, port);
+    for (let i = 0; i < extraHttp.length; i++) extraPorts.push(await listenOn(extraHttp[i], opts.extraPorts![i]));
+  } catch (err) {
+    // 任一端口监听失败：关掉已经打开的端口与定时器再报错（调用方据此提示「端口被占用」等）
+    stopTimers();
+    for (const srv of [http, ...extraHttp]) if (srv.listening) srv.close();
+    throw err;
+  }
+  for (const srv of [http, ...extraHttp]) srv.on('error', (err) => log(`HTTP 服务器错误：${err.message}`));
 
   let closed = false;
   const running: RunningServer = {
     port,
-    url: `http://localhost:${port}`,
-    wsUrl: `ws://localhost:${port}${WS_PATH}`,
+    url: httpOrigin('localhost', port),
+    extraPorts,
+    wsUrl: `${httpOrigin('localhost', port).replace(/^http:/, 'ws:')}${WS_PATH}`,
     lanUrls: lanUrlsNow(),
     publicMode,
     rooms,
     store,
     stats,
     http,
+    extraHttp,
     flushSync: () => {
       stats.flush();
       return store ? store.flushSync(rooms.roomIds()) : 0;
@@ -358,9 +392,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       closed = true;
       // 先同步写出在线统计（当天截至目前的汇总），之后断开连接引起的人数变化不再计入
       stats.close();
-      if (heartbeat) clearInterval(heartbeat);
-      clearInterval(sweeper);
-      clearInterval(addrSweeper);
+      stopTimers();
       rooms.shutdown();
       if (store) {
         await store.flush();
@@ -368,10 +400,10 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
       }
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((r) => wss.close(() => r()));
-      await new Promise<void>((r) => {
-        http.close(() => r());
-        http.closeAllConnections?.();
-      });
+      await Promise.all([http, ...extraHttp].map((srv) => new Promise<void>((r) => {
+        srv.close(() => r());
+        srv.closeAllConnections?.();
+      })));
     },
   };
   return running;

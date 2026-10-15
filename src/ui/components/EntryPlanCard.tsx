@@ -2,12 +2,14 @@
 // 总览「赛事报名」卡片（第十四波）：本赛季尚未开赛的常规赛事——受邀 / 已报名 / 可报名 / 未解锁（附原因）与操作按钮，
 // 赛季中可随时报名、重新接受或退出（退出代价见 TourEntry / schedule.withdrawPenaltyOf）。
 // 本回合收到补充邀请时自动展开并高亮；按钮与赛程页共用 entryControls（经 call 调用引擎）。
+// 手机（< sm）：规则说明收进「规则说明」折叠块，切换按钮占满一行，列表不再嵌套滚动；每项赛事为「名称」一行 +「状态 · 操作」一行。
 // ============================================================================
 import { useState } from 'react';
 import type { GameState, Tournament } from '../../engine/types';
 import { CONFIG } from '../../engine';
 import { useCall, useGame, useGameStore } from '../../store/gameStore';
 import { cx } from './common';
+import { useIsPhone } from '../mobile';
 import NewBadge, { useNewFeature } from './NewBadge';
 import { entryControls, entryStatusOf } from './TourEntry';
 import { Segmented, TourTierBadge, openTournamentView, safe } from './TourShared';
@@ -49,6 +51,7 @@ export function EntryPlanCard({ className }: { className?: string }) {
   const roundKey = `${game.season?.ti ?? 0}-${game.roundIndex}`;
   const [toggle, setToggle] = useState<{ key: string; open: boolean } | null>(null);
   const [scope, setScope] = useState<Scope>('mine');
+  const phone = useIsPhone();
   // 新功能徽标（v0.3.0）：显示在卡片标题旁，展开 / 收起卡片后消失
   const entryNew = useNewFeature('seasonEntry');
   if (!game.teams[me] || game.gameOver || safe(() => seatSpectating(game), false)) return null;
@@ -97,17 +100,31 @@ export function EntryPlanCard({ className }: { className?: string }) {
       {open && (
         <div className="border-t border-line px-3 py-2">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-faint">{ruleText}</p>
-            <div className="flex shrink-0 items-center gap-2">
+            {phone ? (
+              <details className="group w-full rounded-md border border-line bg-panel-2/40 text-[11px] text-faint">
+                <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-2.5 text-mute [&::-webkit-details-marker]:hidden">
+                  规则说明（退出扣荣誉、补充邀请）
+                  <span className="ml-auto text-faint group-open:rotate-180">▾</span>
+                </summary>
+                <p className="border-t border-line px-2.5 py-2 leading-relaxed">{ruleText}</p>
+              </details>
+            ) : (
+              <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-faint">{ruleText}</p>
+            )}
+            <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
               <Segmented<Scope>
                 value={scope}
                 onChange={setScope}
+                className="max-sm:flex-1 max-sm:[&>button]:flex-1"
                 options={[
                   { key: 'mine', label: '我的安排' },
                   { key: 'all', label: '全部未开赛' },
                 ]}
               />
-              <button className="cursor-pointer text-[11px] text-gold hover:underline" onClick={() => setView('schedule')}>
+              <button
+                className="shrink-0 cursor-pointer whitespace-nowrap text-[11px] text-gold hover:underline pointer-coarse:min-h-9 pointer-coarse:px-1"
+                onClick={() => setView('schedule')}
+              >
                 赛程报名 ›
               </button>
             </div>
@@ -115,7 +132,7 @@ export function EntryPlanCard({ className }: { className?: string }) {
           {rows.length === 0 ? (
             <div className="px-1 py-2 text-xs text-faint">没有已受邀或已报名的未开赛赛事，切换到「全部未开赛」报名。</div>
           ) : (
-            <div className="max-h-[360px] overflow-y-auto">
+            <div className="sm:max-h-[360px] sm:overflow-y-auto">
               {rows.map((t) => {
                 const { chip, action } = entryControls(game, t, call, { size: 'xs' });
                 const fresh = t.lateInvites?.[me] === game.roundIndex;
@@ -129,15 +146,18 @@ export function EntryPlanCard({ className }: { className?: string }) {
                   >
                     <span className="w-9 shrink-0 font-semibold tabular text-mute">R{t.roundIndex}</span>
                     <button
-                      className="min-w-[140px] flex-1 cursor-pointer truncate text-left hover:text-gold hover:underline"
+                      className="min-w-0 flex-1 cursor-pointer truncate text-left hover:text-gold hover:underline sm:min-w-[140px]"
                       onClick={() => openTournamentView(game, t.id)}
                       title="在赛事中心查看"
                     >
                       {t.name}
                     </button>
                     <TourTierBadge tier={t.tier} className="shrink-0" />
-                    <span className="shrink-0">{chip}</span>
-                    <span className="flex shrink-0 justify-end">{action}</span>
+                    {/* 手机：状态与操作另起一行（状态靠左、操作靠右）；≥ sm 用 contents 保持原来的一行 */}
+                    <span className="flex items-center justify-between gap-2 max-sm:basis-full max-sm:pl-11 sm:contents">
+                      <span className="shrink-0">{chip}</span>
+                      <span className="flex shrink-0 justify-end">{action}</span>
+                    </span>
                   </div>
                 );
               })}

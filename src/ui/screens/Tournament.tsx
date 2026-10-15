@@ -1,4 +1,6 @@
 // 赛事中心：赛事选择、玩家下一场、小组/对阵图、名次与结算
+// 手机（< sm，docs/UI.md「手机适配」）：赛事下拉框占满一行；「我的下一场」三个按钮撑满一行（快速模拟单独一行）；
+// 名次 / 参赛队伍表不再嵌套纵向滚动，宽了可横向滑动。
 import { useState } from 'react';
 import { useCall, useCallSilent, useGame, useGameStore } from '../../store/gameStore';
 import type { GameState, Series, Stage, Tournament } from '../../engine/types';
@@ -127,7 +129,12 @@ export default function TournamentCenter() {
                 回到我的赛事
               </Button>
             )}
-            <TourSelect value={t.id} onChange={(v) => select(v, roundKeyOf(game))} className="max-w-[420px]" title="选择赛事">
+            <TourSelect
+              value={t.id}
+              onChange={(v) => select(v, roundKeyOf(game))}
+              className="w-full max-w-full sm:w-auto sm:max-w-[420px]"
+              title="选择赛事"
+            >
               <optgroup label={`本赛季（TI${game.season.ti}）`}>
                 {current.map((x) => (
                   <option key={x.id} value={x.id}>
@@ -152,7 +159,7 @@ export default function TournamentCenter() {
       <TournamentHeader game={game} t={t} />
       <PlayerMatchPanel game={game} t={t} />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">
           <Card
             title="赛程与对阵"
@@ -251,7 +258,7 @@ function TournamentHeader({ game, t }: { game: GameState; t: Tournament }) {
             {round ? ` · ${PHASE_LABEL[round.phase]}` : ''} · {round ? dateRange(round.startDate, round.endDate) : t.startDate}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {entry.action}
           {exp !== undefined && Number.isFinite(exp) && (
             <div
@@ -439,29 +446,32 @@ function PlayerMatchPanel({ game, t }: { game: GameState; t: Tournament }) {
               </Badge>
             )}
           </div>
-          <div className="mt-2 flex items-center gap-2 text-[11px] text-mute">
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-mute">
             <span className="tabular" title="战队评分（首发评分之和 + 教练加成）">战力 {Math.round(myR)}</span>
-            <div className="flex h-1.5 w-40 overflow-hidden rounded-full bg-panel-3">
+            <div className="flex h-1.5 w-24 overflow-hidden rounded-full bg-panel-3 sm:w-40">
               <div className="h-full bg-gold" style={{ width: `${share * 100}%` }} />
               <div className="h-full flex-1" style={{ background: opp.color }} />
             </div>
             <span className="tabular">{Math.round(oppR)}</span>
-            {oppTeam && <span className="ml-2 text-faint">对手荣誉 {Math.round(oppTeam.honor)} · {REGION_LABEL[oppTeam.region]}</span>}
+            {oppTeam && <span className="text-faint sm:ml-2">对手荣誉 {Math.round(oppTeam.honor)} · {REGION_LABEL[oppTeam.region]}</span>}
           </div>
         </div>
         {/* 主打轻松：快速模拟本场（主）→ 快速模拟整项赛事（副）→ 进入比赛·手动 BP（第三） */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* 手机：快速模拟本场占满一行，另外两个按钮在下一行平分 */}
+        <div className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>span]:flex-1">
           <Button
             variant="gold"
             size="lg"
             disabled={!!blockReason}
             title={blockReason || '自动 BP、跳过直播，直接得出本系列赛结果'}
             onClick={() => void call('quickSimSeries')}
+            className="max-sm:w-full"
           >
             快速模拟本场 ▶
           </Button>
           <ConfirmButton
             variant="secondary"
+            className="whitespace-nowrap max-sm:w-full"
             disabled={!!blockReason}
             title={blockReason || '自动完成你在本赛事的全部剩余比赛（自动 BP、跳过直播）'}
             confirm={{
@@ -472,7 +482,13 @@ function PlayerMatchPanel({ game, t }: { game: GameState; t: Tournament }) {
           >
             快速模拟整项赛事
           </ConfirmButton>
-          <Button variant="ghost" disabled={!!blockReason} title={blockReason || '进入赛前准备 → 亲自 BP → 大老师胜率 → 文字直播'} onClick={enter}>
+          <Button
+            variant="ghost"
+            disabled={!!blockReason}
+            title={blockReason || '进入赛前准备 → 亲自 BP → 大老师胜率 → 文字直播'}
+            onClick={enter}
+            className="whitespace-nowrap max-sm:flex-1"
+          >
             进入比赛 · 手动 BP
           </Button>
         </div>
@@ -526,7 +542,7 @@ function PlacementsCard({ game, t }: { game: GameState; t: Tournament }) {
   const hasExp = !!t.expectedRanks && Object.keys(t.expectedRanks).length > 0;
   return (
     <Card title={t.status === 'finished' ? '最终排名' : '已确定名次'} subtitle={`${rows.length} 支队伍`} bodyClassName="p-0">
-      <div className="max-h-[480px] overflow-y-auto">
+      <div className="overflow-x-auto sm:max-h-[480px] sm:overflow-y-auto">
         <table className="tbl">
           <thead>
             <tr>
@@ -596,6 +612,7 @@ function SettlementCard({ game, t }: { game: GameState; t: Tournament }) {
       {s.playerGrowth && s.playerGrowth.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] text-faint">赛事成长（比赛主要磨炼韧性；战力 / 天梯 / 灵性主要靠训练）</div>
+          <div className="overflow-x-auto">
           <table className="tbl">
             <thead>
               <tr>
@@ -618,6 +635,7 @@ function SettlementCard({ game, t }: { game: GameState; t: Tournament }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </Card>
@@ -648,7 +666,7 @@ function TeamsCard({ game, t }: { game: GameState; t: Tournament }) {
     .sort((a, b) => (a.exp ?? 999) - (b.exp ?? 999) || b.rating - a.rating);
   return (
     <Card title="参赛队伍" subtitle={`${ids.length} 支${qual.size ? ` · 其中 ${qual.size} 支参加封闭预选` : ''}`} bodyClassName="p-0">
-      <div className="max-h-[520px] overflow-y-auto">
+      <div className="overflow-x-auto sm:max-h-[520px] sm:overflow-y-auto">
         <table className="tbl">
           <thead>
             <tr>

@@ -14,7 +14,18 @@ function timeOf(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function MpChat({ className, height = 'h-64', autoFocus }: { className?: string; height?: string; autoFocus?: boolean }) {
+export default function MpChat({
+  className,
+  height = 'h-64',
+  autoFocus,
+  listMaxHeight,
+}: {
+  className?: string;
+  height?: string;
+  autoFocus?: boolean;
+  /** 消息列表的最大高度（CSS 值，如顶栏下的弹出面板在横屏矮视口里不超出屏幕） */
+  listMaxHeight?: string;
+}) {
   const chat = useGameStore((s) => s.mp.chat);
   const myName = useGameStore((s) => s.mp.playerName);
   const connected = useGameStore((s) => s.mp.net.status === 'open');
@@ -38,7 +49,12 @@ export default function MpChat({ className, height = 'h-64', autoFocus }: { clas
 
   return (
     <div className={cx('flex flex-col', className)}>
-      <div ref={listRef} className={cx('min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-2 text-sm', height)}>
+      {/* 列表按 height 固定高度（flex-auto 以 height 为基准；原来的 flex-1 基准为 0%，在不定高的容器里按内容撑高、消息一多就把输入框挤出屏幕） */}
+      <div
+        ref={listRef}
+        className={cx('min-h-0 flex-auto space-y-1.5 overflow-y-auto overscroll-contain px-3 py-2 text-sm', height)}
+        style={listMaxHeight ? { maxHeight: listMaxHeight } : undefined}
+      >
         {chat.length === 0 ? (
           <div className="py-6 text-center text-xs text-faint">还没有消息，打个招呼吧</div>
         ) : (

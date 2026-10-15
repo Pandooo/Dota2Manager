@@ -10,6 +10,9 @@
 // 继续收进「更多」，不会压住主按钮。左侧为本回合信息与「自动处理」开关（tooltip 说明自动处理内容）。
 // 多人模式：主按钮为「准备进入下一回合（n/m）」/「取消准备」，开启自动处理时为自动准备（服务器先自动处理再准备），
 // 全员准备后服务器推进回合。在比赛页且比赛进行中时不渲染（比赛页自带 MatchDock 底栏，避免两条底栏）。
+// 手机（< 640px，v0.4，docs/UI.md「手机适配 · 底栏」）：PhoneBar 三行——一行提示（右侧提示，没有时为回合信息；点按展开全文）、
+// 可横向滑动的情境操作条（紧凑写法）、底行「自动」开关 + 通栏主按钮 + 「更多」（次要操作）；气泡改为底栏上方的通栏抽屉。
+// sm–lg 之间在操作行上方补一行提示（BarRow 的提示与回合信息 lg 起才显示）。底栏高度写入 CSS 变量 --chrome-bottom（含安全区）。
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { mpHumanTeamIds, useCall, useCallSilent, useGame, useGameStore } from '../../store/gameStore';
@@ -20,9 +23,12 @@ import {
 } from '../../engine';
 import { defaultDecisionChoice } from '../../engine/events';
 import { Button, Gold, TeamTag, cx } from '../components/common';
+import { showTouchTip } from '../components/TouchTip';
+import { useChromeVar, useCoarsePointer, useIsPhone } from '../mobile';
 import { ConfirmButton, type ConfirmSpec } from '../components/ConfirmPopover';
 import { TiBarGlow } from '../components/TiTransition';
 import { roundTournamentOf } from '../components/TourModalLogic';
+import { GACHA_FOCUS_EVENT } from '../components/gachaDiscard';
 import {
   FOCUS_INFO, FOCUS_ORDER, SCRIM_BOOKED_LABEL, scrimMultTone, scrimOptions, scrimReason, scrimRuleText, suggestedScrims, trainingStatus,
   type TrainingStatus,
@@ -51,9 +57,14 @@ const LAZY_TIP =
   + '未用完的训练本来就会在回合结束时按当前焦点自动完成。处理结果记入消息中心「本回合自动处理」。'
   + '\n多人模式下「准备」同样先自动处理，能准备时自动准备。'
   + '\n关闭后需逐项处理，阻塞未清除时不能推进。设置保存在本浏览器。';
+/** 触屏上切换「自动处理」时的说明（没有悬停，完整说明 LAZY_TIP 看不到） */
+const LAZY_ON_TIP = '已开启自动处理：点主按钮时先按默认选项处理本回合挡住推进的事务（待决事件、首发、本方比赛等）再推进，处理结果记入消息中心「本回合自动处理」。';
+const LAZY_OFF_TIP = '已关闭自动处理：需逐项处理本回合的事务，阻塞未清除时不能推进。';
 
 interface Main {
   label: string;
+  /** 手机上的短写法（多人「准备（1/2）」，动词放进小字） */
+  short?: string;
   /** 主按钮里的小字（开启自动处理时为「将自动：…」的事项） */
   sub?: string;
   onClick: () => void;
@@ -108,6 +119,8 @@ export default function ActionBar() {
   const setTrainingOpen = useGameStore((s) => s.setTrainingOpen);
   const setTournamentOpen = useGameStore((s) => s.setTournamentOpen);
   const version = useGameStore((s) => s.version);
+  const phone = useIsPhone();
+  const chromeRef = useChromeVar('--chrome-bottom', 'bottom');
   const autoPending = !!roundStatus?.autoPending?.[game.settings.playerTeamId];
   // 自动处理预览只在开启自动处理（或多人已请求自动准备）时用到；按状态版本缓存（有待决事件时预览会在状态副本上推演一遍）
   const preview = useMemo(
@@ -252,6 +265,7 @@ export default function ActionBar() {
       // 已按「下一回合」请求自动处理，正在等待对手 / 其他玩家的结果：可以时服务器自动处理并准备
       main = {
         label: `取消自动准备（${count}）`,
+        short: `取消自动（${count}）`,
         variant: 'gold',
         onClick: () => setRoundReady(false),
         hint: (
@@ -265,7 +279,8 @@ export default function ActionBar() {
       const blockedHere = lazy ? preview?.blocked ?? null : blockers.length ? blockerText : null;
       main = {
         label: `准备${verb}（${count}）`,
-        sub: lazySub ?? blockSub,
+        short: `准备（${count}）`,
+        sub: lazySub ?? blockSub ?? (phone ? verb : undefined),
         variant: 'primary',
         onClick: () => advance(),
         disabled: blockedHere ?? undefined,
@@ -310,7 +325,11 @@ export default function ActionBar() {
   });
 
   if (!spectating && overCap) {
-    const goFix = () => setView('gacha');
+    const goFix = () => {
+      setView('gacha');
+      // 已在抽卡页时换页没有可见变化：让抽卡页把本回合的结果（「退回」按钮）滚到眼前
+      requestAnimationFrame(() => window.dispatchEvent(new Event(GACHA_FOCUS_EVENT)));
+    };
     const fixTitle = `${overCap.message}。点击打开新秀抽卡页退回本回合抽到的新秀（也可在阵容页解约 / 出售队员）`;
     const overN = overCap.message.split('：')[0].replace('超编 ', '');
     const fixBtn = (label: string) => (
@@ -318,14 +337,14 @@ export default function ActionBar() {
         {label}
       </Button>
     );
-    // 窄屏放不下时先换成「超编 3 人」，仍放不下再收进「更多」（不压住主按钮）
+    // 窄屏放不下时先换成「退回 3 人」（手机操作条也用这个写法：带动词），仍放不下再收进「更多」（不压住主按钮）
     ctx.push({
       key: 'overCap',
       side: 'left',
       compact: 1.8,
       demote: 2.7,
       el: fixBtn(`处理超编 · ${overN}`),
-      compactEl: fixBtn(`超编 ${overN}`),
+      compactEl: fixBtn(`退回 ${overN}`),
       menu: <MenuItem onClick={goFix} title={fixTitle}>处理超编 · {overN}</MenuItem>,
     });
   }
@@ -335,6 +354,7 @@ export default function ActionBar() {
       key: 'decisions',
       side: 'left',
       compact: 2,
+      demote: 3.2,
       el: <DecisionButton game={game} count={decisions} lazy={lazy} emphasize={guide} />,
       compactEl: <DecisionButton game={game} count={decisions} lazy={lazy} emphasize={guide} compact />,
     });
@@ -344,11 +364,13 @@ export default function ActionBar() {
     ctx.push({
       key: 'continue',
       side: 'left',
+      demote: 6,
       el: (
         <Button variant="gold" className="glow" onClick={() => setView('match')} title="比赛进行中：回到比赛页继续">
           继续比赛 ▶
         </Button>
       ),
+      menu: <MenuItem onClick={() => setView('match')} title="比赛进行中：回到比赛页继续">继续比赛 ▶</MenuItem>,
     });
   } else if (!spectating && tour && next) {
     const oppId = next.teamA === me ? next.teamB : next.teamA;
@@ -356,15 +378,22 @@ export default function ActionBar() {
     const lineupBad = blockers.some((b) => b.code === 'lineup_invalid');
     if (fieldableFor(tour.id) < 5) {
       // 首发凑不齐 5 人（自动排阵也补不上）：先招募临时替补，否则本场弃权判负
+      const fillTitle = `可出场选手不足 5 人，未补齐将弃权判负 · ${tour.name} · ${next.label}`;
       ctx.push({
         key: 'fill',
         side: 'left',
+        demote: 6,
+        menu: (
+          <MenuItem onClick={() => void call('fillLineupWithTempSubs')} title={fillTitle}>
+            补齐首发（临时替补）
+          </MenuItem>
+        ),
         el: (
           <Button
             variant="gold"
             className={cx(guide && 'glow')}
             onClick={() => void call('fillLineupWithTempSubs')}
-            title={`可出场选手不足 5 人，未补齐将弃权判负 · ${tour.name} · ${next.label}`}
+            title={fillTitle}
           >
             补齐首发（临时替补）
           </Button>
@@ -421,7 +450,19 @@ export default function ActionBar() {
           快速模拟本场{withOpp && opp ? ` vs ${opp.tag}` : ''} ▶
         </Button>
       );
-      ctx.push({ key: 'sim', side: 'left', compact: 2.5, el: simBtn(true), compactEl: simBtn(false) });
+      ctx.push({
+        key: 'sim',
+        side: 'left',
+        compact: 2.5,
+        demote: 3.5,
+        el: simBtn(true),
+        compactEl: simBtn(false),
+        menu: (
+          <MenuItem onClick={() => void call('quickSimSeries')} title={`${tour.name} · ${next.label}：自动 BP、跳过直播，直接得出本系列赛结果`}>
+            快速模拟本场{opp ? ` vs ${opp.tag}` : ''} ▶
+          </MenuItem>
+        ),
+      });
       const simAllTitle = '自动完成你在本赛事的全部剩余比赛（自动 BP、跳过直播）';
       const simAllConfirm = {
         message: <>将自动完成你在「{tour.name}」的全部剩余比赛（自动 BP、跳过文字直播），赛事结算显示在总览「通知」中。</>,
@@ -469,7 +510,18 @@ export default function ActionBar() {
   }
 
   if (!spectating && st?.trainable) {
-    ctx.push({ key: 'train', side: 'left', el: <TrainButton st={st} /> });
+    const trainTitle = st.trainReason || '按当前焦点训练 1 次（优先使用免费次数），收益即时展示在总览训练卡片';
+    ctx.push({
+      key: 'train',
+      side: 'left',
+      demote: 5,
+      el: <TrainButton st={st} />,
+      menu: (
+        <MenuItem onClick={() => void call('doTraining')} title={trainTitle} disabled={!!st.trainReason}>
+          ⚔ 训练{st.sessionsLeft > 0 ? `（${st.sessionsLeft}）` : ''}
+        </MenuItem>
+      ),
+    });
     const buyExtra = () => void call('buyExtraTraining');
     const extraTitle =
       st.buyReason ||
@@ -489,7 +541,18 @@ export default function ActionBar() {
         </MenuItem>
       ),
     });
-    ctx.push({ key: 'scrim', side: 'right', demote: 4, el: <ScrimButton game={game} st={st} /> });
+    ctx.push({
+      key: 'scrim',
+      side: 'right',
+      demote: 4,
+      el: <ScrimButton game={game} st={st} />,
+      // 收进「更多」时不再嵌套第二个气泡：打开总览训练卡片挑选对手
+      menu: (
+        <MenuItem onClick={() => setTrainingOpen(true)} title="在总览展开训练卡片：推荐训练赛对手与约练">
+          训练赛 · 选择对手 ›
+        </MenuItem>
+      ),
+    });
     ctx.push(detailBtn('训练详情', () => setTrainingOpen(true), '在总览展开训练卡片：焦点说明、最近一次训练收益、更多训练赛对手', 'trainDetail'));
   }
 
@@ -501,47 +564,127 @@ export default function ActionBar() {
 
   const tourName = tour ? ` · ${tour.name}` : panelTour ? ` · ${panelTour.name}` : '';
   const blocked = !!main.disabled;
+  /** 本回合信息的一行写法（手机提示行、sm–lg 的补充提示行在没有提示时显示） */
+  const infoText = `${KIND_LABEL[kind] ?? kind}${tourName} · ${game.currentDate}${game.roundIndex > 0 && roundsToTi > 0 ? ` · 距 TI 正赛 ${roundsToTi} 个回合` : ''}`;
 
   return (
-    <footer className="relative shrink-0 border-t border-line bg-panel/95 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur">
+    // pb-safe：底栏背景铺到 Home 横条下方，按钮在安全区之上；ref 把底栏高度写入 --chrome-bottom
+    <footer ref={chromeRef} className="relative shrink-0 border-t border-line bg-panel/95 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur">
       {/* TI 正赛回合：该届主题色点缀 */}
       <TiBarGlow />
-      <BarRow
-        left={left}
-        right={right}
-        fitKey={`${visible.map((a) => a.key).join(',')}|${main.label}|${main.sub ?? ''}|${lazy ? 1 : 0}`}
-        info={
-          <>
-            <div className={cx('truncate font-semibold', kind === 'rest' || kind === 'preseason' ? 'text-ink' : 'text-gold')} title={`${KIND_LABEL[kind] ?? kind}${tourName}`}>
-              {KIND_LABEL[kind] ?? kind}
-              {tourName}
-            </div>
-            <div className="truncate text-faint">
-              {game.currentDate}
-              {game.roundIndex > 0 && roundsToTi > 0 ? ` · 距 TI 正赛 ${roundsToTi} 个回合` : ''}
-            </div>
-          </>
-        }
-        mainEl={
-          /* 中：回合推进 */
-          <Button
-            variant={main.variant}
-            size="lg"
-            disabled={blocked}
-            onClick={main.onClick}
-            title={main.disabled ?? main.title}
-            className={cx('h-12 min-w-[200px] text-base font-bold tracking-wider xl:min-w-[260px]', main.variant === 'gold' && 'glow')}
-          >
-            <span className="flex min-w-0 flex-col items-center leading-tight">
-              <span>{main.label}</span>
-              {main.sub && <span className="max-w-[220px] truncate xl:max-w-[300px] text-[11px] font-normal tracking-normal opacity-90">{main.sub}</span>}
-            </span>
-          </Button>
-        }
-        hint={main.hint}
-        hintBad={main.hintBad}
-      />
+      {phone ? (
+        <PhoneBar actions={visible} main={main} infoText={infoText} />
+      ) : (
+        <>
+          {/* sm–lg：BarRow 的右侧提示与左侧回合信息放不下（lg 起才显示），在操作行上方补一行；横屏矮视口（short）省掉这一行，把高度留给内容 */}
+          <HintLine className="px-4 pt-1.5 short:hidden lg:hidden" hint={main.hint} bad={main.hintBad} fallback={infoText} />
+          <BarRow
+            left={left}
+            right={right}
+            fitKey={`${visible.map((a) => a.key).join(',')}|${main.label}|${main.sub ?? ''}|${lazy ? 1 : 0}`}
+            info={
+              <>
+                <div className={cx('truncate font-semibold', kind === 'rest' || kind === 'preseason' ? 'text-ink' : 'text-gold')} title={`${KIND_LABEL[kind] ?? kind}${tourName}`}>
+                  {KIND_LABEL[kind] ?? kind}
+                  {tourName}
+                </div>
+                <div className="truncate text-faint">
+                  {game.currentDate}
+                  {game.roundIndex > 0 && roundsToTi > 0 ? ` · 距 TI 正赛 ${roundsToTi} 个回合` : ''}
+                </div>
+              </>
+            }
+            mainEl={
+              /* 中：回合推进 */
+              <Button
+                variant={main.variant}
+                size="lg"
+                disabled={blocked}
+                onClick={main.onClick}
+                title={main.disabled ?? main.title}
+                // relative z-10：两侧栏万一溢出也只会被主按钮盖住，不会盖住主按钮（测量随后会把溢出的操作收进「更多」）
+                className={cx('relative z-10 h-12 min-w-[200px] text-base font-bold tracking-wider short:h-10 xl:min-w-[260px]', main.variant === 'gold' && 'glow')}
+              >
+                <span className="flex min-w-0 flex-col items-center leading-tight">
+                  <span>{main.label}</span>
+                  {main.sub && <span className="max-w-[220px] truncate xl:max-w-[300px] text-[11px] font-normal tracking-normal opacity-90">{main.sub}</span>}
+                </span>
+              </Button>
+            }
+            hint={main.hint}
+            hintBad={main.hintBad}
+          />
+        </>
+      )}
     </footer>
+  );
+}
+
+/**
+ * 一行提示（手机底栏顶部、sm–lg 底栏操作行上方）：有右侧提示时显示提示（阻塞为红色），否则为本回合信息；
+ * 超出一行时截断，点按展开全文（点在提示里的按钮上时执行按钮，不展开）。
+ */
+function HintLine({ hint, bad, fallback, className }: { hint?: ReactNode; bad?: boolean; fallback: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const has = hint !== undefined && hint !== null && hint !== false && hint !== '';
+  return (
+    <div
+      className={cx(
+        'min-w-0 cursor-default text-[11px] leading-snug',
+        has ? (bad ? 'text-bad' : 'text-mute') : 'text-faint',
+        open ? 'whitespace-normal break-words' : 'truncate',
+        className,
+      )}
+      aria-live="polite"
+      onClick={(e) => {
+        if ((e.target as Element).closest?.('button, a')) return;
+        setOpen((v) => !v);
+      }}
+    >
+      {has ? hint : fallback}
+    </div>
+  );
+}
+
+/**
+ * 手机底栏（< 640px）：提示行 / 情境操作条（横向滑动，紧凑写法，次要操作不在条里）/ 「自动」开关 + 通栏主按钮 + 「更多」。
+ * 主按钮被禁用时小字写原因（触屏点按禁用的主按钮也会弹出原因，见 Button）。
+ */
+function PhoneBar({ actions, main, infoText }: { actions: CtxAction[]; main: Main; infoText: string }) {
+  const strip = actions.filter((a) => !a.secondary);
+  const more = actions.filter((a) => a.secondary).map((a) => ({ a, narrowOnly: false }));
+  const sub = main.sub ?? main.disabled;
+  return (
+    <div className="flex flex-col gap-1.5 px-3 pb-2 pt-1.5 short:gap-1 short:pb-1.5 short:pt-1">
+      <HintLine hint={main.hint} bad={main.hintBad} fallback={infoText} />
+      {strip.length > 0 && (
+        // pt-1 / gap：待决事件按钮右上角的红点不被滚动容器裁掉
+        <div className="no-scrollbar -mx-3 flex items-center gap-2 overflow-x-auto overscroll-x-contain px-3 pt-1">
+          {strip.map((a) => (
+            <span key={a.key} className="inline-flex shrink-0">
+              {a.compactEl ?? a.el}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className={cx('grid items-center gap-2', more.length ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-[auto_minmax(0,1fr)]')}>
+        <LazyToggle phone />
+        <Button
+          variant={main.variant}
+          size="lg"
+          disabled={!!main.disabled}
+          onClick={main.onClick}
+          title={main.disabled ?? main.title}
+          className={cx('h-12 w-full min-w-0 px-3 font-bold short:h-10', main.variant === 'gold' && 'glow')}
+        >
+          <span className="flex min-w-0 max-w-full flex-col items-center leading-tight">
+            <span className="max-w-full truncate text-[15px] tracking-wide">{main.short ?? main.label}</span>
+            {sub && <span className="max-w-full truncate text-[11px] font-normal tracking-normal opacity-90">{sub}</span>}
+          </span>
+        </Button>
+        {more.length > 0 && <MoreButton items={more} />}
+      </div>
+    </div>
   );
 }
 
@@ -620,7 +763,7 @@ function BarRow({
   );
 
   return (
-    <div ref={rowRef} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 xl:px-6">
+    <div ref={rowRef} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 short:py-1.5 xl:px-6">
       {/* 左：自动处理开关 + 本回合信息 + 主按钮左侧的情境操作 */}
       <div className="flex min-w-0 items-center gap-3">
         <LazyToggle compact={compacted.has(TOGGLE_KEY)} />
@@ -661,10 +804,14 @@ function safe<T>(fn: () => T, fallback: T): T {
 // ---------------------------------------------------------------------------
 // 「下一回合自动处理」开关
 // ---------------------------------------------------------------------------
-/** compact：底栏放不下时只显示开关本身（说明在 tooltip 里） */
-function LazyToggle({ compact = false }: { compact?: boolean }) {
+/**
+ * compact：底栏放不下时只显示开关本身（说明在 tooltip 里）；phone：手机底栏里竖排「开关 + 自动」，与主按钮等高。
+ * 触屏没有悬停：每次切换在开关旁显示一句说明（LAZY_ON_TIP / LAZY_OFF_TIP）。
+ */
+function LazyToggle({ compact = false, phone = false }: { compact?: boolean; phone?: boolean }) {
   const lazy = useGameStore((s) => s.lazyAdvance);
   const setLazy = useGameStore((s) => s.setLazyAdvance);
+  const coarse = useCoarsePointer();
   return (
     <button
       type="button"
@@ -672,20 +819,29 @@ function LazyToggle({ compact = false }: { compact?: boolean }) {
       aria-checked={lazy}
       aria-label="下一回合自动处理"
       title={LAZY_TIP}
-      onClick={() => setLazy(!lazy)}
+      onClick={(e) => {
+        const next = !lazy;
+        setLazy(next);
+        if (coarse) showTouchTip(e.currentTarget, next ? LAZY_ON_TIP : LAZY_OFF_TIP);
+      }}
       className={cx(
-        'flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors',
+        'flex shrink-0 cursor-pointer items-center rounded-md border text-[11px] transition-colors',
+        phone ? 'h-12 flex-col justify-center gap-1 px-2 short:h-10' : 'gap-1.5 px-2 py-1',
         lazy ? 'border-gold/50 bg-gold/10 text-gold hover:bg-gold/15' : 'border-line bg-panel-2 text-mute hover:text-ink',
       )}
     >
       <span className={cx('relative h-3.5 w-6 rounded-full transition-colors', lazy ? 'bg-gold/80' : 'bg-panel-3')}>
         <span className={cx('absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-all', lazy ? 'left-3' : 'left-0.5')} />
       </span>
-      {!compact && (
-        <span className="leading-tight">
-          自动处理
-          <span className="hidden xl:inline">{lazy ? '：开' : '：关'}</span>
-        </span>
+      {phone ? (
+        <span className="leading-none">自动</span>
+      ) : (
+        !compact && (
+          <span className="leading-tight">
+            自动处理
+            <span className="hidden xl:inline">{lazy ? '：开' : '：关'}</span>
+          </span>
+        )
       )}
     </button>
   );
@@ -702,6 +858,10 @@ function useBarPopover() {
   return { anchorRef, open, close, toggle };
 }
 
+/**
+ * 底栏按钮上方的气泡。宽度不超过视口（左右各留 8px），高度不超过按钮上方的空间（内容滚动）；
+ * 手机（< 640px）：改为底栏上方的通栏抽屉（--chrome-bottom），不随按钮位置左右漂移。
+ */
 function BarPopover({
   open,
   anchorRef,
@@ -716,13 +876,15 @@ function BarPopover({
   children: ReactNode;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  const phone = useIsPhone();
+  const [pos, setPos] = useState<{ left: number; bottom: number; w: number; maxH: number } | null>(null);
   const place = useCallback(() => {
     const a = anchorRef.current?.getBoundingClientRect();
     if (!a) return;
     const vw = window.innerWidth;
-    const left = Math.min(Math.max(8, a.left + a.width / 2 - width / 2), vw - width - 8);
-    setPos({ left, bottom: Math.max(8, window.innerHeight - a.top + 8) });
+    const w = Math.min(width, vw - 16);
+    const left = Math.min(Math.max(8, a.left + a.width / 2 - w / 2), vw - w - 8);
+    setPos({ left, bottom: Math.max(8, window.innerHeight - a.top + 8), w, maxH: Math.max(160, a.top - 16) });
   }, [anchorRef, width]);
   useLayoutEffect(() => {
     if (open) place();
@@ -731,7 +893,8 @@ function BarPopover({
     if (!open) return;
     // Esc 用冒泡阶段：气泡里的确认气泡（ConfirmPopover，捕获阶段）先处理自己的 Esc
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    const onDown = (e: MouseEvent) => {
+    // pointerdown：iOS Safari 点按页面空白处不发 mousedown
+    const onDown = (e: PointerEvent) => {
       const t = e.target as Element | null;
       if (!t || boxRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
       // 点在其他气泡（嵌套的确认气泡）里不算点外部
@@ -739,11 +902,11 @@ function BarPopover({
       onClose();
     };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('mousedown', onDown, true);
+    window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('resize', place);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('mousedown', onDown, true);
+      window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('resize', place);
     };
   }, [open, onClose, anchorRef, place]);
@@ -753,8 +916,20 @@ function BarPopover({
       ref={boxRef}
       role="dialog"
       aria-modal="false"
-      className="fade-up fixed z-[70] rounded-lg border border-line bg-panel-2 p-2 text-sm shadow-2xl shadow-black/60"
-      style={{ left: pos?.left ?? -9999, bottom: pos?.bottom ?? -9999, width }}
+      className={cx(
+        'fixed z-[70] overflow-y-auto overscroll-contain rounded-lg border border-line bg-panel-2 p-2 text-sm shadow-2xl shadow-black/60',
+        phone ? 'sheet-up' : 'fade-up',
+      )}
+      style={
+        phone
+          ? {
+              left: 'calc(8px + env(safe-area-inset-left, 0px))',
+              right: 'calc(8px + env(safe-area-inset-right, 0px))',
+              bottom: 'calc(var(--chrome-bottom, 0px) + 8px)',
+              maxHeight: 'calc(100dvh - var(--chrome-bottom, 0px) - var(--chrome-top, 0px) - 16px)',
+            }
+          : { left: pos?.left ?? -9999, bottom: pos?.bottom ?? -9999, width: pos?.w ?? width, maxHeight: pos?.maxH }
+      }
     >
       {children}
     </div>,
@@ -770,7 +945,7 @@ function MenuItem({ onClick, title, children, disabled }: { onClick: () => void;
   return (
     <Button
       variant="ghost"
-      className="w-full justify-start"
+      className="w-full justify-start max-sm:py-3 max-sm:text-[15px]"
       onClick={() => {
         close?.();
         onClick();
@@ -799,7 +974,7 @@ function MenuConfirm({
   return (
     <ConfirmButton
       variant="ghost"
-      className="w-full justify-start"
+      className="w-full justify-start max-sm:py-3 max-sm:text-[15px]"
       title={title}
       confirm={confirm}
       onConfirm={() => {
@@ -817,7 +992,7 @@ function MoreButton({ items }: { items: { a: CtxAction; narrowOnly: boolean }[] 
   const pop = useBarPopover();
   return (
     <span ref={pop.anchorRef} className="inline-flex">
-      <Button variant="ghost" onClick={pop.toggle} title="更多操作">
+      <Button variant="ghost" onClick={pop.toggle} title="更多操作" className="max-sm:h-12 max-sm:px-2.5 max-sm:short:h-10" aria-haspopup="dialog" aria-expanded={pop.open}>
         更多 ▴
       </Button>
       <BarPopover open={pop.open} anchorRef={pop.anchorRef} onClose={pop.close} width={220}>
@@ -855,6 +1030,8 @@ function DecisionButton({
   const call = useCall();
   const setView = useGameStore((s) => s.setView);
   const pop = useBarPopover();
+  // 手机：正文不截断，每个选项的说明（原本只在悬停提示里）直接写在选项下方
+  const phone = useIsPhone();
   const list = game.pendingDecisions.filter((d) => d.blocking);
   const choose = (d: PendingDecision, choiceId: string) => {
     void call('resolveDecision', d.id, choiceId).then((res) => {
@@ -886,7 +1063,7 @@ function DecisionButton({
         <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-bad" />! {compact ? '事件' : '待决事件'} {count}
       </Button>
       <BarPopover open={pop.open} anchorRef={pop.anchorRef} onClose={pop.close} width={380}>
-        <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-0.5">
+        <div className={cx('space-y-2 pr-0.5', !phone && 'max-h-[60vh] overflow-y-auto')}>
           {list.length === 0 && <div className="px-1 py-2 text-xs text-faint">事件已全部处理。</div>}
           {list.map((d) => {
             const def = safe(() => defaultDecisionChoice(d), '');
@@ -894,32 +1071,49 @@ function DecisionButton({
             return (
               <div key={d.id} className="rounded-md border border-dota/50 bg-dota/5 px-2.5 py-2">
                 <div className="text-sm font-semibold">{d.title}</div>
-                <p className="mt-0.5 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-mute" title={d.body}>
+                <p className={cx('mt-0.5 whitespace-pre-line text-xs leading-relaxed text-mute', !phone && 'line-clamp-3')} title={d.body}>
                   {d.body}
                 </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {choices.map((c) => (
-                    <Button
-                      key={c.id}
-                      size="sm"
-                      variant={c.id === def ? 'gold' : 'secondary'}
-                      title={`${c.description ?? c.label}${c.id === def ? '\n（默认选项：开启自动处理时按此处理）' : ''}`}
-                      onClick={() => choose(d, c.id)}
-                    >
-                      {c.label}
-                      {c.id === def && <span className="text-[10px] font-normal opacity-70">默认</span>}
-                    </Button>
-                  ))}
-                </div>
+                {phone ? (
+                  <div className="mt-1.5 flex flex-col gap-1.5">
+                    {choices.map((c) => (
+                      <div key={c.id}>
+                        <Button size="md" variant={c.id === def ? 'gold' : 'secondary'} className="w-full justify-start" onClick={() => choose(d, c.id)}>
+                          {c.label}
+                          {c.id === def && <span className="text-[10px] font-normal opacity-70">默认</span>}
+                        </Button>
+                        {c.description && c.description !== c.label && (
+                          <div className="mt-0.5 px-1 text-[11px] leading-snug text-mute">{c.description}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {choices.map((c) => (
+                      <Button
+                        key={c.id}
+                        size="sm"
+                        variant={c.id === def ? 'gold' : 'secondary'}
+                        title={`${c.description ?? c.label}${c.id === def ? '\n（默认选项：开启自动处理时按此处理）' : ''}`}
+                        onClick={() => choose(d, c.id)}
+                      >
+                        {c.label}
+                        {c.id === def && <span className="text-[10px] font-normal opacity-70">默认</span>}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
         <div className="mt-1.5 flex justify-end gap-3 px-1 text-[11px] text-mute">
-          <button type="button" className="cursor-pointer hover:text-gold" onClick={() => go('dashboard')}>
+          {/* 触屏：链接加高到 40px（手机上是底部抽屉的最后一行） */}
+          <button type="button" className="cursor-pointer hover:text-gold pointer-coarse:min-h-10 pointer-coarse:px-2" onClick={() => go('dashboard')}>
             总览「待处理」›
           </button>
-          <button type="button" className="cursor-pointer hover:text-gold" onClick={() => go('inbox')}>
+          <button type="button" className="cursor-pointer hover:text-gold pointer-coarse:min-h-10 pointer-coarse:px-2" onClick={() => go('inbox')}>
             消息中心 ›
           </button>
         </div>

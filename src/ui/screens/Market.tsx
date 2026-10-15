@@ -7,7 +7,7 @@ import {
 } from '../../engine';
 import { Badge, Button, EmptyState, Gold, Stat, Tabs, cx } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
-import { Banner, num, safe } from '../components/MarketKit';
+import { Banner, num, safe, useCompactList } from '../components/MarketKit';
 import MarketFreeAgents from '../components/MarketFreeAgents';
 import MarketTransferList from '../components/MarketTransferList';
 import MarketOffers from '../components/MarketOffers';
@@ -31,6 +31,7 @@ export default function Market() {
   const team = g.teams[me];
 
   const pendingOffers = (g.transferOffers ?? []).filter((o) => o && o.status === 'pending' && o.toTeamId === me).length;
+  const phone = useCompactList();
   const [tab, setTab] = useState<TabKey>(pendingOffers > 0 ? 'offers' : 'free');
 
   if (!team) {
@@ -55,6 +56,14 @@ export default function Market() {
   const listed = safe(() => listedPlayers(g), [] as Player[]);
   const listingOfferCount = listed.reduce((n, p) => n + safe(() => listingOffers(g, p.id).length, 0), 0);
   const subNeeded = target ? missingPositions(g, target.id).length > 0 : false;
+  const rosterHint =
+    hardRoom <= 0
+      ? `已达绝对上限 ${CONFIG.team.hardMaxRoster} 人，需先解约或出售`
+      : room > 0
+        ? `常规上限内还可签 ${room} 人`
+        : room === 0
+          ? `已到常规上限，仍可签约（绝对上限 ${CONFIG.team.hardMaxRoster}）`
+          : `超出常规上限 ${-room} 人：替补归属感下降更快、工资照付`;
 
   return (
     <div className="space-y-4">
@@ -82,34 +91,46 @@ export default function Market() {
         </Banner>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Stat label="可用金币" value={<Gold value={num(team.gold)} />} hint="签约费 / 转会费从此支付" />
-        <Stat
-          label="阵容人数"
-          value={
-            <span className={cx(hardRoom <= 0 ? 'text-bad' : room < 0 && 'text-gold')}>
-              {regular}
-              <span className="text-sm text-faint"> / {CONFIG.team.maxRoster}</span>
+      {/* 手机（< sm）与横屏矮视口：五项数字合成一块概要（金币、荣誉顶栏也有），阵容超限的提醒写在下面；其余为原来的数字格 */}
+      {phone ? (
+        <div className="rounded-lg border border-line bg-panel-2/60 px-3 py-2 text-xs text-mute">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span className="whitespace-nowrap">金币 <Gold value={num(team.gold)} className="text-sm font-semibold" /></span>
+            <span className="whitespace-nowrap">
+              阵容{' '}
+              <span className={cx('text-sm font-semibold tabular', hardRoom <= 0 ? 'text-bad' : room < 0 ? 'text-gold' : 'text-ink')}>{regular}</span>
+              <span className="text-faint"> / {CONFIG.team.maxRoster}</span>
             </span>
-          }
-          hint={
-            hardRoom <= 0
-              ? `已达绝对上限 ${CONFIG.team.hardMaxRoster} 人，需先解约或出售`
-              : room > 0
-                ? `常规上限内还可签 ${room} 人`
-                : room === 0
-                  ? `已到常规上限，仍可签约（绝对上限 ${CONFIG.team.hardMaxRoster}）`
-                  : `超出常规上限 ${-room} 人：替补归属感下降更快、工资照付`
-          }
-        />
-        <Stat label="俱乐部荣誉" value={Math.round(num(team.honor))} hint="荣誉越高，选手越愿意加盟" />
-        <Stat label="每回合工资" value={<Gold value={wage} />} hint="选手 + 教练" />
-        <Stat
-          label="待处理报价"
-          value={<span className={cx(pendingOffers > 0 && 'text-gold')}>{pendingOffers}</span>}
-          hint={pendingOffers > 0 ? '请尽快答复，报价会过期' : '暂无'}
-        />
-      </div>
+            <span className="whitespace-nowrap">荣誉 <span className="text-sm font-semibold tabular text-ink">{Math.round(num(team.honor))}</span></span>
+            <span className="whitespace-nowrap">工资 <Gold value={wage} className="text-sm font-semibold" />/回合</span>
+            <span className="whitespace-nowrap">
+              待处理报价 <span className={cx('text-sm font-semibold tabular', pendingOffers > 0 ? 'text-gold' : 'text-ink')}>{pendingOffers}</span>
+            </span>
+          </div>
+          {(hardRoom <= 0 || room < 0) && <div className={cx('mt-1', hardRoom <= 0 ? 'text-bad' : 'text-gold')}>阵容：{rosterHint}</div>}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <Stat label="可用金币" value={<Gold value={num(team.gold)} />} hint="签约费 / 转会费从此支付" />
+          <Stat
+            label="阵容人数"
+            value={
+              <span className={cx(hardRoom <= 0 ? 'text-bad' : room < 0 && 'text-gold')}>
+                {regular}
+                <span className="text-sm text-faint"> / {CONFIG.team.maxRoster}</span>
+              </span>
+            }
+            hint={rosterHint}
+          />
+          <Stat label="俱乐部荣誉" value={Math.round(num(team.honor))} hint="荣誉越高，选手越愿意加盟" />
+          <Stat label="每回合工资" value={<Gold value={wage} />} hint="选手 + 教练" />
+          <Stat
+            label="待处理报价"
+            value={<span className={cx(pendingOffers > 0 && 'text-gold')}>{pendingOffers}</span>}
+            hint={pendingOffers > 0 ? '请尽快答复，报价会过期' : '暂无'}
+          />
+        </div>
+      )}
 
       <Tabs<TabKey>
         value={tab}

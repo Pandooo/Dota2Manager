@@ -11,7 +11,7 @@ import type { MpEngine } from '../server/engine';
 import { startServer, type RunningServer, type ServerOptions } from '../server/app';
 import { TestClient, until } from '../server/testClient';
 import {
-  GENERIC_SERVER_ERROR, isLoopbackAddress, isLoopbackRequest, isPrivateAddress, isPrivateOrigin, lanAddresses, publicSafeErrorText,
+  GENERIC_SERVER_ERROR, httpOrigin, isLoopbackAddress, isLoopbackRequest, isPrivateAddress, isPrivateOrigin, lanAddresses, publicSafeErrorText,
 } from '../server/net';
 import { ServerStats, dayKeyOf, zeroCounts, type OnlineCounts, type StatsSource } from '../server/stats';
 import { mySeat } from '../src/shared/protocol';
@@ -177,6 +177,16 @@ async function startGame(server: RunningServer, cs: TestClient[]): Promise<strin
 // ---------------------------------------------------------------------------
 // 纯函数
 // ---------------------------------------------------------------------------
+describe('net · 网页地址写法', () => {
+  it('80 端口不写端口号（公网服务器 http://地址/），其他端口照写；IPv6 加方括号', () => {
+    expect(httpOrigin('203.0.113.7', 80)).toBe('http://203.0.113.7');
+    expect(httpOrigin('localhost', 80)).toBe('http://localhost');
+    expect(httpOrigin('192.168.1.5', 8686)).toBe('http://192.168.1.5:8686');
+    expect(httpOrigin('::1', 8686)).toBe('http://[::1]:8686');
+    expect(httpOrigin('[::1]', 80)).toBe('http://[::1]');
+  });
+});
+
 describe('net · 内网来源判断与错误过滤', () => {
   it('回环 / 私有 / 链路本地地址（含 IPv4 映射、方括号、端口、区域标识）', () => {
     for (const ip of [
@@ -492,6 +502,52 @@ describe('stats · 换日与日志', () => {
     stats.tick();
     expect(out.at(-1)).toBe('在线 4 人（峰值 5，20:01）· 对局中 0 局 · 房间 0 个');
     stats.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 兼容端口（--also-port）：公网服务器改用 80 端口后，旧地址 :8686 仍是同一个服务器
+// ---------------------------------------------------------------------------
+describe('server · 兼容端口（--also-port）', () => {
+  it('另一个端口是同一个服务器：网页与接口相同、玩家在同一批房间里；关闭时一起关闭', async () => {
+    const s = await boot({ extraPorts: [0] });
+    expect(s.extraPorts).toHaveLength(1);
+    const extra = s.extraPorts[0];
+    expect(extra).toBeGreaterThan(0);
+    expect(extra).not.toBe(s.port);
+    expect(s.extraHttp[0].listening).toBe(true);
+    const info = await httpGet({ port: extra, path: '/api/info' });
+    expect(info.status).toBe(200);
+    expect(JSON.parse(info.body)).toMatchObject({ ok: true, name: 'dota2-manager' });
+    // /api/status 在兼容端口上同样只回答本机
+    expect((await httpGet({ port: extra, path: '/api/status' })).status).toBe(200);
+    const fwd = await httpGet({ port: extra, path: '/api/status', headers: { 'x-forwarded-for': '203.0.113.9' } });
+    expect(fwd.status).toBe(403);
+    expect(JSON.parse(fwd.body)).toEqual({ ok: false, error: '在线统计只允许在服务器本机访问' });
+    // 静态前端在兼容端口上同样提供
+    expect((await httpGet({ port: extra, path: '/' })).status).toBe((await httpGet({ port: s.port, path: '/' })).status);
+    // 一人从主端口、一人从兼容端口进入：在同一个大厅里
+    const a = await client(s, '新地址');
+    const b = new TestClient(`ws://127.0.0.1:${extra}/ws`, { sessionId: `sid-also-${++seq}`, name: '旧地址' });
+    clients.push(b);
+    await b.hello();
+    await until(() => s.rooms.onlineCounts().online === 2, 5000, '两人都在线');
+    a.send({ t: 'createRoom', name: '过渡房间', maxPlayers: 4 });
+    await until(() => !!a.room, 5000, '建房');
+    b.send({ t: 'listRooms' });
+    await until(() => b.rooms.some((r) => r.name === '过渡房间'), 5000, '旧地址看到新地址建的房间');
+    running.splice(running.indexOf(s), 1);
+    await s.close();
+    expect(s.http.listening).toBe(false);
+    expect(s.extraHttp[0].listening).toBe(false);
+  });
+
+  it('兼容端口被占用时启动失败（报 EADDRINUSE 与该端口，命令行据此提示）', async () => {
+    const blocker = await boot();
+    await expect(startServer({
+      port: 0, host: '127.0.0.1', dataDir: null, distDir: tmp('dist'), engine: fakeEngine(), log: () => undefined, heartbeatMs: 0,
+      extraPorts: [blocker.port],
+    })).rejects.toMatchObject({ code: 'EADDRINUSE', port: blocker.port });
   });
 });
 

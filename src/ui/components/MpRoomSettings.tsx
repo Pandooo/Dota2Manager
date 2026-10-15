@@ -1,13 +1,14 @@
 // ============================================================================
 // 房间设置（房主可改，其他玩家只读）：起止 TI 卡片（默认 TI1 → TI16）、难度、玩法（各自组建 / 选择已有战队）
 // ============================================================================
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { MAX_TI, formatGold, tiYear, type TiInfo } from '../../engine';
 import { availableStartTis, getAllTiInfo } from '../../data/index';
 import type { MpMode, RoomSettings } from '../../shared/protocol';
 import { Card, cx } from './common';
 import { DIFFICULTY_LABEL, prettySlug, safe, type Difficulty } from './ShellKit';
 import { MP_MODE_LABEL, MP_MODE_RULE } from './MpKit';
+import { BREAKPOINT, useMinWidth } from '../mobile';
 
 function StartTiCard({ info, available, selected, editable, onSelect }: { info: TiInfo; available: boolean; selected: boolean; editable: boolean; onSelect: () => void }) {
   const clickable = available && editable;
@@ -15,7 +16,7 @@ function StartTiCard({ info, available, selected, editable, onSelect }: { info: 
     <button
       onClick={clickable ? onSelect : undefined}
       disabled={!available || (!editable && !selected)}
-      title={available ? `${info.name}（${info.city}）` : '暂无该届阵容数据，无法作为起点'}
+      title={available ? `${info.name}（${info.city}）${editable ? '' : ' · 起始 TI 由房主设置'}` : '暂无该届阵容数据，无法作为起点'}
       className={cx(
         'relative flex flex-col overflow-hidden rounded-lg border px-2.5 py-2 text-left transition-all',
         'disabled:opacity-35',
@@ -56,6 +57,11 @@ export default function MpRoomSettings({
   const seasons = Math.max(1, endTi - startTi + 1);
 
   const pickStart = (ti: number) => onChange(ti > endTi ? { startTi: ti, endTi: Math.max(ti, endTi) } : { startTi: ti });
+  // < xl 的非房主：设置只读，默认只显示一行摘要（不用先滑过十几张不能点的 TI 卡片），可展开查看
+  const wide = useMinWidth(BREAKPOINT.xl);
+  const [open, setOpen] = useState(false);
+  const compact = !editable && !wide && !open;
+  const startInfo = allTis.find((t) => t.ti === startTi);
 
   return (
     <Card
@@ -63,6 +69,25 @@ export default function MpRoomSettings({
       subtitle={editable ? '房主设置；修改后所有玩家需要重新确认准备' : '由房主设置'}
       actions={<span className="text-xs text-mute">TI{startTi} → TI{endTi} · 共 {seasons} 个赛季</span>}
     >
+      {!editable && !wide && (
+        <div className={cx('flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm', !compact && 'mb-4')}>
+          <span className="min-w-0">
+            起始 <span className="font-semibold text-gold">TI{startTi}</span>
+            {startInfo && <span className="text-xs text-mute">（{startInfo.year} · {startInfo.city}）</span>} → 终点{' '}
+            <span className="font-semibold text-gold">TI{endTi}</span>
+            <span className="text-mute"> · {DIFFICULTY_LABEL[difficulty]} · {MP_MODE_LABEL[mode]}</span>
+          </span>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="min-h-9 shrink-0 cursor-pointer text-xs text-info hover:text-gold"
+          >
+            {open ? '收起 ▴' : '查看设置详情 ▾'}
+          </button>
+        </div>
+      )}
+      {!compact && (
       <div className="space-y-5">
         <div>
           <div className="mb-1.5 text-xs font-medium text-mute">起始 TI（各战队使用该届 TI 参赛时的真实阵容）</div>
@@ -91,7 +116,7 @@ export default function MpRoomSettings({
                   disabled={!editable && !sel}
                   onClick={editable ? () => onChange({ endTi: ti }) : undefined}
                   className={cx(
-                    'rounded-md border px-2 py-1 text-left transition-colors disabled:opacity-35',
+                    'min-w-0 rounded-md border px-2 py-1 text-left transition-colors disabled:opacity-35',
                     editable ? 'cursor-pointer' : 'cursor-default',
                     sel ? 'border-gold bg-gold/15' : cx('border-line bg-panel-2/50', editable && 'hover:border-gold/40'),
                   )}
@@ -107,7 +132,7 @@ export default function MpRoomSettings({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
           <div>
             <div className="mb-1.5 text-xs font-medium text-mute">难度</div>
             <div className="flex gap-1.5 md:flex-col">
@@ -117,7 +142,7 @@ export default function MpRoomSettings({
                   disabled={!editable && difficulty !== d}
                   onClick={editable ? () => onChange({ difficulty: d }) : undefined}
                   className={cx(
-                    'flex flex-1 items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors disabled:opacity-35',
+                    'flex flex-1 items-center gap-2 whitespace-nowrap rounded-md border px-3 py-1.5 text-sm transition-colors disabled:opacity-35 pointer-coarse:min-h-10',
                     editable ? 'cursor-pointer' : 'cursor-default',
                     difficulty === d ? 'border-gold/70 bg-gold/10 text-gold' : cx('border-line bg-panel-2/50 text-mute', editable && 'hover:text-ink'),
                   )}
@@ -130,7 +155,7 @@ export default function MpRoomSettings({
           </div>
           <div>
             <div className="mb-1.5 text-xs font-medium text-mute">玩法</div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
               {(['build', 'existing'] as MpMode[]).map((m) => (
                 <button
                   key={m}
@@ -153,6 +178,7 @@ export default function MpRoomSettings({
           </div>
         </div>
       </div>
+      )}
     </Card>
   );
 }

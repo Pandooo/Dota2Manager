@@ -1,7 +1,7 @@
 // ============================================================================
 // 多人大厅：连接状态与在线统计 / 服务器地址 / 玩家昵称 / 房间列表 / 创建房间 / 房间码加入
 // 局域网：房主在电脑上运行 `npm run server`，朋友在浏览器打开 http://<房主局域网IP>:8686 即可进入；
-// 公网服务器（welcome.publicServer）：不显示任何局域网说明，邀请地址为当前页面地址。
+// 公网服务器（welcome.publicServer）：不显示任何局域网说明，邀请地址为当前页面地址（部署在 80 端口时为 http://<地址>，不带端口号）。
 // ============================================================================
 import { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
@@ -10,6 +10,7 @@ import { DEFAULT_SERVER_PORT, type RoomSummary } from '../../shared/protocol';
 import { Badge, Button, Card, EmptyState, Hint, cx } from '../components/common';
 import { ConnBadge, CopyButton, MpField, ServerStatsLine, mpInputBase, mpInputCls, settingsSummary } from '../components/MpKit';
 import NewBadge from '../components/NewBadge';
+import { BREAKPOINT, useMinWidth } from '../mobile';
 
 const ROOM_STATUS: Record<RoomSummary['status'], { text: string; cls: string }> = {
   lobby: { text: '等待中', cls: 'bg-good/15 text-good' },
@@ -32,6 +33,8 @@ export default function Lobby() {
   const setName = useGameStore((s) => s.mpSetName);
   const identity = getNetIdentity();
   const connected = mp.net.status === 'open';
+  /** 连接中断 / 已断开：手机上把「服务器」卡片（立即重连、错误原因）提到最前 */
+  const lost = mp.net.status === 'reconnecting' || mp.net.status === 'closed';
   /** 局域网服务器（收到 welcome 且不是公网模式）：显示房主运行服务器、局域网地址等说明 */
   const lan = mp.serverMode === 'lan';
   const pub = mp.serverMode === 'public';
@@ -41,6 +44,9 @@ export default function Lobby() {
   const [roomName, setRoomName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [code, setCode] = useState('');
+  // < lg（手机 / 平板）：服务器地址等设置默认收起（连接状态、在线人数与邀请地址仍显示）
+  const wide = useMinWidth(BREAKPOINT.lg);
+  const [serverOpen, setServerOpen] = useState(false);
 
   useEffect(() => setNameDraft(mp.playerName), [mp.playerName]);
 
@@ -52,7 +58,7 @@ export default function Lobby() {
   }, [connected, send]);
 
   const addrNorm = addr.trim() ? normalizeServerAddress(addr) : null;
-  const addrError = addr.trim() && !addrNorm ? (pub ? '地址格式不正确，请填写「地址:端口」' : `地址格式不正确，例如 192.168.1.5:${DEFAULT_SERVER_PORT}`) : null;
+  const addrError = addr.trim() && !addrNorm ? (pub ? '地址格式不正确，请填写网页地址（如 http://地址/）或「地址:端口」' : `地址格式不正确，例如 192.168.1.5:${DEFAULT_SERVER_PORT}`) : null;
   const usingManual = !!getManualServer();
 
   const nameTrim = nameDraft.trim();
@@ -92,7 +98,7 @@ export default function Lobby() {
           ‹ 主菜单
         </Button>
         <div className="shrink-0 whitespace-nowrap text-base font-bold tracking-wide">{lan ? '多人对战（局域网）' : '多人对战'}</div>
-        <ConnBadge net={mp.net} className="shrink-0 whitespace-nowrap sm:ml-2" />
+        <ConnBadge net={mp.net} short className="shrink-0 whitespace-nowrap sm:ml-2" />
         {mp.serverName && <span className="hidden min-w-0 truncate text-xs text-faint sm:inline">服务器：{mp.serverName}</span>}
         <span className="ml-auto min-w-0 truncate text-xs text-mute">
           <span className="hidden sm:inline">玩家 </span><span className="font-semibold text-ink">{mp.playerName}</span>
@@ -100,11 +106,14 @@ export default function Lobby() {
         </span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[340px_1fr]">
+      {/* 手机：内边距收窄；底部让出右下角的音乐按钮与 Home 横条 */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 max-lg:pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
+        {/* < lg：单列，左栏的卡片与房间列表按使用顺序排列（玩家 → 加入房间 → 房间列表 → 创建房间 → 服务器）；≥ lg 两栏与以前一样 */}
+        <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
           {/* ---------------- 左栏 ---------------- */}
-          <div className="space-y-4">
+          <div className="space-y-4 max-lg:contents">
             <Card
+              className={lost ? 'max-lg:order-first' : 'max-lg:order-5'}
               title="服务器"
               subtitle={
                 lan
@@ -124,18 +133,32 @@ export default function Lobby() {
                   )}
                 </div>
                 {connected && <ServerStatsLine stats={mp.serverStats} badge={<NewBadge feature="onlineStats" dismissOn="view" />} />}
-                <div className="break-all rounded-md border border-line bg-panel-2/60 px-2.5 py-1.5 font-mono text-[11px] text-mute">{mp.net.url || defaultServerUrl()}</div>
+                {(wide || serverOpen) && (
+                  <div className="break-all rounded-md border border-line bg-panel-2/60 px-2.5 py-1.5 font-mono text-[11px] text-mute">{mp.net.url || defaultServerUrl()}</div>
+                )}
                 {mp.net.error && mp.net.status !== 'open' && <div className="text-[11px] text-bad">{mp.net.error}</div>}
+                {!wide && (
+                  <button
+                    type="button"
+                    aria-expanded={serverOpen}
+                    onClick={() => setServerOpen((v) => !v)}
+                    className="min-h-9 cursor-pointer text-xs text-info hover:text-gold"
+                  >
+                    {serverOpen ? '收起服务器地址 ▴' : `服务器地址${usingManual ? '（手动）' : ''} ▾`}
+                  </button>
+                )}
+                {(wide || serverOpen) && (
+                <>
                 <MpField
                   label="手动地址（可选）"
-                  hint={pub ? '连接其他服务器时填写「地址:端口」；留空 = 使用当前网页地址' : `填写房主的 IP:端口，例如 192.168.1.5:${DEFAULT_SERVER_PORT}；留空 = 使用当前网页地址`}
+                  hint={pub ? '连接其他服务器时填写它的网页地址（如 http://地址/）或「地址:端口」；留空 = 使用当前网页地址' : `填写房主的 IP:端口，例如 192.168.1.5:${DEFAULT_SERVER_PORT}；留空 = 使用当前网页地址`}
                   error={addrError}
                 >
                   <div className="flex gap-2">
                     <input
                       className={cx(mpInputBase, 'min-w-0 flex-1 font-mono')}
                       value={addr}
-                      placeholder={pub ? '地址:端口' : `192.168.1.5:${DEFAULT_SERVER_PORT}`}
+                      placeholder={pub ? 'http://地址/' : `192.168.1.5:${DEFAULT_SERVER_PORT}`}
                       onChange={(e) => setAddr(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !addrError && connect(addr.trim() || null)}
                     />
@@ -155,6 +178,8 @@ export default function Lobby() {
                   >
                     恢复默认地址（本页）
                   </Button>
+                )}
+                </>
                 )}
                 {lanPages.length > 0 ? (
                   <div>
@@ -182,7 +207,7 @@ export default function Lobby() {
               </div>
             </Card>
 
-            <Card title="玩家">
+            <Card title="玩家" className="max-lg:order-1">
               <MpField label="昵称" hint="显示在房间与其他玩家的快讯中（最多 16 字）" error={nameDraft ? nameError : '请填写昵称'}>
                 <input
                   className={mpInputCls}
@@ -201,7 +226,7 @@ export default function Lobby() {
               )}
             </Card>
 
-            <Card title="加入房间">
+            <Card title="加入房间" className="max-lg:order-2">
               <div className="flex gap-2">
                 <input
                   className={cx(mpInputBase, 'min-w-0 flex-1 font-mono uppercase tracking-[0.3em]')}
@@ -217,7 +242,7 @@ export default function Lobby() {
               </div>
             </Card>
 
-            <Card title="创建房间" subtitle="你将成为房主，负责设置起止 TI、难度与玩法">
+            <Card title="创建房间" subtitle="你将成为房主，负责设置起止 TI、难度与玩法" className="max-lg:order-4">
               <div className="space-y-3">
                 <MpField label="房间名称">
                   <input className={mpInputCls} value={roomName} maxLength={24} placeholder={roomNameTrim} onChange={(e) => setRoomName(e.target.value)} />
@@ -230,7 +255,7 @@ export default function Lobby() {
                         key={n}
                         onClick={() => setMaxPlayers(n)}
                         className={cx(
-                          'h-8 w-10 cursor-pointer rounded-md border text-sm font-semibold transition-colors',
+                          'h-8 w-10 cursor-pointer rounded-md border text-sm font-semibold transition-colors pointer-coarse:h-10 pointer-coarse:w-11',
                           maxPlayers === n ? 'border-gold/70 bg-gold/15 text-gold' : 'border-line bg-panel-2/50 text-mute hover:text-ink',
                         )}
                       >
@@ -248,6 +273,7 @@ export default function Lobby() {
 
           {/* ---------------- 房间列表 ---------------- */}
           <Card
+            className="max-lg:order-3"
             title="房间列表"
             subtitle={mp.roomsLoadedAt ? `共 ${rooms.length} 个房间 · 更新于 ${timeAgo(mp.roomsLoadedAt)}` : connected ? '正在获取…' : '连接服务器后显示'}
             actions={
@@ -286,19 +312,21 @@ export default function Lobby() {
                           : null;
                   const label = r.mine ? (r.status === 'finished' ? '查看结算' : r.status === 'playing' ? '回到对局' : '回到房间') : r.status === 'playing' ? '进行中' : '加入';
                   return (
+                    // 手机：房间信息可收缩（长房间名截断），人数与按钮不被挤出；不能加入时把原因直接写在下方（触屏看不到悬停说明）
                     <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-panel-2/40">
-                      <div className="min-w-[200px] flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-semibold">{r.name}</span>
-                          <Badge className={st.cls}>{st.text}</Badge>
-                          {r.mine && <Badge className="bg-info/15 text-info">我的座位</Badge>}
+                      <div className="min-w-0 flex-1 sm:min-w-[200px]">
+                        {/* 名称行可换行：放不下时状态徽标换到下一行，房间名不会被徽标挤成「甲的…」 */}
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="min-w-0 truncate text-sm font-semibold">{r.name}</span>
+                          <Badge className={cx('shrink-0', st.cls)}>{st.text}</Badge>
+                          {r.mine && <Badge className="shrink-0 bg-info/15 text-info">我的座位</Badge>}
                         </div>
                         <div className="mt-0.5 text-xs text-mute">
                           房主 {r.hostName} · <span className="font-mono text-faint">{r.id}</span>
                         </div>
                         <div className="text-[11px] text-faint">{settingsSummary(r.settings)}</div>
                       </div>
-                      <div className="text-sm tabular">
+                      <div className="shrink-0 whitespace-nowrap text-sm tabular">
                         <span className={cx('font-semibold', full ? 'text-bad' : 'text-ink')}>{r.players}</span>
                         <span className="text-faint"> / {r.maxPlayers} 人</span>
                       </div>
@@ -308,9 +336,11 @@ export default function Lobby() {
                         disabled={!!why}
                         title={why ?? (r.mine ? (r.status === 'finished' ? '回到已结束的对局查看结算' : `回到「${r.name}」`) : `加入「${r.name}」`)}
                         onClick={() => join(r.id)}
+                        className="shrink-0"
                       >
                         {label}
                       </Button>
+                      {why && <div className="w-full text-[11px] text-faint sm:hidden">{why}</div>}
                     </div>
                   );
                 })}
@@ -319,7 +349,7 @@ export default function Lobby() {
           </Card>
         </div>
 
-        <div className="mx-auto mt-5 max-w-6xl rounded-lg border border-line bg-panel/70 px-4 py-3 text-xs leading-relaxed text-mute">
+        <div className="mx-auto mt-5 max-w-6xl break-words rounded-lg border border-line bg-panel/70 px-4 py-3 text-xs leading-relaxed text-mute">
           <span className="font-semibold text-ink">怎么开局：</span>
           {lan ? (
             <>

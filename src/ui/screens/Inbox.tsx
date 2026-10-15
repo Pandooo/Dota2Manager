@@ -7,6 +7,7 @@ import { newsIsMine } from '../../engine/news';
 import { Badge, Button, Card, EmptyState, Hint, PageHeader, Tabs, cx } from '../components/common';
 import { NEWS_CATEGORY_LABEL, NEWS_CATEGORY_STYLE, roundLabel } from '../components/ShellKit';
 import { NewsChips } from '../components/WorldFeed';
+import { useIsPhone } from '../mobile';
 
 type TabKey = 'all' | 'mine' | 'players' | 'world' | 'transfer' | 'tournament' | 'weekly';
 const PAGE = 40;
@@ -49,22 +50,35 @@ function decisionWhen(game: GameState, d: PendingDecision): string {
 // ---------------------------------------------------------------------------
 // 待决策事件卡片
 // ---------------------------------------------------------------------------
+/** 手机上正文超过这么多字时先收起（4 行），点「展开全文」再看全部 */
+const DECISION_FOLD_CHARS = 90;
+
 function DecisionCard({ d, onChoose }: { d: PendingDecision; onChoose: (choiceId: string) => void }) {
   const game = useGame();
   const choices = d.choices?.length ? d.choices : [{ id: 'ack', label: '知道了' }];
+  // 手机：长正文（如真实新秀出道的说明）先收起，选项按钮不被挤到屏幕外
+  const phone = useIsPhone();
+  const [expanded, setExpanded] = useState(false);
+  const foldable = phone && (d.body?.length ?? 0) > DECISION_FOLD_CHARS;
+  const folded = foldable && !expanded;
   return (
     <div className="fade-up relative overflow-hidden rounded-xl border-2 border-dota/60 bg-gradient-to-br from-dota/15 via-panel to-panel shadow-lg shadow-dota/10">
       <span className="absolute inset-y-0 left-0 w-1 bg-dota-2" />
-      <div className="flex flex-wrap items-center gap-2 border-b border-line/60 px-5 py-2.5">
-        <span className="text-base font-semibold">{d.title}</span>
+      <div className="flex flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2.5 sm:px-5">
+        <span className="text-sm font-semibold sm:text-base">{d.title}</span>
         <span className="ml-auto flex items-center gap-2 text-[11px] text-faint">
           {d.blocking && <Badge className="bg-bad/20 text-bad" title="处理之前无法推进回合">需先处理</Badge>}
           {decisionWhen(game, d)}
         </span>
       </div>
-      <div className="px-5 py-3">
-        <p className="whitespace-pre-line text-sm leading-relaxed text-ink/90">{d.body}</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="px-3 py-3 sm:px-5">
+        <p className={cx('whitespace-pre-line text-sm leading-relaxed text-ink/90', folded && 'line-clamp-4')}>{d.body}</p>
+        {foldable && (
+          <button type="button" className="mt-1 min-h-9 cursor-pointer text-xs text-info" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+            {expanded ? '收起 ▴' : '展开全文 ▾'}
+          </button>
+        )}
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {choices.map((c) => (
             <button
               key={c.id}
@@ -100,7 +114,7 @@ function NewsRow({ n, mine, open, onToggle }: { n: NewsItem; mine: boolean; open
         className="flex w-full cursor-pointer items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-panel-2/60"
       >
         <span className={cx('mt-1.5 h-2 w-2 shrink-0 rounded-full', n.read ? 'bg-transparent ring-1 ring-line' : 'bg-dota-2 shadow-[0_0_6px_rgba(226,82,59,0.7)]')} title={n.read ? '已读' : '未读'} />
-        <span className="w-12 shrink-0 pt-0.5">
+        <span className="w-12 shrink-0 pt-0.5 max-sm:w-10">
           <Badge className={weekly ? 'bg-gold/20 text-gold' : NEWS_CATEGORY_STYLE[n.category]}>{weekly ? '周报' : NEWS_CATEGORY_LABEL[n.category] ?? n.category}</Badge>
         </span>
         <span className="min-w-0 flex-1">
@@ -110,16 +124,17 @@ function NewsRow({ n, mine, open, onToggle }: { n: NewsItem; mine: boolean; open
                 ★
               </span>
             )}
-            <span className={cx(open ? 'whitespace-normal' : 'truncate')}>{n.title}</span>
+            <span className={cx(open ? 'whitespace-normal' : 'break-words max-sm:line-clamp-2 sm:truncate')}>{n.title}</span>
           </span>
           {!open && n.body && <span className="mt-0.5 block truncate text-xs text-faint">{n.body.replace(/\s+/g, ' ')}</span>}
           <NewsChips n={n} className="mt-1" maxTeams={open ? 8 : 4} maxPlayers={open ? 8 : 3} />
         </span>
-        <span className="shrink-0 pt-0.5 text-right text-[11px] tabular text-faint">{n.date}</span>
+        {/* 手机：日期不单占一列（分组标题行已有日期），标题多出约 70px */}
+        <span className="shrink-0 pt-0.5 text-right text-[11px] tabular text-faint max-sm:hidden">{n.date}</span>
         <span className={cx('shrink-0 pt-0.5 text-xs text-faint transition-transform', open && 'rotate-90 text-gold')}>›</span>
       </div>
       {open && (
-        <div className="fade-up px-4 pb-3.5 pl-[5.25rem]">
+        <div className="fade-up px-4 pb-3.5 sm:pl-[5.25rem]">
           <p className="whitespace-pre-line rounded-lg border border-line/70 bg-panel/80 px-4 py-3 text-sm leading-relaxed text-ink/90">{n.body || '（无正文）'}</p>
         </div>
       )}
@@ -286,7 +301,7 @@ export default function Inbox() {
               setLimit(PAGE);
             }}
             placeholder="搜索标题或内容…"
-            className="w-56 rounded-md border border-line bg-panel-2 px-2.5 py-1 text-xs text-ink outline-none placeholder:text-faint focus:border-gold/60"
+            className="w-full rounded-md border border-line bg-panel-2 px-2.5 py-1 text-xs text-ink outline-none placeholder:text-faint focus:border-gold/60 max-sm:py-1.5 sm:w-56"
           />
           <select
             value={cat}
@@ -294,7 +309,7 @@ export default function Inbox() {
               setCat(e.target.value as NewsCategory | 'all');
               setLimit(PAGE);
             }}
-            className="rounded-md border border-line bg-panel-2 px-2 py-1 text-xs text-ink outline-none focus:border-gold/60"
+            className="rounded-md border border-line bg-panel-2 px-2 py-1 text-xs text-ink outline-none focus:border-gold/60 max-sm:py-1.5"
             title="按分类筛选"
           >
             <option value="all">全部分类</option>
@@ -304,7 +319,7 @@ export default function Inbox() {
               </option>
             ))}
           </select>
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-mute">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-mute pointer-coarse:min-h-9">
             <input
               type="checkbox"
               checked={unreadOnly}
@@ -319,7 +334,7 @@ export default function Inbox() {
           <span className="ml-auto text-[11px] text-faint">
             {filtered.length} 条
             {openIds.size > 0 && (
-              <button className="ml-2 cursor-pointer text-mute hover:text-ink" onClick={() => setOpenIds(new Set())}>
+              <button className="ml-2 cursor-pointer text-mute hover:text-ink pointer-coarse:min-h-9 pointer-coarse:px-1" onClick={() => setOpenIds(new Set())}>
                 全部收起
               </button>
             )}

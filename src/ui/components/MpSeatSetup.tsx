@@ -12,6 +12,7 @@ import { Badge, Button, Card, EmptyState, Hint, PosBadge, RegionBadge, TeamTag, 
 import { TeamEmblem } from './TeamEmblem';
 import { Spinner } from './ShellKit';
 import { MP_MODE_RULE, MP_SWATCHES, MpField, mpInputBase, mpInputCls } from './MpKit';
+import { BREAKPOINT, useMinWidth } from '../mobile';
 
 /** 首发 5 人的平均战力 */
 function avgPower(team: SeedTeam): number {
@@ -101,14 +102,14 @@ function ClubForm({ room, seat, seatIndex, locked, realTeams }: { room: RoomInfo
   const synced = sameClub(seat.newClub, { name: draft.name.trim(), tag: draft.tag.toUpperCase(), region: draft.region, color: draft.color });
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
       <div className="space-y-3">
         <MpField label="俱乐部名称" error={draft.name ? errs.name : null} hint="最多 24 个字">
           <input className={mpInputCls} value={draft.name} maxLength={30} disabled={locked} onChange={(e) => set({ name: e.target.value })} placeholder="俱乐部名称" />
         </MpField>
         <MpField label="简称（TAG）" error={draft.tag ? errs.tag : null} hint="2–5 个大写字母或数字，用于赛程与比分">
           <input
-            className={cx(mpInputBase, 'w-40 font-semibold uppercase tracking-widest')}
+            className={cx(mpInputBase, 'w-40 max-w-full font-semibold uppercase tracking-widest')}
             value={draft.tag}
             maxLength={5}
             disabled={locked}
@@ -125,7 +126,7 @@ function ClubForm({ room, seat, seatIndex, locked, realTeams }: { room: RoomInfo
                 disabled={locked}
                 onClick={() => set({ region: r as Region })}
                 className={cx(
-                  'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                  'cursor-pointer rounded-md border px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:min-h-10',
                   draft.region === r ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line bg-panel-2/50 text-mute hover:text-ink',
                 )}
               >
@@ -143,12 +144,21 @@ function ClubForm({ room, seat, seatIndex, locked, realTeams }: { room: RoomInfo
                 disabled={locked}
                 onClick={() => set({ color: c })}
                 title={c}
-                className={cx('h-7 w-7 cursor-pointer rounded-md border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed', draft.color === c ? 'border-white' : 'border-transparent')}
+                className={cx(
+                  'h-7 w-7 cursor-pointer rounded-md border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed pointer-coarse:h-9 pointer-coarse:w-9',
+                  draft.color === c ? 'border-white' : 'border-transparent',
+                )}
                 style={{ background: c }}
               />
             ))}
             <label className="flex cursor-pointer items-center gap-1 text-xs text-mute" title="自定义颜色">
-              <input type="color" value={draft.color} disabled={locked} onChange={(e) => set({ color: e.target.value })} className="h-7 w-9 cursor-pointer rounded border border-line bg-transparent" />
+              <input
+                type="color"
+                value={draft.color}
+                disabled={locked}
+                onChange={(e) => set({ color: e.target.value })}
+                className="h-7 w-9 cursor-pointer rounded border border-line bg-transparent pointer-coarse:h-9 pointer-coarse:w-11"
+              />
               自定义
             </label>
           </div>
@@ -184,10 +194,15 @@ function ClubForm({ room, seat, seatIndex, locked, realTeams }: { room: RoomInfo
 // ---------------------------------------------------------------------------
 // 选择真实战队
 // ---------------------------------------------------------------------------
+/** < md：战队列表先列出的数量（不用列表内滚动，避免滑动被列表吞掉；已选的战队总会列出） */
+const PICKER_PREVIEW = 8;
+
 function TeamPicker({ room, seat, locked, roster }: { room: RoomInfo; seat: RoomSeat; locked: boolean; roster: RosterFile }) {
   const send = useGameStore((s) => s.mpSend);
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState<Region | 'ALL'>('ALL');
+  const wide = useMinWidth(BREAKPOINT.md);
+  const [all, setAll] = useState(false);
   const takenBy = new Map<string, string>();
   for (const s of room.seats) if (s.seatKey !== seat.seatKey && s.teamId) takenBy.set(s.teamId, s.name);
   const teams = useMemo(() => (roster.teams ?? []).filter((t) => t && t.id), [roster]);
@@ -196,6 +211,8 @@ function TeamPicker({ room, seat, locked, roster }: { room: RoomInfo; seat: Room
     .filter((t) => region === 'ALL' || t.region === region)
     .filter((t) => !q || t.name.toLowerCase().includes(q) || t.tag.toLowerCase().includes(q) || (t.players ?? []).some((p) => p.handle.toLowerCase().includes(q)))
     .sort((a, b) => Number(b.atTI) - Number(a.atTI) || avgPower(b) - avgPower(a));
+  const preview = !wide && !all && list.length > PICKER_PREVIEW;
+  const shown = preview ? list.filter((t, i) => i < PICKER_PREVIEW || t.id === seat.teamId) : list;
 
   return (
     <div className="space-y-3">
@@ -206,13 +223,13 @@ function TeamPicker({ room, seat, locked, roster }: { room: RoomInfo; seat: Room
         本局启动资金 <span className="tabular text-gold">{formatGold(estimateNewClubStart(room.settings.startTi, room.settings.difficulty).funds)}</span>。
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <input className={cx(mpInputBase, 'w-56 max-w-full py-1.5 text-xs')} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索战队 / 简称 / 选手" />
+        <input className={cx(mpInputBase, 'w-full py-1.5 text-xs sm:w-56')} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索战队 / 简称 / 选手" />
         <div className="flex flex-wrap gap-1">
           {(['ALL', ...REGIONS] as (Region | 'ALL')[]).map((r) => (
             <button
               key={r}
               onClick={() => setRegion(r)}
-              className={cx('cursor-pointer rounded-md border px-2 py-1 text-xs', region === r ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink')}
+              className={cx('cursor-pointer rounded-md border px-2 py-1 text-xs pointer-coarse:min-h-9 pointer-coarse:px-2.5', region === r ? 'border-gold/60 bg-gold/15 text-gold' : 'border-line text-mute hover:text-ink')}
             >
               {r === 'ALL' ? '全部' : REGION_LABEL[r]}
             </button>
@@ -223,8 +240,8 @@ function TeamPicker({ room, seat, locked, roster }: { room: RoomInfo; seat: Room
       {list.length === 0 ? (
         <EmptyState text="没有符合条件的战队" />
       ) : (
-        <div className="grid max-h-[420px] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
-          {list.map((t) => {
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2 md:max-h-[420px] md:grid-cols-2 md:overflow-y-auto md:pr-1">
+          {shown.map((t) => {
             const mine = seat.teamId === t.id;
             const by = takenBy.get(t.id);
             const disabled = locked || !!by;
@@ -261,6 +278,11 @@ function TeamPicker({ room, seat, locked, roster }: { room: RoomInfo; seat: Room
             );
           })}
         </div>
+      )}
+      {preview && (
+        <button type="button" className="min-h-10 w-full cursor-pointer rounded-md border border-line text-xs text-info hover:text-gold" onClick={() => setAll(true)}>
+          显示全部 {list.length} 支战队 ▾
+        </button>
       )}
       <Hint>选手属性将按新俱乐部水平重置（保留姓名、ID 与天赋），因此这里只展示阵容名单，不代表开局实力。</Hint>
     </div>

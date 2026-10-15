@@ -77,8 +77,9 @@ export default function PediaTeamMission({ view, id = 'pt-mission' }: { view: Cl
         </span>
       </div>
       {view.note && <div className="mt-2 text-xs text-mute">{view.note}</div>}
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[420px] text-sm">
+      {/* 手机（< sm）：不设最小宽度，「现在」一列（状态 + 战队）在单元格内换行，不需要横向滑动 */}
+      <div className="mt-3 sm:overflow-x-auto">
+        <table className="w-full text-sm sm:min-w-[420px]">
           <thead>
             <tr className="border-b border-line text-left text-xs text-mute">
               <th className="py-1.5 pr-2 font-normal">位置</th>

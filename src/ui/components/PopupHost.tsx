@@ -15,7 +15,7 @@ import {
 } from '../../engine';
 // 选秀结果（2026-10-14 起选秀默认关闭，只有旧存档 / 打开选秀开关时才有此通知）：按需加载，不进主包
 const RookieDraftPopupBody = lazy(() => import('../screens/RookieDraft').then((m) => ({ default: m.RookieDraftPopupBody })));
-import { Badge, Button, Delta, EmptyState, Gold, Modal, PlayerLink, PosBadge, TierBadge, cx } from './common';
+import { Badge, Button, Delta, EmptyState, Gold, Modal, PlayerLink, PosBadge, TableScroll, TierBadge, cx } from './common';
 import { MiniTitle, TourTierBadge, roundLabel, safe, teamNameOf } from './ShellKit';
 
 // ---------------------------------------------------------------------------
@@ -143,7 +143,8 @@ function SettlementBody({ game, tournamentId }: { game: GameState; tournamentId:
       {h && (
         <div>
           <MiniTitle right={<span className="text-[11px] text-faint">荣誉 = 基数 × (预期项 + 同比项 + 环比项 + 名次奖励) + 宿敌</span>}>荣誉结算明细</MiniTitle>
-          <div className="overflow-hidden rounded-lg border border-line">
+          {/* 手机上横向滑动查看全部列（不再用 overflow-hidden 裁掉右侧的列） */}
+          <TableScroll stickyFirst className="rounded-lg border border-line">
             <table className="tbl">
               <thead>
                 <tr>
@@ -174,7 +175,7 @@ function SettlementBody({ game, tournamentId }: { game: GameState; tournamentId:
                 </tr>
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </div>
       )}
 
@@ -184,7 +185,8 @@ function SettlementBody({ game, tournamentId }: { game: GameState; tournamentId:
         {growth.length === 0 ? (
           <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-xs text-faint">本次赛事没有选手成长记录</div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-line">
+          // 手机上横向滑动查看全部列（不再用 overflow-hidden 裁掉右侧的列）
+          <TableScroll stickyFirst className="rounded-lg border border-line">
             <table className="tbl">
               <thead>
                 <tr>
@@ -224,7 +226,7 @@ function SettlementBody({ game, tournamentId }: { game: GameState; tournamentId:
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
       </div>
     </div>
@@ -375,7 +377,8 @@ function PatchSection({ version }: { version: string }) {
       <div className="mt-1 text-base font-semibold">{p.title}</div>
       {p.summary && <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-mute">{p.summary}</p>}
 
-      <div className="mt-3 overflow-hidden rounded-lg border border-line">
+      {/* 手机上横向滑动查看全部列（不再用 overflow-hidden 裁掉右侧的列） */}
+      <TableScroll stickyFirst className="mt-3 rounded-lg border border-line">
         <table className="tbl">
           <thead>
             <tr>
@@ -396,7 +399,7 @@ function PatchSection({ version }: { version: string }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
 
       {((p.heroBuffs?.length ?? 0) > 0 || (p.heroNerfs?.length ?? 0) > 0 || (p.newHeroes?.length ?? 0) > 0) && (
         <div className="mt-3 space-y-1.5">
@@ -696,15 +699,16 @@ export function NoticesCard({ className }: { className?: string }) {
           const open = openKeys.has(g.key);
           return (
             <li key={g.key}>
+              {/* 手机（< sm）：标题占满第一行，摘要（名次 / 奖金 / 荣誉…）换到第二行完整显示，不再被截成「♛ 冠…」 */}
               <button
                 type="button"
                 onClick={() => toggle(g.key)}
                 aria-expanded={open}
-                className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2 pl-5 text-left transition-colors hover:bg-panel-2/50"
+                className="flex w-full cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-0.5 px-4 py-2 pl-5 text-left transition-colors hover:bg-panel-2/50 sm:flex-nowrap"
               >
                 <span className={cx('shrink-0 rounded border px-1.5 py-px text-[10px] font-semibold', v.chip.cls)}>{v.chip.text}</span>
-                <span className="max-w-[40%] shrink-0 truncate text-sm font-medium text-ink">{v.title}</span>
-                <span className="min-w-0 flex-1 truncate text-xs text-mute">{v.summary}</span>
+                <span className="max-w-[40%] shrink-0 truncate text-sm font-medium text-ink max-sm:min-w-0 max-sm:max-w-none max-sm:flex-1 max-sm:shrink">{v.title}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-mute max-sm:order-last max-sm:basis-full max-sm:whitespace-normal">{v.summary}</span>
                 {i === 0 && groups.length > 1 && !showAll && <span className="shrink-0 text-[10px] text-gold">最新</span>}
                 <span className="shrink-0 text-[11px] text-faint">{open ? '收起 ▴' : '详情 ▾'}</span>
               </button>
@@ -758,6 +762,7 @@ export function NoticesCard({ className }: { className?: string }) {
 // 其他页面：左下角的通知徽标（不阻塞操作，点击回到总览）。
 // 放在侧栏底部的空白处（侧栏宽 w-40，只有顶部 6 个入口）：不会盖住页面内容——
 // 放在右下角时会挡住表格行尾的操作按钮（如转会市场的「签约」），误点会直接跳回总览。
+// < md 没有侧栏（手机）：不显示，改为顶栏 ☰ 上的蓝点与导航抽屉「总览」上的计数（SideNav.NavToggle）。
 // ---------------------------------------------------------------------------
 const BADGE_FRESH_MS = 4000;
 
@@ -785,7 +790,8 @@ export function NoticeBadge() {
       onClick={() => setView('dashboard')}
       title={`${count} 条新通知（赛事结算、版本更新等）：点击回到总览查看`}
       className={cx(
-        'fade-up fixed bottom-24 left-2 z-40 flex w-36 cursor-pointer items-center gap-2 rounded-lg border bg-panel/95 px-2.5 py-1.5 text-left text-xs shadow-lg shadow-black/40 backdrop-blur transition-colors',
+        // 横屏手机（short）侧栏很矮，浮动徽标会压住侧栏入口：改为侧栏「总览」上的蓝色计数（SideNav）
+        'fade-up fixed bottom-24 left-2 z-40 hidden w-36 cursor-pointer items-center gap-2 rounded-lg border bg-panel/95 px-2.5 py-1.5 text-left text-xs shadow-lg shadow-black/40 backdrop-blur transition-colors md:flex short:hidden',
         fresh ? 'border-info text-info ring-2 ring-info/40' : 'border-line text-ink hover:border-info hover:text-info',
       )}
     >

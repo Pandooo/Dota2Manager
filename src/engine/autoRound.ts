@@ -6,7 +6,7 @@
 //      拒绝报价 / 续约 1 赛季 / 不聘用，其余含无厘头事件取第一项）；
 //   1a) 超编（2026-10-15 用户决策「十连后本回合内退回到 12 人」；planOverCapTrim）：抽卡让正式阵容超出绝对上限（12 人）时，
 //      先退回本回合抽到的新秀中评分最低者（gacha.gachaDiscard，返还单抽价格 × discardRefundRatio），仍超编才解约替补中
-//      「放走代价」（解约补偿 + 身价）最低者（market.releasePlayer，正常补偿与荣誉规则），直到退回 12 人；
+//      「放走代价」（解约补偿 + 身价）最低者（market.releasePlayer，正常补偿与荣誉规则），直到降到 12 人以内；
 //   1b) 补员（v0.3 选秀取消后，只按「下一回合」的人类战队不再自动得到新秀；planRosterFill，DESIGN.md 3.4.2）：转会窗口开放期间，
 //      正式阵容（不含临时 / 野外替补）不能覆盖五个位置（roles.uncoveredPositions，含副位置）或少于 CONFIG.autoRound.minRosterFill 人时，
 //      先为缺失的位置、再为替补深度签下负担得起（余额留足工资；先在签下后经常性收入仍付得起工资的人选中挑，
@@ -391,7 +391,7 @@ function trimOverCap(state: GameState, rep: AutoRoundReport): Set<string> {
   if (gone.size && emptyLineupSlots(state, me).length) fillEmptyLineupSlots(state, me, null);
   rep.overCapLeft = isTransferWindowOpen(state) ? rosterOverCap(state, me) : 0;
   if (rep.overCapLeft > 0) {
-    rep.lines.push(`仍超编 ${rep.overCapLeft} 人：没有可自动退回或解约的人选，请手动放弃新秀或解约，退回 ${CONFIG.team.hardMaxRoster} 人后才能进入下一回合`);
+    rep.lines.push(`仍超编 ${rep.overCapLeft} 人：没有可自动退回或解约的人选，请手动放弃新秀或解约 ${rep.overCapLeft} 人（降到 ${CONFIG.team.hardMaxRoster} 人以内）后才能进入下一回合`);
   }
   return gone;
 }

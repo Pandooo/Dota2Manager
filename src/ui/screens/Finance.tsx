@@ -8,12 +8,13 @@ import {
   type FinanceEntry, type GameState, type Player, type PlayerEntryStatus, type Tournament,
 } from '../../engine';
 import {
-  Badge, Button, Card, Delta, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TierBadge, cx,
+  Badge, Button, Card, Delta, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TableScroll, TierBadge, cx,
 } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
 import { ConfirmButton } from '../components/ConfirmPopover';
 import NewBadge from '../components/NewBadge';
-import { Banner, Field, Pager, Select, TableWrap, TextInput, num, safe, usePaged } from '../components/MarketKit';
+import { Banner, Field, Pager, Select, TextInput, num, safe, usePaged } from '../components/MarketKit';
+import { useStickyFirstCol } from '../components/SquadShared';
 import {
   GoldLineChart, RoundPnlChart, SourceBreakdown, type PnlRow, type SeriesPoint, type SourceItem,
 } from '../components/MarketCharts';
@@ -155,6 +156,7 @@ export default function Finance() {
   const [dir, setDir] = useState<'all' | 'in' | 'out'>('all');
   const [q, setQ] = useState('');
   const [eventFilter, setEventFilter] = useState<'mine' | 'all'>('mine');
+  const sticky = useStickyFirstCol();
 
   const roundLabel = roundLabelOf(g);
   const shortRound = shortRoundOf(g);
@@ -494,14 +496,15 @@ export default function Finance() {
         {seasonEvents.length === 0 ? (
           <EmptyState text={eventFilter === 'mine' ? '本赛季尚未报名或受邀任何有奖金的赛事。可切换为「全部赛事」查看。' : '本赛季没有有奖金的赛事。'} />
         ) : (
-          <TableWrap>
+          // 手机：横向滑动；「奖池（真实）」只是展示用的美元奖池，不显示
+          <TableScroll>
             <table className="tbl">
               <thead>
                 <tr>
                   <th>回合</th>
                   <th className="w-full">赛事</th>
                   <th>状态</th>
-                  <th className="num" title="真实奖金池（美元），仅展示">奖池（真实）</th>
+                  <th className="num max-sm:hidden" title="真实奖金池（美元），仅展示">奖池（真实）</th>
                   <th className="num" title="游戏内实际发放的奖金池">游戏内发放</th>
                   <th className="num">冠军奖金</th>
                   <th className="num" title="正赛队伍出场费 / 封闭预选出局补贴">出场费</th>
@@ -537,7 +540,7 @@ export default function Finance() {
                           {t.status === 'finished' ? '已结束' : ENTRY_STATUS_LABEL[t.playerStatus] ?? '—'}
                         </Badge>
                       </td>
-                      <td className="num text-xs text-mute tabular" title={filler ? '线上公开赛为补位赛事，没有真实奖金池' : '真实奖金池（美元）'}>
+                      <td className="num text-xs text-mute tabular max-sm:hidden" title={filler ? '线上公开赛为补位赛事，没有真实奖金池' : '真实奖金池（美元）'}>
                         {filler ? '—' : `$${formatGold(num(t.prizePool))}`}
                       </td>
                       <td className="num"><Gold value={pool} /></td>
@@ -551,7 +554,7 @@ export default function Finance() {
                 })}
               </tbody>
             </table>
-          </TableWrap>
+          </TableScroll>
         )}
       </Card>
 
@@ -565,7 +568,8 @@ export default function Finance() {
         {roster.length === 0 && !coach ? (
           <EmptyState text="队中没有签约选手或教练。" />
         ) : (
-          <TableWrap>
+          // 手机：姓名列固定在左侧横向滑动；「占工资总额」条形与「赛季合计」不显示（合计行同样隐藏对应格）
+          <TableScroll stickyFirst={sticky}>
             <table className="tbl">
               <thead>
                 <tr>
@@ -573,8 +577,8 @@ export default function Finance() {
                   <th>角色</th>
                   <th>等级</th>
                   <th className="num">工资/回合</th>
-                  <th className="w-[28%]">占工资总额</th>
-                  <th className="num" title={`按 ${paidRounds} 个付薪回合估算`}>赛季合计</th>
+                  <th className="w-[28%] max-sm:hidden">占工资总额</th>
+                  <th className="num max-sm:hidden" title={`按 ${paidRounds} 个付薪回合估算`}>赛季合计</th>
                   <th className="num">合同到期</th>
                 </tr>
               </thead>
@@ -589,7 +593,10 @@ export default function Finance() {
                       <td>
                         <div className="flex items-center gap-1.5">
                           <PlayerLink player={p} />
-                          <PosBadge pos={p.position} alt={p.altPositions} />
+                          {/* 手机上固定列要窄：位置徽章不显示 */}
+                          <span className="max-sm:hidden">
+                            <PosBadge pos={p.position} alt={p.altPositions} />
+                          </span>
                           {p.isRookie && <span className="text-[10px] text-faint">新秀</span>}
                         </div>
                       </td>
@@ -600,7 +607,7 @@ export default function Finance() {
                       </td>
                       <td><TierBadge tier={playerTier(p)} /></td>
                       <td className="num"><Gold value={s} /></td>
-                      <td>
+                      <td className="max-sm:hidden">
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-panel-3">
                             <div className="h-full rounded-full bg-gold/80" style={{ width: `${(s / wageMax) * 100}%` }} />
@@ -608,7 +615,7 @@ export default function Finance() {
                           <span className="w-10 text-right text-[11px] tabular text-mute">{Math.round(share * 100)}%</span>
                         </div>
                       </td>
-                      <td className="num text-mute"><Gold value={s * paidRounds} /></td>
+                      <td className="num text-mute max-sm:hidden"><Gold value={s * paidRounds} /></td>
                       <td className={cx('num text-xs', expiring ? 'text-gold' : 'text-mute')} title={expiring ? '本赛季结束后到期，需续约' : undefined}>
                         TI{p.contractUntil}{expiring ? ' ⚑' : ''}
                       </td>
@@ -627,7 +634,7 @@ export default function Finance() {
                     <td><Badge className="bg-dota/20 text-dota-2">主教练</Badge></td>
                     <td><TierBadge tier={coach.tier} /></td>
                     <td className="num"><Gold value={coachWage} /></td>
-                    <td>
+                    <td className="max-sm:hidden">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-panel-3">
                           <div className="h-full rounded-full bg-dota-2/80" style={{ width: `${(coachWage / wageMax) * 100}%` }} />
@@ -635,58 +642,63 @@ export default function Finance() {
                         <span className="w-10 text-right text-[11px] tabular text-mute">{wage > 0 ? Math.round((coachWage / wage) * 100) : 0}%</span>
                       </div>
                     </td>
-                    <td className="num text-mute"><Gold value={coachWage * paidRounds} /></td>
+                    <td className="num text-mute max-sm:hidden"><Gold value={coachWage * paidRounds} /></td>
                     <td className="num text-xs text-faint">—</td>
                   </tr>
                 )}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={3} className="text-xs font-semibold text-mute">合计</td>
-                  <td className="num font-semibold"><Gold value={wage} /></td>
+                  {/* 不用 colSpan：手机上第一列固定在左侧，跨三列的固定格会盖住滑过来的工资合计 */}
+                  <td className="text-xs font-semibold text-mute">合计</td>
                   <td />
-                  <td className="num font-semibold"><Gold value={wage * paidRounds} /></td>
+                  <td />
+                  <td className="num font-semibold"><Gold value={wage} /></td>
+                  <td className="max-sm:hidden" />
+                  <td className="num font-semibold max-sm:hidden"><Gold value={wage * paidRounds} /></td>
                   <td />
                 </tr>
               </tfoot>
             </table>
-          </TableWrap>
+          </TableScroll>
         )}
       </Card>
 
       {/* 账目明细 */}
       <Card title="账目明细" subtitle={`${scopeLabel} · 最新在前`} bodyClassName="p-0">
-        <div className="flex flex-wrap items-end gap-3 border-b border-line px-4 py-3">
-          <Field label="类别">
-            <Select value={cat} onChange={(ev) => setCat(ev.target.value as 'all' | Category)}>
+        {/* 手机：两个下拉框并排、搜索框占满一行 */}
+        <div className="flex flex-wrap items-end gap-3 border-b border-line px-4 py-3 max-sm:grid max-sm:grid-cols-2">
+          <Field label="类别" className="min-w-0">
+            <Select value={cat} onChange={(ev) => setCat(ev.target.value as 'all' | Category)} className="max-sm:w-full">
               <option value="all">全部类别</option>
               {CATEGORY_ORDER.map((c) => (
                 <option key={c} value={c}>{c === 'transfer_in' ? '转会（买入）' : c === 'transfer_out' ? '转会（卖出）' : CATEGORY_LABEL[c]}</option>
               ))}
             </Select>
           </Field>
-          <Field label="方向">
-            <Select value={dir} onChange={(ev) => setDir(ev.target.value as 'all' | 'in' | 'out')}>
+          <Field label="方向" className="min-w-0">
+            <Select value={dir} onChange={(ev) => setDir(ev.target.value as 'all' | 'in' | 'out')} className="max-sm:w-full">
               <option value="all">收入 + 支出</option>
               <option value="in">仅收入</option>
               <option value="out">仅支出</option>
             </Select>
           </Field>
-          <Field label="搜索说明">
-            <TextInput value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="如：赞助、奖金、工资、选手 ID" className="w-48" />
+          <Field label="搜索说明" className="max-sm:col-span-2">
+            <TextInput value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="如：赞助、奖金、工资、选手 ID" className="w-48 max-sm:w-full" />
           </Field>
         </div>
         {ledger.length === 0 ? (
           <EmptyState text={ledgerAll.length === 0 ? '还没有任何账目。推进回合、参加赛事或进行转会后会产生记录。' : '没有符合条件的账目。'} />
         ) : (
           <>
-            <TableWrap>
+            {/* 手机：「赛季」「类别」两列不显示（类别改为说明前的小标签），说明换行显示全文（桌面单行截断、全文在悬停提示里） */}
+            <TableScroll>
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>赛季</th>
+                    <th className="max-sm:hidden">赛季</th>
                     <th>回合</th>
-                    <th>类别</th>
+                    <th className="max-sm:hidden">类别</th>
                     <th className="w-full">说明</th>
                     <th className="num">金额</th>
                   </tr>
@@ -694,14 +706,20 @@ export default function Finance() {
                 <tbody>
                   {paged.rows.map(({ x, i }) => (
                     <tr key={`${x.season}-${x.round}-${i}`}>
-                      <td className="text-xs text-mute tabular">TI{x.season}</td>
+                      <td className="text-xs text-mute tabular max-sm:hidden">TI{x.season}</td>
                       <td className="text-xs text-mute">{roundLabel(x.season, x.round)}</td>
-                      <td>
+                      <td className="max-sm:hidden">
                         <Badge className={x.amount >= 0 ? 'bg-good/10 text-good' : 'bg-bad/10 text-[#ff9b9b]'}>
                           {categoryLabel(x.category, x.amount)}
                         </Badge>
                       </td>
-                      <td className="max-w-0 truncate text-ink/90" title={x.note}>{x.note || '—'}</td>
+                      {/* 换行要加 !：index.css 的 .tbl td 不换行规则不在 @layer 里，优先于工具类 */}
+                      <td className="max-w-0 truncate text-ink/90 max-sm:min-w-[8rem] max-sm:max-w-none max-sm:whitespace-normal!" title={x.note}>
+                        <Badge className={cx('mr-1.5 align-middle sm:hidden', x.amount >= 0 ? 'bg-good/10 text-good' : 'bg-bad/10 text-[#ff9b9b]')}>
+                          {categoryLabel(x.category, x.amount)}
+                        </Badge>
+                        {x.note || '—'}
+                      </td>
                       <td className={cx('num font-semibold', x.amount >= 0 ? 'text-good' : 'text-bad')}>
                         {x.amount >= 0 ? '+' : ''}{formatGold(x.amount)}
                       </td>
@@ -709,7 +727,7 @@ export default function Finance() {
                   ))}
                 </tbody>
               </table>
-            </TableWrap>
+            </TableScroll>
             <Pager {...paged} onChange={paged.setPage} unit="笔" />
           </>
         )}
@@ -805,7 +823,7 @@ function PrizeShareCard({ g, me, roundLabel }: { g: GameState; me: string; round
       }
       subtitle={`赛事奖金的 ${pct(current)} 分给队员，俱乐部保留 ${pct(1 - current)}；出场费与赞助、直播、周边收入全归俱乐部`}
     >
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="min-w-0 space-y-3">
           <div>
             <div className="flex items-baseline justify-between gap-2 text-xs text-mute">
@@ -829,7 +847,7 @@ function PrizeShareCard({ g, me, roundLabel }: { g: GameState; me: string; round
                   onClick={() => setPick(isCur ? null : v)}
                   title={isCur ? `当前比例 ${pct(v)}` : `队员 ${pct(v)} / 俱乐部 ${pct(1 - v)}`}
                   className={cx(
-                    'cursor-pointer whitespace-nowrap rounded border px-0.5 py-1 text-xs tabular transition-colors',
+                    'cursor-pointer whitespace-nowrap rounded border px-0.5 py-1 text-xs tabular transition-colors pointer-coarse:min-h-9',
                     isSel ? 'border-gold bg-gold/15 text-gold' : 'border-line bg-panel-2 text-mute hover:bg-panel-3 hover:text-ink',
                     isCur && 'font-semibold underline decoration-dotted underline-offset-2',
                   )}

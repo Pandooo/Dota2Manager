@@ -2,9 +2,23 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 手机适配（v0.4，docs/UI.md「手机适配」）：viewport-fit=cover 让页面铺满刘海 / 底部横条区域，安全区由 CSS 的 env(safe-area-inset-*) 让出 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0d13" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="刀塔经理：在浏览器里经营一支 Dota 2 俱乐部（单机 / 多人）" />
+    <meta name="application-name" content="刀塔经理" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="刀塔经理" />
+    <meta name="format-detection" content="telephone=no" />
     <title>刀塔经理</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23a3271c'/><text x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>D2</text></svg>" />
+    <!-- 图标：由原创冠军盾矢量图（TiTransition.tsx 的 AegisSvg，默认主题）渲染，见 public/icons/ -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
   </head>
   <body>
     <div id="root"></div>

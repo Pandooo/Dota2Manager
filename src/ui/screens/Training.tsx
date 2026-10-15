@@ -9,10 +9,10 @@ import {
 } from '../../engine';
 import type { GameState, Player, Region, Team, TrainingFocus, TrainingRecord, TrainingSummary } from '../../engine';
 import {
-  Badge, Button, Card, Delta, EmptyState, Gold, Hint, PlayerLink, PosBadge, RegionBadge, Tabs, TeamLink, TeamTag, cx,
+  Badge, Button, Card, Delta, EmptyState, Gold, Hint, PlayerLink, PosBadge, RegionBadge, TableScroll, Tabs, TeamLink, TeamTag, cx,
 } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
-import { Chip, MiniBar, fmt1, pct, safe } from '../components/SquadShared';
+import { Chip, MiniBar, fmt1, pct, safe, useStickyFirstCol } from '../components/SquadShared';
 import {
   FOCUS_INFO, FOCUS_ORDER, GainsTable, ROUND_KIND_TEXT, RecordKindChip, SCRIM_BOOKED_LABEL, costBreakdown, recordInsightMult,
   roundRecords, scrimInsightBonus, scrimMultTone, scrimOptions, scrimPerOpponentLimit, scrimReason, scrimRuleShort, sumGains,
@@ -124,10 +124,11 @@ export default function Training() {
           )}
           <GrowthSourceNote />
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          {/* 单列也写 minmax(0,1fr)：隐式 auto 列会被训练赛表格撑出屏幕（docs/UI.md「手机适配」） */}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             {/* ---------------- 焦点 + 开始训练 ---------------- */}
             <Card title="训练焦点" subtitle="选择本次训练的重点，倍数为 [战斗力 / 天梯 / 灵性] 收益系数">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {FOCUS_ORDER.map((f) => {
                   const info = FOCUS_INFO[f];
                   const mult = CONFIG.growth.focus[f] ?? [0.5, 0.5, 0.5];
@@ -249,7 +250,7 @@ export default function Training() {
             <ForecastCard game={game} team={team} players={st.players} focus={focus} />
           )}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <ScrimPanel
               game={game}
               st={st}
@@ -443,6 +444,7 @@ function hiOf(base: { min: number; spread: number }, talent: number) {
 }
 
 function ForecastCard({ game, team, players, focus }: { game: GameState; team: Team; players: Player[]; focus: TrainingFocus }) {
+  const sticky = useStickyFirstCol();
   const starters = new Set(POSITIONS.map((p) => team.lineup?.[p]).filter(Boolean) as string[]);
   const [fP, fM, fI] = CONFIG.growth.focus[focus] ?? [0.5, 0.5, 0.5];
   const tr = CONFIG.growth.training;
@@ -473,7 +475,8 @@ function ForecastCard({ game, team, players, focus }: { game: GameState; team: T
       {rows.length === 0 ? (
         <EmptyState text="阵容中没有选手，无法训练。" />
       ) : (
-        <div className="overflow-x-auto">
+        // 手机：横向滑动，选手列固定在左侧
+        <TableScroll stickyFirst={sticky}>
           <table className="tbl">
             <thead>
               <tr>
@@ -507,7 +510,7 @@ function ForecastCard({ game, team, players, focus }: { game: GameState; team: T
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </Card>
   );
@@ -533,6 +536,7 @@ function ScrimPanel({
   setAffordOnly: (v: boolean) => void;
   onScrim: (id: string) => void;
 }) {
+  const openTeam = useGameStore((s) => s.openTeam);
   const { team, ownRating } = st;
   const rows = scrimOptions(game, team, ownRating);
   const shown = rows.filter((r) => (regionFilter === 'all' || r.t.region === regionFilter) && (!affordOnly || r.cost <= team.gold));
@@ -561,7 +565,7 @@ function ScrimPanel({
           <select
             value={regionFilter}
             onChange={(e) => setRegionFilter(e.target.value as Region | 'all')}
-            className="cursor-pointer rounded border border-line bg-panel-2 px-1.5 py-0.5 text-xs text-ink [color-scheme:dark]"
+            className="cursor-pointer rounded border border-line bg-panel-2 px-1.5 py-0.5 text-xs text-ink [color-scheme:dark] pointer-coarse:min-h-9"
           >
             <option value="all">全部赛区</option>
             {REGIONS.map((r) => (
@@ -570,8 +574,8 @@ function ScrimPanel({
               </option>
             ))}
           </select>
-          <label className="flex cursor-pointer items-center gap-1 text-mute">
-            <input type="checkbox" checked={affordOnly} onChange={(e) => setAffordOnly(e.target.checked)} className="accent-[#c23c2a]" />
+          <label className="flex cursor-pointer items-center gap-1 text-mute pointer-coarse:min-h-9">
+            <input type="checkbox" checked={affordOnly} onChange={(e) => setAffordOnly(e.target.checked)} className="accent-[#c23c2a] pointer-coarse:size-4" />
             负担得起
           </label>
         </div>
@@ -582,18 +586,20 @@ function ScrimPanel({
       ) : shown.length === 0 ? (
         <EmptyState text="没有符合筛选条件的战队。" />
       ) : (
-        <div className="max-h-[460px] overflow-y-auto">
+        // 手机（< sm）：只显示战队简称 / 倍数 / 费用 / 约练按钮（序号、赛区、评分、差距、本季战绩与战队全名隐藏——倍数由评分差距算出；
+        // 点简称看战队详情），仍放不下时横向滑动
+        <TableScroll className="max-h-[460px] overflow-y-auto">
           <table className="tbl">
             <thead>
               <tr>
-                <th className="num">#</th>
+                <th className="num max-sm:hidden">#</th>
                 <th>战队</th>
-                <th>赛区</th>
-                <th className="num">评分</th>
-                <th className="num" title="(对手评分 − 本队评分) / 本队评分">差距</th>
+                <th className="max-sm:hidden">赛区</th>
+                <th className="num max-sm:hidden">评分</th>
+                <th className="num max-sm:hidden" title="(对手评分 − 本队评分) / 本队评分">差距</th>
                 <th className="num" title="训练收益倍数">倍数</th>
                 <th className="num">费用</th>
-                <th className="num" title="本赛季与该队的训练赛战绩">本季</th>
+                <th className="num max-sm:hidden" title="本赛季与该队的训练赛战绩">本季</th>
                 <th />
               </tr>
             </thead>
@@ -605,18 +611,21 @@ function ScrimPanel({
                 const rec = record.get(r.t.id);
                 return (
                   <tr key={r.t.id} className={r.booked ? 'opacity-60' : undefined}>
-                    <td className="num text-faint">{rank}</td>
+                    <td className="num text-faint max-sm:hidden">{rank}</td>
                     <td>
                       <span className="inline-flex items-center gap-1.5">
-                        <TeamTag color={r.t.color} tag={r.t.tag} />
-                        <TeamLink teamId={r.t.id} name={r.t.name} className="max-w-24 truncate text-xs text-mute" />
+                        {/* flex：按钮内不产生行盒，行高与以前（不可点的队标）一致 */}
+                        <button type="button" className="flex cursor-pointer pointer-coarse:-my-2 pointer-coarse:py-2" onClick={() => openTeam(r.t.id)} title={r.t.name}>
+                          <TeamTag color={r.t.color} tag={r.t.tag} />
+                        </button>
+                        <TeamLink teamId={r.t.id} name={r.t.name} className="max-w-24 truncate text-xs text-mute max-sm:hidden" />
                       </span>
                     </td>
-                    <td>
+                    <td className="max-sm:hidden">
                       <RegionBadge region={r.t.region} />
                     </td>
-                    <td className="num">{fmt1(r.rating)}</td>
-                    <td className="num">
+                    <td className="num max-sm:hidden">{fmt1(r.rating)}</td>
+                    <td className="num max-sm:hidden">
                       <span className="inline-flex items-center justify-end gap-1.5">
                         <GapBar gap={gapPct} />
                         <span className={cx('w-12 tabular', gapPct > 0.005 ? 'text-good' : gapPct < -0.005 ? 'text-bad' : 'text-faint')}>
@@ -629,7 +638,7 @@ function ScrimPanel({
                     <td className="num">
                       <Gold value={r.cost} className={!r.booked && r.cost > team.gold ? 'text-bad' : undefined} />
                     </td>
-                    <td className="num text-xs">
+                    <td className="num text-xs max-sm:hidden">
                       {rec ? (
                         <span>
                           <span className="text-good">{rec.w}</span>-<span className="text-bad">{rec.l}</span>
@@ -645,7 +654,8 @@ function ScrimPanel({
                         </span>
                       ) : (
                         <Button size="xs" variant="secondary" disabled={!!why} title={why || `花费 ${formatGold(r.cost)} 与 ${r.t.name} 打一场训练赛`} onClick={() => onScrim(r.t.id)}>
-                          约训练赛
+                          <span className="sm:hidden">约练</span>
+                          <span className="max-sm:hidden">约训练赛</span>
                         </Button>
                       )}
                     </td>
@@ -654,7 +664,7 @@ function ScrimPanel({
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </Card>
   );

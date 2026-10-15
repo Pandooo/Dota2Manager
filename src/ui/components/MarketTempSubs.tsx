@@ -8,7 +8,7 @@ import {
   type GameState, type Player, type Position, type Tournament,
 } from '../../engine';
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TierBadge, cx } from './common';
-import { AttrNum, Banner, Field, Select, TableWrap, num, safe } from './MarketKit';
+import { AttrNum, BODY_FLUSH, Banner, Facts, Field, PHONE_LINK, PhoneList, PhoneRow, Select, TableWrap, num, safe, useCompactList } from './MarketKit';
 
 /** 替补目标赛事：当前回合参加的赛事，否则赛程中下一项已报名/受邀且未结束的赛事 */
 export function tempSubTargetTournament(g: GameState): Tournament | null {
@@ -42,6 +42,7 @@ export default function MarketTempSubs() {
   const call = useCall();
   const callSilent = useCallSilent();
   const toast = useGameStore((s) => s.toast);
+  const phone = useCompactList();
   const setView = useGameStore((s) => s.setView);
   const me = g.settings.playerTeamId;
   const team = g.teams[me];
@@ -98,8 +99,21 @@ export default function MarketTempSubs() {
     void call('fillLineupWithTempSubs');
   };
 
+  const hireButton = (p: Player, cost: number, block: string | null, className?: string) => (
+    <Button
+      size={phone ? 'sm' : 'xs'}
+      variant={block ? 'secondary' : 'primary'}
+      className={className}
+      disabled={!!block}
+      title={block ?? `雇佣为「${target?.name}」临时替补，费用 ${formatGold(cost)}`}
+      onClick={() => tid && void call('hireTempSub', p.id, tid)}
+    >
+      雇佣
+    </Button>
+  );
+
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="min-w-0 space-y-4">
         {/* 目标赛事 + 阵容状态 */}
         <Card title="替补需求" subtitle="临时替补只效力一项赛事，赛事结束后自动离队，费用远低于正式签约">
@@ -118,26 +132,32 @@ export default function MarketTempSubs() {
                 </span>
                 {target.status === 'running' && <Badge className="bg-dota/20 text-dota-2">进行中</Badge>}
               </div>
+              {/* 手机：三格只放数字，说明合并成格子下方的一行小字 */}
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="rounded-md border border-line px-3 py-2">
+                <div className="rounded-md border border-line px-2.5 py-2 sm:px-3">
                   <div className="text-faint">可出战选手</div>
                   <div className={cx('text-lg font-semibold tabular', availableCount < 5 ? 'text-bad' : 'text-ink')}>
-                    {availableCount}<span className="text-xs text-faint">（首发需 5 人）</span>
+                    {availableCount}<span className="text-xs text-faint max-sm:hidden">（首发需 5 人）</span>
                   </div>
                 </div>
-                <div className="rounded-md border border-line px-3 py-2">
+                <div className="rounded-md border border-line px-2.5 py-2 sm:px-3">
                   <div className="text-faint">无法参赛</div>
                   <div className={cx('text-lg font-semibold tabular', unavailable.length ? 'text-gold' : 'text-ink')}>{unavailable.length}</div>
                 </div>
-                <div className="rounded-md border border-line px-3 py-2">
+                <div className="rounded-md border border-line px-2.5 py-2 sm:px-3">
                   <div className="text-faint">阵容人数</div>
                   <div className="text-lg font-semibold tabular">
                     {regularCount}
                     <span className="text-xs text-faint">
-                      {' '}/ {CONFIG.team.maxRoster}{tempSubs.length ? ` + 临时替补 ${tempSubs.length}` : ''}（临时替补不占阵容名额，同时最多 {tempMax} 人）
+                      {' '}/ {CONFIG.team.maxRoster}
+                      {tempSubs.length ? <span className="max-sm:hidden"> + 临时替补 {tempSubs.length}</span> : null}
+                      <span className="max-sm:hidden">（临时替补不占阵容名额，同时最多 {tempMax} 人）</span>
                     </span>
                   </div>
                 </div>
+              </div>
+              <div className="-mt-1.5 text-[11px] leading-snug text-faint sm:hidden">
+                首发需 5 人；临时替补不占阵容名额（当前 {tempSubs.length} 人，同时最多 {tempMax} 人）
               </div>
               {unavailable.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -183,7 +203,7 @@ export default function MarketTempSubs() {
           title="野外候选替补"
           subtitle={`每次搜索生成 ${CONFIG.tempSub.candidates} 名候选，等级分布受俱乐部荣誉影响`}
           actions={
-            <div className="flex items-end gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               <Field label="位置">
                 <Select value={pos} onChange={(e) => setPos(e.target.value as 'any' | Position)}>
                   <option value="any">任意位置</option>
@@ -199,12 +219,50 @@ export default function MarketTempSubs() {
               </Button>
             </div>
           }
-          bodyClassName="p-0"
+          bodyClassName={BODY_FLUSH}
         >
           {candidates.length === 0 ? (
             <EmptyState text="还没有候选替补。">
               <span className="text-xs text-faint">选择位置后点击「去野外找替补」。</span>
             </EmptyState>
+          ) : phone ? (
+            <PhoneList>
+              {candidates.map((p) => {
+                const cost = safe(() => tempSubCost(g, p.id), 0);
+                const block = hireBlock(cost);
+                return (
+                  <PhoneRow
+                    key={p.id}
+                    head={
+                      <>
+                        <TierBadge tier={playerTier(p)} />
+                        <PlayerLink player={p} className={PHONE_LINK} />
+                        {p.isReal && <span className="text-[10px] text-gold">真实选手</span>}
+                        <span className="text-[10px] text-faint">{p.nationality ?? ''}</span>
+                        <PosBadge pos={p.position} alt={p.altPositions} />
+                        {naturalPositions(p).some((q) => missing.includes(q)) && <span className="text-[10px] text-gold">补缺</span>}
+                      </>
+                    }
+                    action={hireButton(p, cost, block, 'min-h-10 min-w-16')}
+                  >
+                    <Facts
+                      items={[
+                        ['战力', <span className="font-semibold"><AttrNum value={effectivePower(p)} digits={1} /></span>],
+                        ['灵性', <AttrNum value={effectiveAttr(p, 'insight')} />],
+                        ['韧性', <AttrNum value={effectiveAttr(p, 'resilience')} />],
+                        ['年龄', <span className="tabular text-ink">{ageOf(g, p)}</span>],
+                      ]}
+                    />
+                    <Facts
+                      items={[
+                        ['雇佣费', <Gold value={cost} className="font-semibold" />],
+                        ['工资', <><Gold value={num(p.salary)} />/回合</>],
+                      ]}
+                    />
+                  </PhoneRow>
+                );
+              })}
+            </PhoneList>
           ) : (
             <TableWrap>
               <table className="tbl">
@@ -246,17 +304,7 @@ export default function MarketTempSubs() {
                         <td className="num"><AttrNum value={effectiveAttr(p, 'resilience')} /></td>
                         <td className="num text-mute"><Gold value={num(p.salary)} /></td>
                         <td className="num font-semibold"><Gold value={cost} /></td>
-                        <td className="text-right">
-                          <Button
-                            size="xs"
-                            variant={block ? 'secondary' : 'primary'}
-                            disabled={!!block}
-                            title={block ?? `雇佣为「${target?.name}」临时替补，费用 ${formatGold(cost)}`}
-                            onClick={() => tid && void call('hireTempSub', p.id, tid)}
-                          >
-                            雇佣
-                          </Button>
-                        </td>
+                        <td className="text-right">{hireButton(p, cost, block)}</td>
                       </tr>
                     );
                   })}

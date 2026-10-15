@@ -155,7 +155,8 @@ function PlayerDetail({ game, p, onClose }: { game: GameState; p: Player; onClos
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      {/* 单列也写 minmax(0,1fr)（docs/UI.md「手机适配」：隐式 auto 列会被不换行的内容撑宽） */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* ---------- 左列 ---------- */}
         <div className="space-y-4">
           <Panel title="基本资料">
@@ -171,9 +172,10 @@ function PlayerDetail({ game, p, onClose }: { game: GameState; p: Player; onClos
               <Info label="年龄">
                 {age} 岁 <span className="text-xs text-faint">（{p.birthYear} 年生）</span>
               </Info>
-              <Info label="战队">
+              <Info label="战队" wrap>
                 {team ? (
-                  <span className="inline-flex items-center gap-1.5">
+                  // 窄屏（手机上半列约 140px）：战队全名放不下时换行，而不是截掉
+                  <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                     <TeamTag color={team.color} tag={team.tag} />
                     <TeamLink teamId={team.id} name={team.name} className="text-mute" />
                     {team.id === myTeamId && <Chip tone="gold">本队</Chip>}
@@ -247,7 +249,8 @@ function PlayerDetail({ game, p, onClose }: { game: GameState; p: Player; onClos
                 <div className="flex items-center gap-2 text-xs" title={GROWTH_OUTLOOK_HINT[outlook]}>
                   <span className="w-14 shrink-0 text-mute">潜力</span>
                   <Chip tone={GROWTH_OUTLOOK_TONE[outlook]}>{outlook}</Chip>
-                  <span className="min-w-0 flex-1 truncate text-faint">{GROWTH_OUTLOOK_SHORT[outlook]}</span>
+                  {/* 手机上换行显示全文（悬停说明触屏看不到） */}
+                  <span className="min-w-0 flex-1 text-faint sm:truncate">{GROWTH_OUTLOOK_SHORT[outlook]}</span>
                 </div>
               )}
             </div>
@@ -435,7 +438,7 @@ function ActionPanel({ game, p, team, onClose }: { game: GameState; p: Player; t
       <>
         <OwnActions game={game} p={p} myTeam={myTeam} />
         {!temp && p.status === 'active' && (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
             <LoyaltyPanel game={game} p={p} />
             <ListingPanel game={game} p={p} windowOpen={safe(() => isTransferWindowOpen(game), true)} />
           </div>
@@ -1019,7 +1022,7 @@ function BidActions({ game, p, seller, myTeam }: { game: GameState; p: Player; s
 
   return (
     <Panel title={`向 ${seller.name} 报价求购`}>
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="grid grid-cols-2 gap-2 text-sm">
           <Info label="身价">
             <Gold value={value} />

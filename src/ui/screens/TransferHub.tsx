@@ -7,7 +7,8 @@ import type { TransferTab as Tab } from '../../store/gameStore';
 import { HubShell, useHubTab, CountBadge, TextBadge, type HubTabDef } from '../layout/HubKit';
 import { safe } from '../components/ShellKit';
 import NewBadge from '../components/NewBadge';
-import Market from './Market';
+// 转会市场：按需加载（v0.4 手机适配后市场各页同时含表格与手机卡片两套布局，主包接近 800 kB 提示线）；首次进入「转会市场」标签时下载
+const Market = lazy(() => import('./Market'));
 // 新秀抽卡页：按需加载（主包接近 vite.config.ts 的 800 kB 提示线）；进入「新秀抽卡」标签时才下载
 const Gacha = lazy(() => import('./Gacha'));
 // 选秀页（选秀默认关闭，只有旧存档 / 打开选秀开关时才显示）：按需加载，不进主包
@@ -65,7 +66,11 @@ export default function TransferHub() {
 
   return (
     <HubShell title="转会" tabs={tabs} value={tab}>
-      {tab === 'market' && <Market />}
+      {tab === 'market' && (
+        <Suspense fallback={<div className="py-16 text-center text-sm text-mute">正在载入转会市场…</div>}>
+          <Market />
+        </Suspense>
+      )}
       {tab === 'gacha' && (
         <Suspense fallback={<div className="py-16 text-center text-sm text-mute">正在载入新秀抽卡…</div>}>
           <Gacha />

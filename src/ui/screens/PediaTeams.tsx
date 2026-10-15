@@ -3,10 +3,12 @@ import { useMemo, useState } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
 import { REGIONS, REGION_LABEL, isHumanTeam, pediaLegacyBoard } from '../../engine';
 import type { GameState, PediaTeamLegacy, Region } from '../../engine';
-import { Card, EmptyState, Gold, RegionBadge, cx } from '../components/common';
+import { Card, EmptyState, Gold, RegionBadge, TableScroll, cx } from '../components/common';
 import { Chip, SortTh, sortList, useSort } from '../components/SquadShared';
 import { Segmented, TourSelect } from '../components/TourShared';
-import { GradeBadge, PTeam, PediaInput, fmtPct, safe, usePediaSel, PediaEntryGuard } from '../components/PediaKit';
+import {
+  GradeBadge, PHONE_HIDE, PTeam, PediaEntryGuard, PediaInput, PediaSortSelect, STICKY_TD, STICKY_TH, fmtPct, safe, usePediaSel,
+} from '../components/PediaKit';
 import { WdlBar } from '../components/PediaCharts';
 import PediaTeamPage from './PediaTeamPage';
 
@@ -164,7 +166,7 @@ function TeamList({ game }: { game: GameState }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <PediaInput value={q} onChange={setQ} placeholder="按战队名 / 简称筛选" className="w-56" />
+        <PediaInput value={q} onChange={setQ} placeholder="按战队名 / 简称筛选" className="w-full sm:w-56" />
         <TourSelect value={region} onChange={(v) => setRegion(v as 'all' | Region)} title="赛区">
           <option value="all">全部赛区</option>
           {REGIONS.map((r) => (
@@ -182,44 +184,63 @@ function TeamList({ game }: { game: GameState }) {
             { key: 'inactive', label: `解散 / 除名 ${counts.all - counts.active}` },
           ]}
         />
-        <span className="ml-auto text-xs text-faint">点击表头排序 · 点击战队名打开词条</span>
+        <PediaSortSelect
+          sort={sort}
+          options={[
+            { key: 'legacy', label: '历史地位' },
+            { key: 'titles', label: '冠军数' },
+            { key: 'tiApps', label: 'TI 次数' },
+            { key: 'series', label: '系列赛场次' },
+            { key: 'seriesRate', label: '胜率' },
+            { key: 'gameRate', label: '小局胜率' },
+            { key: 'prize', label: '奖金' },
+            { key: 'first', label: '首次出战', defaultDir: 'asc' },
+            { key: 'name', label: '战队名', defaultDir: 'asc' },
+          ]}
+        />
+        <span className="ml-auto text-xs text-faint max-sm:hidden">点击表头排序 · 点击战队名打开词条</span>
       </div>
 
       <Card bodyClassName="p-0">
         {sorted.length === 0 ? (
           <EmptyState text="没有符合条件的战队" />
         ) : (
-          <div className="overflow-x-auto">
+          // 手机（< sm）：战队列固定在左侧（名次并入），赛区 / 状态 / TI / 小局 / 始于隐藏，其余横向滑动
+          <TableScroll>
             <table className="tbl">
               <thead>
                 <tr>
-                  <th className="num">#</th>
-                  <SortTh k="name" sort={sort} defaultDir="asc">战队</SortTh>
-                  <th>赛区</th>
-                  <th>状态</th>
+                  <th className={cx('num', PHONE_HIDE)}>#</th>
+                  <SortTh k="name" sort={sort} defaultDir="asc" className={STICKY_TH}>战队</SortTh>
+                  <th className={PHONE_HIDE}>赛区</th>
+                  <th className={PHONE_HIDE}>状态</th>
                   <SortTh k="legacy" sort={sort} title="实时历史地位（开局前现实成就 + 本局成就）">历史地位</SortTh>
                   <SortTh k="titles" sort={sort} className="num" title="冠军总数（不含预选赛）">冠军</SortTh>
-                  <SortTh k="tiApps" sort={sort} className="num" title="本局 TI 正赛参赛次数">TI</SortTh>
+                  <SortTh k="tiApps" sort={sort} className={cx('num', PHONE_HIDE)} title="本局 TI 正赛参赛次数">TI</SortTh>
                   <SortTh k="series" sort={sort} title="系列赛 胜-平-负">系列赛</SortTh>
                   <SortTh k="seriesRate" sort={sort} className="num">胜率</SortTh>
-                  <SortTh k="gameRate" sort={sort} className="num" title="小局胜率">小局</SortTh>
+                  <SortTh k="gameRate" sort={sort} className={cx('num', PHONE_HIDE)} title="小局胜率">小局</SortTh>
                   <SortTh k="prize" sort={sort} className="num" title="名次奖金（俱乐部 + 队员分成）">奖金</SortTh>
-                  <SortTh k="first" sort={sort} defaultDir="asc" title="本局首次出战的赛季">始于</SortTh>
+                  <SortTh k="first" sort={sort} defaultDir="asc" className={PHONE_HIDE} title="本局首次出战的赛季">始于</SortTh>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((r, i) => (
                   <tr key={r.id} className={cx(r.id === me && 'bg-gold/5', r.status !== 'active' && 'opacity-80')}>
-                    <td className="num text-faint">{i + 1}</td>
-                    <td className="max-w-56">
-                      <div className="flex items-center gap-1.5">
+                    <td className={cx('num text-faint', PHONE_HIDE)}>{i + 1}</td>
+                    <td className={STICKY_TD}>
+                      <div className="flex max-w-56 items-center gap-1.5 max-sm:max-w-[10.5rem]">
+                        <span className="w-6 shrink-0 text-right text-xs text-faint tabular sm:hidden">{i + 1}</span>
                         <PTeam id={r.id} name={r.name} color={r.color} className="font-medium" />
-                        {r.tag && <span className="text-[11px] text-faint">{r.tag}</span>}
+                        {r.tag && <span className="text-[11px] text-faint max-sm:hidden">{r.tag}</span>}
                         {r.human && <Chip tone={r.id === me ? 'gold' : 'info'}>{r.id === me ? '本方' : '玩家'}</Chip>}
+                        {r.status !== 'active' && (
+                          <span className={cx('shrink-0 text-[11px] sm:hidden', r.status === 'banned' ? 'text-bad' : 'text-faint')}>{STATUS_LABEL[r.status]}</span>
+                        )}
                       </div>
                     </td>
-                    <td>{r.region ? <RegionBadge region={r.region} /> : <span className="text-faint">—</span>}</td>
-                    <td className={cx('text-xs', r.status === 'active' ? 'text-good' : r.status === 'banned' ? 'text-bad' : 'text-faint')}>
+                    <td className={PHONE_HIDE}>{r.region ? <RegionBadge region={r.region} /> : <span className="text-faint">—</span>}</td>
+                    <td className={cx('text-xs', PHONE_HIDE, r.status === 'active' ? 'text-good' : r.status === 'banned' ? 'text-bad' : 'text-faint')}>
                       {STATUS_LABEL[r.status]}
                     </td>
                     <td title={r.lg ? `${r.lg.summary}\n${r.lg.title.desc}` : undefined}>
@@ -243,17 +264,17 @@ function TeamList({ game }: { game: GameState }) {
                         <span className="text-faint">0</span>
                       )}
                     </td>
-                    <td className="num">{r.tiApps || <span className="text-faint">0</span>}</td>
-                    <td className="w-40">{r.sw + r.sd + r.sl > 0 ? <WdlBar w={r.sw} d={r.sd} l={r.sl} /> : <span className="text-faint">—</span>}</td>
+                    <td className={cx('num', PHONE_HIDE)}>{r.tiApps || <span className="text-faint">0</span>}</td>
+                    <td className="w-40 max-sm:min-w-32">{r.sw + r.sd + r.sl > 0 ? <WdlBar w={r.sw} d={r.sd} l={r.sl} /> : <span className="text-faint">—</span>}</td>
                     <td className="num">{fmtPct(r.seriesRate)}</td>
-                    <td className="num text-mute">{fmtPct(r.gameRate)}</td>
+                    <td className={cx('num text-mute', PHONE_HIDE)}>{fmtPct(r.gameRate)}</td>
                     <td className="num">{r.prize > 0 ? <Gold value={r.prize} /> : <span className="text-faint">—</span>}</td>
-                    <td className="text-mute tabular">{r.firstTi ? `TI${r.firstTi}` : '—'}</td>
+                    <td className={cx('text-mute tabular', PHONE_HIDE)}>{r.firstTi ? `TI${r.firstTi}` : '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
       </Card>
     </div>

@@ -7,7 +7,7 @@ import {
   playerRating, playerTier, rankTeamsByRating, seasonStandings, teamRating, trainingBlockReason, ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
 import type { RoleFit } from '../../engine';
-import { Badge, Button, EmptyState, Modal, PosBadge, RegionBadge, TierBadge, cx } from './common';
+import { Badge, Button, EmptyState, Modal, PosBadge, RegionBadge, TableScroll, TierBadge, cx } from './common';
 
 /** 位置评分的颜色：本位置 / 副位置与四五号位互换 / 非本位置 */
 const FIT_TEXT: Record<RoleFit, string> = { main: 'text-mute', alt: 'text-info', swap: 'text-info', off: 'text-bad' };
@@ -15,6 +15,10 @@ import { TeamEmblem } from './TeamEmblem';
 import { MomentumBadge } from './MomentumBadge';
 import { TourTierBadge, openTournamentView, rankClass, safe } from './TourShared';
 import { PediaEntryButton } from './PediaKit';
+
+/** 近期战绩的赛事名单元格：桌面单行截断；手机上换行，保证等级与名次列留在屏幕内 */
+const PHONE_WRAP_TD = 'max-sm:min-w-[7rem] max-sm:whitespace-normal!';
+const RESULT_NAME_TD = `${PHONE_WRAP_TD} sm:max-w-72 sm:truncate`;
 
 export default function TeamModal() {
   const teamId = useGameStore((s) => s.selectedTeamId);
@@ -226,7 +230,7 @@ function TeamBody({
       {/* 阵容 */}
       <div>
         <div className="mb-1.5 text-xs font-semibold text-mute">阵容（{starters.filter((s) => s.player).length + bench.length} 人）</div>
-        <div className="overflow-x-auto rounded-lg border border-line">
+        <TableScroll className="rounded-lg border border-line">
           <table className="tbl">
             <thead>
               <tr>
@@ -266,7 +270,7 @@ function TeamBody({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </div>
 
       {/* 战绩 */}
@@ -275,14 +279,15 @@ function TeamBody({
         {results.length === 0 && running.length === 0 ? (
           <div className="rounded-lg border border-line px-3 py-4 text-center text-xs text-faint">本存档中暂无赛事战绩</div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-line">
+          // 手机上赛事名换行（不截断），右侧的等级与名次总在屏幕内；万一仍放不下可横向滑动（UI.md「手机适配 · 表格」：不要用 overflow-hidden 包表格）
+          <TableScroll className="rounded-lg border border-line">
             <table className="tbl">
               <tbody>
                 {running.map((t) => (
                   <tr key={t.id}>
-                    <td className="w-16 text-mute">TI{t.season}</td>
-                    <td>
-                      <button className="cursor-pointer hover:text-gold hover:underline" onClick={() => onTournament(t.id)}>
+                    <td className="w-16 text-mute max-sm:w-12">TI{t.season}</td>
+                    <td className={PHONE_WRAP_TD}>
+                      <button className="cursor-pointer text-left hover:text-gold hover:underline" onClick={() => onTournament(t.id)}>
                         {t.name}
                       </button>
                     </td>
@@ -294,10 +299,10 @@ function TeamBody({
                 ))}
                 {results.map(({ h, pl }) => (
                   <tr key={`${h.tournamentId}-${h.season}`}>
-                    <td className="w-16 text-mute">TI{h.season}</td>
-                    <td className="max-w-72 truncate">
+                    <td className="w-16 text-mute max-sm:w-12">TI{h.season}</td>
+                    <td className={RESULT_NAME_TD}>
                       {game.tournaments[h.tournamentId] ? (
-                        <button className="cursor-pointer hover:text-gold hover:underline" onClick={() => onTournament(h.tournamentId)}>
+                        <button className="cursor-pointer text-left hover:text-gold hover:underline" onClick={() => onTournament(h.tournamentId)}>
                           {h.name}
                         </button>
                       ) : (
@@ -315,7 +320,7 @@ function TeamBody({
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
       </div>
     </div>

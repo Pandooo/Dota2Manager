@@ -3,11 +3,13 @@
 // 主题色见 src/index.css @theme：bg / panel / panel-2 / panel-3 / line / ink / mute / faint /
 // dota / gold / radiant / dire / good / bad / info / tier-*
 // ============================================================================
-import { useEffect, useRef, type ReactNode, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import type { Position, Region, Tier, Player } from '../../engine/types';
 import { CONFIG, POSITION_LABEL, POSITION_SHORT, REGION_LABEL, formatGold } from '../../engine';
-import { useGameStore } from '../../store/gameStore';
+import { useGameStore, type Toast } from '../../store/gameStore';
 import { TeamEmblem } from './TeamEmblem';
+import { showTouchTip } from './TouchTip';
+import { useCoarsePointer, useIsPhone } from '../mobile';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -25,6 +27,18 @@ const BUTTON_STYLE: Record<ButtonVariant, string> = {
   gold: 'bg-gold/90 hover:bg-gold text-black border border-gold font-semibold',
 };
 
+/** 按钮尺寸；触屏（pointer: coarse）上加大最小高度，便于拇指点按（docs/UI.md「手机适配 · 触控尺寸」） */
+const BUTTON_SIZE: Record<'xs' | 'sm' | 'md' | 'lg', string> = {
+  xs: 'px-2 py-0.5 text-xs pointer-coarse:min-h-8 pointer-coarse:px-2.5',
+  sm: 'px-2.5 py-1 text-xs pointer-coarse:min-h-9',
+  md: 'px-3.5 py-1.5 text-sm pointer-coarse:min-h-10',
+  lg: 'px-5 py-2.5 text-base',
+};
+
+/**
+ * 通用按钮。禁用时用 title 说明原因（AGENTS.md）；触屏上「禁用 + 有 title」的按钮改为 aria-disabled（原生 disabled 收不到点击），
+ * 点击时在按钮旁显示 title（TouchTip.tsx），不执行 onClick。
+ */
 export function Button({
   variant = 'secondary',
   size = 'md',
@@ -32,14 +46,29 @@ export function Button({
   children,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
-  const sz = size === 'xs' ? 'px-2 py-0.5 text-xs' : size === 'sm' ? 'px-2.5 py-1 text-xs' : size === 'lg' ? 'px-5 py-2.5 text-base' : 'px-3.5 py-1.5 text-sm';
+  const coarse = useCoarsePointer();
+  const reason = typeof rest.title === 'string' ? rest.title.trim() : '';
+  const soft = coarse && !!rest.disabled && !!reason;
   return (
     <button
       {...rest}
+      disabled={soft ? undefined : rest.disabled}
+      aria-disabled={soft ? true : rest['aria-disabled']}
+      onClick={
+        soft
+          ? (e) => {
+              // 与原生禁用一致：不执行操作、不冒泡、不提交表单
+              e.preventDefault();
+              e.stopPropagation();
+              showTouchTip(e.currentTarget, reason);
+            }
+          : rest.onClick
+      }
       className={cx(
         'inline-flex items-center justify-center gap-1.5 rounded-md transition-colors cursor-pointer select-none',
         'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-inherit',
-        sz,
+        soft && 'opacity-40 cursor-not-allowed',
+        BUTTON_SIZE[size],
         BUTTON_STYLE[variant],
         className,
       )}
@@ -74,19 +103,22 @@ export function Card({
         <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line px-4 py-2.5">
           <div className="min-w-[8rem] flex-1">
             {title && <h3 className="truncate text-sm font-semibold tracking-wide text-ink">{title}</h3>}
-            {subtitle && <div className="truncate text-xs text-mute">{subtitle}</div>}
+            {/* 手机（< sm）副标题可换两行（一行只放得下十来个字）；≥ sm 单行截断 */}
+            {subtitle && <div className="break-words text-xs text-mute max-sm:line-clamp-2 sm:truncate">{subtitle}</div>}
           </div>
           {actions && <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{actions}</div>}
         </header>
       )}
-      <div className={cx('p-4', bodyClassName)}>{children}</div>
+      {/* bodyClassName 里的 p-0 与默认 p-4 同属 padding、按类名顺序 p-4 生效（桌面一直如此，保持不变）；
+          手机（< sm）上按原意去掉内边距，表格卡片多出 32px 宽 */}
+      <div className={cx('p-4', bodyClassName, !!bodyClassName && /(^|\s)p-0(\s|$)/.test(bodyClassName) && 'max-sm:p-0')}>{children}</div>
     </section>
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, className }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; className?: string }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <div className={cx('mb-4 flex flex-wrap items-end justify-between gap-3', className)}>
       <div>
         <h1 className="text-xl font-bold tracking-wide">{title}</h1>
         {subtitle && <div className="mt-0.5 text-sm text-mute">{subtitle}</div>}
@@ -121,7 +153,8 @@ export function Stat({ label, value, hint, className }: { label: ReactNode; valu
 // ---------------------------------------------------------------------------
 export function Badge({ children, className, title }: { children: ReactNode; className?: string; title?: string }) {
   return (
-    <span title={title} className={cx('inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium leading-none', className ?? 'bg-panel-3 text-mute')}>
+    // shrink-0 + 不换行：窄行里（新闻分类「转会 / 周报」等）不会被挤成两行
+    <span title={title} className={cx('inline-flex shrink-0 items-center whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none', className ?? 'bg-panel-3 text-mute')}>
       {children}
     </span>
   );
@@ -289,14 +322,21 @@ export function Tabs<K extends string>({
   className?: string;
 }) {
   return (
-    <div className={cx('flex flex-wrap gap-1 border-b border-line', className)}>
+    // 手机（< sm）：标签不换行，整行横向滑动（隐藏滚动条）；底边线改为内阴影（滚动容器会裁掉标签的 -mb-px，选中标签的下划线盖在内阴影上）。
+    // ≥ sm 与以前一样可换行
+    <div
+      className={cx(
+        'no-scrollbar flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--color-line)] sm:flex-wrap sm:overflow-visible sm:border-b sm:border-line sm:shadow-none',
+        className,
+      )}
+    >
       {tabs.map((t) => (
         <button
           key={t.key}
           disabled={t.disabled}
           onClick={() => onChange(t.key)}
           className={cx(
-            '-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
+            'flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:-mb-px',
             value === t.key ? 'border-dota text-ink' : 'border-transparent text-mute hover:text-ink',
           )}
         >
@@ -331,6 +371,8 @@ export function Modal({
   width?: string;
   closable?: boolean;
 }) {
+  const phone = useIsPhone();
+  const downOnBackdrop = useRef(false);
   // onClose 通常是内联函数：放进 ref，避免每次渲染重新登记（重新登记会改变弹窗的层叠顺序）
   const onCloseRef = useRef(onClose);
   const closableRef = useRef(closable);
@@ -354,25 +396,86 @@ export function Modal({
     };
   }, [open]);
   if (!open) return null;
+  // 点击遮罩关闭：按下与抬起都在遮罩本身上才算（从面板里拖到遮罩上松开不关闭；嵌套弹窗的事件经 portal 冒泡上来时 target 不是本遮罩）。
+  // 用 pointer + click 而不是 mousedown：iOS Safari 点按非可点击元素不发 mousedown。
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={() => closable && onClose?.()}>
+    <div
+      className={cx(
+        'fixed inset-0 z-50 flex justify-center bg-black/70 backdrop-blur-sm',
+        // 手机（< sm）：底部抽屉（贴底、全宽、顶部圆角）；≥ sm：居中面板
+        'items-end sm:items-center sm:p-4',
+      )}
+      onPointerDown={(e) => {
+        downOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const hit = downOnBackdrop.current && e.target === e.currentTarget;
+        downOnBackdrop.current = false;
+        if (hit && closable) onClose?.();
+      }}
+    >
       <div
-        className={cx('fade-up flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl', width)}
-        onMouseDown={(e) => e.stopPropagation()}
+        className={cx(
+          'flex w-full flex-col overflow-hidden border border-line bg-panel shadow-2xl',
+          phone
+            ? 'sheet-up max-h-[calc(100dvh_-_env(safe-area-inset-top,0px)_-_0.75rem)] rounded-t-2xl border-b-0'
+            : 'fade-up max-h-[calc(100dvh_-_2rem)] rounded-xl',
+          width,
+        )}
+        role="dialog"
+        aria-modal="true"
       >
         {title && (
-          <div className="flex items-center justify-between border-b border-line px-5 py-3">
-            <div className="text-base font-semibold">{title}</div>
+          // 标题栏不随正文滚动；关闭按钮 40×40 便于点按（负外边距不撑高标题栏）
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+            <div className="min-w-0 text-base font-semibold">{title}</div>
             {closable && (
-              <button onClick={onClose} className="cursor-pointer text-mute hover:text-ink" aria-label="关闭">
+              <button
+                type="button"
+                onClick={onClose}
+                className="-my-2 -mr-2 grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-md text-mute hover:bg-panel-2 hover:text-ink"
+                aria-label="关闭"
+              >
                 ✕
               </button>
             )}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</div>}
+        <div className={cx('min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5', !footer && 'pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-5')}>
+          {children}
+        </div>
+        {footer && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:pb-3">
+            {footer}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 宽表格的横向滚动容器（docs/UI.md「手机适配 · 表格」）
+// ---------------------------------------------------------------------------
+/**
+ * 包住 `<table className="tbl">`：窄屏横向滑动，两侧有被遮住的列时显示渐隐阴影；stickyFirst 时第一列（名称）固定在左侧。
+ * bg 为容器所在卡片的底色（固定列与阴影要用实色遮住滑过的内容），默认 panel。
+ * 不要用 overflow-hidden 包表格（手机上右侧的列会被裁掉、无法滑到）。
+ */
+export function TableScroll({
+  children,
+  stickyFirst = false,
+  className,
+  bg,
+}: {
+  children: ReactNode;
+  stickyFirst?: boolean;
+  className?: string;
+  bg?: string;
+}) {
+  return (
+    <div className={cx('table-scroll', stickyFirst && 'sticky-first', className)} style={bg ? ({ '--table-bg': bg } as CSSProperties) : undefined}>
+      {children}
     </div>
   );
 }
@@ -380,27 +483,75 @@ export function Modal({
 // ---------------------------------------------------------------------------
 // Toasts（App 中挂载一次）
 // ---------------------------------------------------------------------------
+/**
+ * 提示的位置（单机 ToastHost 与多人 MpToastHost 共用）：默认在顶栏下方（--chrome-top 为顶栏实际高度，多人窄屏两行时也不压住第二行）；
+ * 手机（< sm）游戏内改在底栏上方（--chrome-bottom），自下而上出现——不挡顶栏，也在拇指附近。
+ * 层级 z-[75]：高于弹窗（z-50）与底栏的通栏抽屉（BarPopover z-[70]，否则在手机上约练后结果提示被抽屉盖住），低于确认气泡（z-[80]）。
+ */
+export function useToastPlacement(): { className: string; style: CSSProperties; anim: string } {
+  const phone = useIsPhone();
+  const inGame = useGameStore((s) => s.screen === 'game');
+  const bottom = phone && inGame;
+  return {
+    className: 'pointer-events-none fixed left-1/2 z-[75] flex w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-col items-stretch gap-2',
+    style: bottom
+      ? { bottom: 'calc(var(--chrome-bottom, env(safe-area-inset-bottom, 0px)) + 8px)' }
+      : { top: 'calc(var(--chrome-top, calc(56px + env(safe-area-inset-top, 0px))) + 8px)' },
+    anim: bottom ? 'toast-rise' : 'toast-drop',
+  };
+}
+
 export function ToastHost() {
   const toasts = useGameStore((s) => s.toasts);
-  const dismiss = useGameStore((s) => s.dismissToast);
+  const place = useToastPlacement();
   return (
-    <div className="pointer-events-none fixed left-1/2 top-16 z-[70] flex w-[min(560px,calc(100vw-32px))] -translate-x-1/2 flex-col items-stretch gap-2">
+    <div className={place.className} style={place.style}>
       {toasts.map((t) => (
-        <div
-          key={t.id}
-          onClick={() => dismiss(t.id)}
-          className={cx(
-            'toast-drop pointer-events-auto flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-2xl shadow-black/50 whitespace-pre-line backdrop-blur',
-            t.ok ? 'border-good/50 bg-[#10241b]/95 text-ink' : 'border-bad/60 bg-[#2a1416]/95 text-[#ffd0d0]',
-          )}
-          title="点击关闭"
-        >
-          <span className={cx('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-bold', t.ok ? 'bg-good text-black' : 'bg-bad text-white')}>
-            {t.ok ? '✓' : '!'}
-          </span>
-          <span className="min-w-0 flex-1 leading-relaxed">{t.text}</span>
-        </div>
+        <ToastCard key={t.id} toast={t} anim={place.anim} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * 一条操作提示（ToastHost / MpToastHost 共用）：点按关闭。手机上超过 4 行时先收起（十连结果之类的长提示会盖住半个屏幕），
+ * 第一次点按展开全文并留住（holdToast），再点关闭；桌面不收起。
+ */
+export function ToastCard({ toast: t, anim }: { toast: Toast; anim: string }) {
+  const dismiss = useGameStore((s) => s.dismissToast);
+  const hold = useGameStore((s) => s.holdToast);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [clamped, setClamped] = useState(false);
+  const [open, setOpen] = useState(false);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (el) setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [t.text]);
+  const folded = clamped && !open;
+  return (
+    <div
+      onClick={() => {
+        if (folded) {
+          setOpen(true);
+          hold(t.id);
+        } else dismiss(t.id);
+      }}
+      className={cx(
+        anim,
+        'pointer-events-auto flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-2xl shadow-black/50 whitespace-pre-line backdrop-blur',
+        t.ok ? 'border-good/50 bg-[#10241b]/95 text-ink' : 'border-bad/60 bg-[#2a1416]/95 text-[#ffd0d0]',
+      )}
+      title="点击关闭"
+    >
+      <span className={cx('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-bold', t.ok ? 'bg-good text-black' : 'bg-bad text-white')}>
+        {t.ok ? '✓' : '!'}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span ref={textRef} className={cx('block leading-relaxed', !open && 'max-sm:line-clamp-4')}>
+          {t.text}
+        </span>
+        {folded && <span className="mt-0.5 block text-[11px] text-mute">点按展开全文</span>}
+      </span>
     </div>
   );
 }

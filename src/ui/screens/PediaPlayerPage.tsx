@@ -4,12 +4,12 @@ import { useMemo, type ReactNode } from 'react';
 import { useGame, useGameStore } from '../../store/gameStore';
 import { GACHA_KIND_LABEL, HOF_SOURCE_LABEL, POSITION_LABEL, POSITION_SHORT, TOURNAMENT_TIER_LABEL, pediaPlayerPage, tiYear } from '../../engine';
 import type { PediaPlayerPage as PlayerPage, TournamentTier } from '../../engine';
-import { Badge, Card, EmptyState, Gold, PosBadge, TierBadge, altPositionsText, cx } from '../components/common';
+import { Badge, Card, EmptyState, Gold, PosBadge, TableScroll, TierBadge, altPositionsText, cx } from '../components/common';
 import { Chip, Flag, countryName } from '../components/SquadShared';
 import { TourTierBadge } from '../components/TourShared';
 import {
-  InfoHead, InfoRow, Infobox, PHero, PPlayer, PSection, PStat, PTeam, PTour, PediaCrumbs, PediaPageLayout, PediaTitle, PediaToc,
-  fmt1, fmtKda, fmtPct, placeCellClass, placeClass, safe, wdl,
+  InfoHead, InfoRow, Infobox, PHONE_HIDE, PHero, PPlayer, PSection, PStat, PTeam, PTour, PediaCrumbs, PediaPageLayout, PediaTitle, PediaToc,
+  STICKY_TD, STICKY_TH, fmt1, fmtKda, fmtPct, placeCellClass, placeClass, safe, wdl,
 } from '../components/PediaKit';
 import { CareerTimeline, MeterBar, PLineChart, PartBars, type ChartDatum } from '../components/PediaCharts';
 
@@ -49,7 +49,7 @@ export default function PediaPlayerPage({ id }: { id: string }) {
             <button
               type="button"
               onClick={() => useGameStore.getState().openPlayer(page.id)}
-              className="cursor-pointer rounded-md border border-line bg-panel-2 px-3 py-1.5 text-sm text-ink hover:bg-panel-3"
+              className="cursor-pointer rounded-md border border-line bg-panel-2 px-3 py-1.5 text-sm text-ink hover:bg-panel-3 pointer-coarse:min-h-10"
               title="打开选手详情弹窗（属性、合同与操作）"
             >
               选手详情
@@ -151,7 +151,7 @@ function Standing({ page }: { page: PlayerPage }) {
   const s = page.standing;
   if (!s) return <div className="text-sm text-faint">尚无可评估的成就</div>;
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div>
         <div className={cx('text-2xl font-bold', s.title === '职业选手' ? 'text-ink' : 'text-gold')}>{s.title}</div>
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -210,7 +210,7 @@ function Career({ page }: { page: PlayerPage }) {
         <PStat label="奖金" value={<Gold value={t.prize} />} sub="赛事奖金的队员分成" />
       </div>
       {seasons.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
           <div>
             <div className="mb-1 text-xs text-mute">分赛季 KDA</div>
             <PLineChart data={kdaData} format={(v) => v.toFixed(2)} min={0} ariaLabel="分赛季 KDA" />
@@ -269,18 +269,19 @@ function Achievements({ page }: { page: PlayerPage }) {
             {tiers
               .filter((t) => a.titles.some((x) => x.tier === t))
               .map((t) => (
-                <div key={t} className="grid grid-cols-[110px_minmax(0,1fr)] items-start gap-2">
+                // 手机：等级徽章在上、冠军标签在下；标签可收缩，过长的赛事名截断（不撑出屏幕）
+                <div key={t} className="grid grid-cols-[minmax(0,1fr)] items-start gap-2 sm:grid-cols-[110px_minmax(0,1fr)]">
                   <TourTierBadge tier={t} className="justify-self-start" />
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex min-w-0 flex-wrap gap-1.5">
                     {a.titles
                       .filter((x) => x.tier === t)
                       .map((x) => (
-                        <span key={x.tournamentId} className="inline-flex items-center gap-1 rounded border border-gold/30 bg-gold/5 px-1.5 py-0.5 text-xs">
+                        <span key={x.tournamentId} className="inline-flex min-w-0 max-w-full items-center gap-1 rounded border border-gold/30 bg-gold/5 px-1.5 py-0.5 text-xs">
                           <span className="text-gold">🏆</span>
                           <span className="text-mute">TI{x.season}</span>
                           <PTour id={x.tournamentId} name={x.name} />
                           <span className="text-faint">·</span>
-                          <PTeam id={x.teamId} name={x.teamName} noSwatch className="text-xs text-mute" />
+                          <PTeam id={x.teamId} name={x.teamName} noSwatch className="shrink text-xs text-mute" />
                         </span>
                       ))}
                   </div>
@@ -297,10 +298,10 @@ function Achievements({ page }: { page: PlayerPage }) {
           <div className="mb-1.5 text-xs text-mute">亚军</div>
           <div className="flex flex-wrap gap-1.5">
             {a.finals.map((x) => (
-              <span key={x.tournamentId} className="inline-flex items-center gap-1 rounded border border-line bg-panel-2/50 px-1.5 py-0.5 text-xs">
+              <span key={x.tournamentId} className="inline-flex min-w-0 max-w-full items-center gap-1 rounded border border-line bg-panel-2/50 px-1.5 py-0.5 text-xs">
                 <span className="text-mute">TI{x.season}</span>
                 <PTour id={x.tournamentId} name={x.name} />
-                <span className="text-faint">· {x.teamName}</span>
+                <span className="shrink-0 text-faint">· {x.teamName}</span>
               </span>
             ))}
           </div>
@@ -333,6 +334,7 @@ function Teams({ page }: { page: PlayerPage }) {
           sub: t.games > 0 ? `${t.games} 局` : '',
         }))}
       />
+      <TableScroll>
       <table className="tbl">
         <thead>
           <tr>
@@ -350,7 +352,7 @@ function Teams({ page }: { page: PlayerPage }) {
               </td>
               <td className="text-mute tabular">
                 {t.fromTi === t.toTi ? `TI${t.fromTi}` : `TI${t.fromTi} – TI${t.toTi}`}
-                <span className="ml-1 text-[11px] text-faint">（{tiYear(t.fromTi)}{t.toTi !== t.fromTi ? `–${tiYear(t.toTi)}` : ''}）</span>
+                <span className="ml-1 text-[11px] text-faint max-sm:hidden">（{tiYear(t.fromTi)}{t.toTi !== t.fromTi ? `–${tiYear(t.toTi)}` : ''}）</span>
               </td>
               <td className="num">{t.games}</td>
               <td className="num">{t.games > 0 ? fmtPct(t.wins / t.games) : '—'}</td>
@@ -358,6 +360,7 @@ function Teams({ page }: { page: PlayerPage }) {
           ))}
         </tbody>
       </table>
+      </TableScroll>
     </div>
   );
 }
@@ -368,45 +371,46 @@ function Teams({ page }: { page: PlayerPage }) {
 function Seasons({ page }: { page: PlayerPage }) {
   if (!page.seasons.length) return <div className="p-4 text-sm text-faint">暂无赛季数据</div>;
   return (
-    <div className="overflow-x-auto">
+    // 手机：赛季列固定在左侧，场均 K / D / A、MVP、系列赛隐藏
+    <TableScroll>
       <table className="tbl">
         <thead>
           <tr>
-            <th>赛季</th>
+            <th className={STICKY_TH}>赛季</th>
             <th>战队</th>
             <th className="num">局数</th>
             <th className="num" title="胜-负（胜率）">胜-负</th>
-            <th className="num" title="场均 击杀 / 阵亡 / 助攻">K / D / A</th>
+            <th className={cx('num', PHONE_HIDE)} title="场均 击杀 / 阵亡 / 助攻">K / D / A</th>
             <th className="num">KDA</th>
-            <th className="num">MVP</th>
-            <th className="num" title="系列赛 胜-平-负">系列赛</th>
+            <th className={cx('num', PHONE_HIDE)}>MVP</th>
+            <th className={cx('num', PHONE_HIDE)} title="系列赛 胜-平-负">系列赛</th>
             <th className="num">奖金</th>
           </tr>
         </thead>
         <tbody>
           {page.seasons.map((s, i) => (
             <tr key={`${s.ti}-${s.teamId}-${i}`}>
-              <td className="tabular" title={`TI${s.ti} 赛季（${s.year}）`}>
+              <td className={cx('tabular', STICKY_TD)} title={`TI${s.ti} 赛季（${s.year}）`}>
                 TI{s.ti}
               </td>
               <td>
-                <PTeam id={s.teamId} name={s.teamName} className="max-w-40" />
+                <PTeam id={s.teamId} name={s.teamName} className="max-w-40 max-sm:max-w-28" />
               </td>
               <td className="num">{s.games}</td>
               <td className="num">
                 {s.wins}-{s.losses}
                 {s.games > 0 && <span className="ml-1 text-[11px] text-mute">{fmtPct(s.winRate)}</span>}
               </td>
-              <td className="num text-mute">{s.games > 0 ? `${fmt1(s.avgKills)} / ${fmt1(s.avgDeaths)} / ${fmt1(s.avgAssists)}` : '—'}</td>
+              <td className={cx('num text-mute', PHONE_HIDE)}>{s.games > 0 ? `${fmt1(s.avgKills)} / ${fmt1(s.avgDeaths)} / ${fmt1(s.avgAssists)}` : '—'}</td>
               <td className="num font-semibold">{s.games > 0 ? fmtKda(s.kda) : '—'}</td>
-              <td className="num">{s.mvps || <span className="text-faint">0</span>}</td>
-              <td className="num text-mute">{wdl(s.seriesWins, s.seriesDraws, s.seriesLosses)}</td>
+              <td className={cx('num', PHONE_HIDE)}>{s.mvps || <span className="text-faint">0</span>}</td>
+              <td className={cx('num text-mute', PHONE_HIDE)}>{wdl(s.seriesWins, s.seriesDraws, s.seriesLosses)}</td>
               <td className="num">{s.prize > 0 ? <Gold value={s.prize} /> : <span className="text-faint">—</span>}</td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -417,12 +421,12 @@ function Heroes({ page }: { page: PlayerPage }) {
   if (!page.heroes.length) return <div className="p-4 text-sm text-faint">暂无英雄数据</div>;
   const top = Math.max(1, ...page.heroes.map((h) => h.games));
   return (
-    <div className="overflow-x-auto">
+    <TableScroll>
       <table className="tbl">
         <thead>
           <tr>
             <th>英雄</th>
-            <th className="w-48">局数</th>
+            <th className="w-48 max-sm:w-28">局数</th>
             <th className="num">胜-负</th>
             <th className="num">胜率</th>
           </tr>
@@ -459,7 +463,7 @@ function Heroes({ page }: { page: PlayerPage }) {
           )}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -493,6 +497,18 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
     <Infobox
       title={page.handle}
       color={color}
+      summary={
+        <>
+          <InfoRow label="当前战队">{page.teamId ? <PTeam id={page.teamId} name={page.teamName ?? undefined} /> : <span className="text-mute">—</span>}</InfoRow>
+          <InfoRow label="出生">
+            {page.birthYear ? `${page.birthYear} 年` : '—'}
+            {page.age !== null && <span className="ml-1 text-xs text-mute">（{page.age} 岁）</span>}
+          </InfoRow>
+          <InfoRow label="出场">
+            {page.totals.games} 局<span className="ml-1 text-xs text-mute">（{page.totals.seasonsActive} 季 · KDA {page.totals.games > 0 ? fmtKda(page.totals.kda) : '—'}）</span>
+          </InfoRow>
+        </>
+      }
       banner={
         <div className="flex flex-col items-center gap-2">
           <div className="text-5xl leading-none">{page.nationality ? <Flag cc={page.nationality} /> : '◇'}</div>

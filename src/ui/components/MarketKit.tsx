@@ -2,7 +2,8 @@
 // 转会市场 / 新秀选秀 / 财务 页面共用的小组件与工具（仅供 Market/RookieDraft/Finance 使用）
 // ============================================================================
 import { useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from 'react';
-import { cx } from './common';
+import { Button, cx } from './common';
+import { useIsPhone, useMediaQuery } from '../mobile';
 import {
   CONFIG, aiAcceptChance, econ, importanceInTeam, signingFee, tierOf,
   type GameState, type Player,
@@ -27,9 +28,9 @@ export function num(v: unknown, fallback = 0): number {
 }
 
 // ---------------------------------------------------------------------------
-// 表单控件
+// 表单控件（触屏上 40px 高；字号由 index.css 的触屏规则提到 16px，iOS 聚焦时不放大页面）
 // ---------------------------------------------------------------------------
-const FIELD = 'h-8 rounded-md border border-line bg-panel-2 px-2 text-sm text-ink outline-none transition-colors focus:border-dota/70 hover:border-panel-3';
+const FIELD = 'h-8 rounded-md border border-line bg-panel-2 px-2 text-sm text-ink outline-none transition-colors focus:border-dota/70 hover:border-panel-3 pointer-coarse:h-10';
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
@@ -80,17 +81,48 @@ export function Banner({
   className?: string;
 }) {
   return (
-    // 窄屏：正文至少保留 10rem，放不下时操作按钮换到正文下方（不会把正文挤成一字一行）
-    <div className={cx('flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border px-4 py-2.5', TONE[tone], className)}>
+    // 窄屏：正文至少保留 10rem，放不下时操作按钮换到正文下方（不会把正文挤成一字一行）；
+    // 手机（< sm）：正文占满整行，操作按钮总是单独一行（与正文左对齐）
+    <div className={cx('flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 sm:px-4', TONE[tone], className)}>
       <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-current text-[11px] font-bold opacity-80">
         {TONE_ICON[tone]}
       </span>
-      <div className="min-w-[10rem] flex-1">
+      <div className="min-w-0 flex-1 sm:min-w-[10rem]">
         <div className="text-sm font-semibold">{title}</div>
         {children && <div className="mt-0.5 text-xs leading-relaxed opacity-85">{children}</div>}
       </div>
-      {actions && <div className="ml-auto flex flex-wrap items-center gap-2 self-center">{actions}</div>}
+      {actions && (
+        <div className="flex flex-wrap items-center gap-2 self-center max-sm:basis-full max-sm:pl-8 sm:ml-auto">{actions}</div>
+      )}
     </div>
+  );
+}
+
+/**
+ * 手机（< sm）上折叠的长说明：桌面 / 平板原样显示 children；手机上收进 <details>，只露出一行 summary（点按展开）。
+ * defaultOpen：手机上默认展开（如列表为空时的规则说明）。
+ */
+export function PhoneFold({
+  summary,
+  children,
+  defaultOpen = false,
+  className,
+}: {
+  summary: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+}) {
+  const phone = useIsPhone();
+  if (!phone) return <>{children}</>;
+  return (
+    <details open={defaultOpen || undefined} className={cx('group', className)}>
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 text-xs text-info [&::-webkit-details-marker]:hidden">
+        <span className="inline-block transition-transform group-open:rotate-90">›</span>
+        {summary}
+      </summary>
+      <div className="mt-1">{children}</div>
+    </details>
   );
 }
 
@@ -124,13 +156,14 @@ export function Pager({
   if (total === 0) return null;
   const from = page * pageSize + 1;
   const to = Math.min(total, (page + 1) * pageSize);
-  const btn = 'h-7 min-w-7 rounded-md border border-line bg-panel-2 px-2 text-xs text-mute transition-colors hover:bg-panel-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer';
+  // 触屏：页码按钮 36px（拇指可点）
+  const btn = 'h-7 min-w-7 rounded-md border border-line bg-panel-2 px-2 text-xs text-mute transition-colors hover:bg-panel-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer pointer-coarse:h-9 pointer-coarse:min-w-9';
   // 页码窗口
   const nums: number[] = [];
   const start = Math.max(0, Math.min(page - 2, pages - 5));
   for (let i = start; i < Math.min(pages, start + 5); i++) nums.push(i);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-2 text-xs text-mute">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2 text-xs text-mute sm:px-4">
       <span className="tabular">
         第 {from}–{to} {unit}，共 {total} {unit}
       </span>
@@ -167,8 +200,141 @@ export function useSort<K extends string>(initial: K, dir: 'asc' | 'desc' = 'des
   const [sort, setSort] = useState<SortState<K>>({ key: initial, dir });
   const toggle = (key: K) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
-  return { sort, toggle };
+  return { sort, toggle, setSort };
 }
+
+/** 手机上的排序选择（卡片列表没有表头可点）：排序字段 + 升 / 降序切换 */
+export function SortSelect<K extends string>({
+  options,
+  sort,
+  onChange,
+}: {
+  options: { k: K; label: string }[];
+  sort: SortState<K>;
+  onChange: (s: SortState<K>) => void;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-xs text-mute">
+      <span className="shrink-0">排序</span>
+      <Select value={sort.key} onChange={(e) => onChange({ key: e.target.value as K, dir: sort.dir })} className="min-w-0" aria-label="排序字段">
+        {options.map((o) => (
+          <option key={o.k} value={o.k}>{o.label}</option>
+        ))}
+      </Select>
+      <button
+        type="button"
+        onClick={() => onChange({ key: sort.key, dir: sort.dir === 'desc' ? 'asc' : 'desc' })}
+        className={cx(FIELD, 'shrink-0 cursor-pointer whitespace-nowrap px-2.5 text-xs')}
+        aria-label={sort.dir === 'desc' ? '当前降序，点按改为升序' : '当前升序，点按改为降序'}
+      >
+        {sort.dir === 'desc' ? '↓ 降序' : '↑ 升序'}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * 手机（< sm）的筛选区：搜索框 + 「筛选（n）」开关（其余筛选项默认收起，展开为两列网格）+ 排序 / 概要行。
+ * 桌面仍用各页面原来的一行筛选（见 MarketFreeAgents / MarketTransferList）。
+ */
+export function PhoneFilters({
+  search,
+  active,
+  onReset,
+  sort,
+  info,
+  children,
+}: {
+  search: ReactNode;
+  /** 生效中的筛选项个数（不含搜索） */
+  active: number;
+  onReset?: () => void;
+  sort?: ReactNode;
+  info?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="space-y-2 border-b border-line px-3 py-3">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">{search}</div>
+        <Button size="sm" variant={open ? 'primary' : 'secondary'} className="shrink-0 whitespace-nowrap pointer-coarse:min-h-10" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          筛选
+          {active > 0 && <span className="rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{active}</span>}
+          <span className="text-[10px] opacity-70">{open ? '▴' : '▾'}</span>
+        </Button>
+      </div>
+      {open && (
+        <div className="grid grid-cols-2 gap-2">
+          {children}
+          {onReset && active > 0 && (
+            <Button size="sm" variant="ghost" className="col-span-2" onClick={onReset}>
+              重置筛选
+            </Button>
+          )}
+        </div>
+      )}
+      {(sort || info) && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          {sort}
+          {info && <div className="ml-auto text-xs text-mute">{info}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 手机卡片列表：宽表格在手机上逐行改成卡片（选手 + 关键数值 + 右侧操作按钮），不再横向滑动找按钮
+// ---------------------------------------------------------------------------
+/**
+ * 市场列表是否用卡片（而不是宽表格）：手机竖屏（< sm）与横屏矮视口（max-height 480px，手机横放时
+ * 侧栏占去一块宽度、表格仍要横向滑动才能点到行尾的按钮）。桌面与平板仍是表格。
+ */
+export function useCompactList(): boolean {
+  const phone = useIsPhone();
+  const short = useMediaQuery('(max-height: 480px)');
+  return phone || short;
+}
+
+export function PhoneList({ children, className }: { children: ReactNode; className?: string }) {
+  return <ul className={cx('divide-y divide-line/60', className)}>{children}</ul>;
+}
+
+/** 一行卡片：head = 第一行（选手名、徽章），children = 数值行，action = 右侧操作 */
+export function PhoneRow({ head, children, action, className }: { head: ReactNode; children?: ReactNode; action?: ReactNode; className?: string }) {
+  return (
+    <li className={cx('flex items-center gap-3 px-3 py-2.5', className)}>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">{head}</div>
+        {children && <div className="mt-1 space-y-0.5 text-xs text-mute">{children}</div>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </li>
+  );
+}
+
+/** 卡片里的一行「标签 数值」（不拆行，放不下时整项换行） */
+export function Facts({ items, className }: { items: [ReactNode, ReactNode][]; className?: string }) {
+  return (
+    <div className={cx('flex flex-wrap gap-x-3 gap-y-0.5', className)}>
+      {items.map(([label, value], i) => (
+        <span key={i} className="whitespace-nowrap">
+          <span className="text-faint">{label}</span> {value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** 卡片里的选手名链接：上下各扩 4px 点击区域（不改变行高），短 ID（如「33」）至少 32px 宽 */
+export const PHONE_LINK = '-my-1 min-w-8 py-1 text-left text-sm font-semibold';
+
+/**
+ * Card 的 bodyClassName 追加在 p-4 之后，而 Tailwind 把 .p-0 排在 .p-4 之前，单写 p-0 不生效（桌面一直是 16px 内边距，保持不变）；
+ * 手机（< sm）与横屏矮视口（short，与 useCompactList 一致）上用 !important 真正去掉内边距，让表格 / 卡片列表贴边，省出 32px 宽度。
+ */
+export const BODY_FLUSH = 'p-0 max-sm:p-0! short:p-0!';
 
 export function SortTh<K extends string>({
   k,
@@ -245,9 +411,9 @@ export function Meter({ value, max, color = 'bg-gold', className }: { value: num
   );
 }
 
-/** 表格容器：横向滚动 + 可选最大高度 */
+/** 表格容器：横向滚动（.table-scroll：两侧有被遮住的列时显示渐隐阴影，见 index.css）+ 可选最大高度 */
 export function TableWrap({ children, maxH, className }: { children: ReactNode; maxH?: string; className?: string }) {
-  return <div className={cx('overflow-x-auto', maxH && 'overflow-y-auto', maxH, className)}>{children}</div>;
+  return <div className={cx('table-scroll overflow-x-auto', maxH && 'overflow-y-auto', maxH, className)}>{children}</div>;
 }
 
 // ---------------------------------------------------------------------------

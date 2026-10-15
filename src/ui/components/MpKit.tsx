@@ -104,25 +104,29 @@ export function useTicker(active: boolean, ms = 1000): number {
 }
 
 /** 连接状态文字 */
-export function netStatusText(net: NetState): { text: string; tone: 'good' | 'gold' | 'bad' | 'mute' } {
+export function netStatusText(net: NetState): { text: string; short: string; tone: 'good' | 'gold' | 'bad' | 'mute' } {
   switch (net.status) {
     case 'open':
-      return { text: '已连接', tone: 'good' };
+      return { text: '已连接', short: '已连接', tone: 'good' };
     case 'connecting':
-      return { text: '正在连接…', tone: 'gold' };
+      return { text: '正在连接…', short: '连接中…', tone: 'gold' };
     case 'reconnecting': {
       const secs = net.retryAt ? Math.max(0, Math.ceil((net.retryAt - Date.now()) / 1000)) : 0;
-      return { text: secs > 0 ? `连接中断，${secs} 秒后第 ${net.attempt} 次重连…` : `正在第 ${net.attempt} 次重连…`, tone: 'bad' };
+      return {
+        text: secs > 0 ? `连接中断，${secs} 秒后第 ${net.attempt} 次重连…` : `正在第 ${net.attempt} 次重连…`,
+        short: secs > 0 ? `重连中 ${secs} 秒` : '重连中…',
+        tone: 'bad',
+      };
     }
     case 'closed':
-      return { text: '未连接', tone: 'mute' };
+      return { text: '未连接', short: '未连接', tone: 'mute' };
     default:
-      return { text: '未连接', tone: 'mute' };
+      return { text: '未连接', short: '未连接', tone: 'mute' };
   }
 }
 
-/** 连接状态徽标 */
-export function ConnBadge({ net, className }: { net: NetState; className?: string }) {
+/** 连接状态徽标；short = 手机（< sm）上用简写（「重连中 16 秒」，完整的「连接中断，16 秒后第 7 次重连…」在服务器卡片里），用于窄顶栏 */
+export function ConnBadge({ net, className, short }: { net: NetState; className?: string; short?: boolean }) {
   useTicker(net.status === 'reconnecting');
   const s = netStatusText(net);
   const dot = s.tone === 'good' ? 'bg-good' : s.tone === 'gold' ? 'bg-gold animate-pulse' : s.tone === 'bad' ? 'bg-bad animate-pulse' : 'bg-faint';
@@ -130,7 +134,14 @@ export function ConnBadge({ net, className }: { net: NetState; className?: strin
   return (
     <span className={cx('inline-flex items-center gap-1.5 text-xs', className)} title={net.error ?? undefined}>
       <span className={cx('h-2 w-2 shrink-0 rounded-full', dot)} />
-      <span className={text}>{s.text}</span>
+      {short && s.short !== s.text ? (
+        <>
+          <span className={cx(text, 'tabular sm:hidden')}>{s.short}</span>
+          <span className={cx(text, 'hidden sm:inline')}>{s.text}</span>
+        </>
+      ) : (
+        <span className={text}>{s.text}</span>
+      )}
     </span>
   );
 }

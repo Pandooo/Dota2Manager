@@ -48,7 +48,9 @@ export default function MatchGoldChart({
   const lastColor = last.v >= 0 ? colorA : colorB;
 
   return (
-    <div className="relative">
+    <div>
+      {/* 图表区单独定位：当前点与 ±标签按图表高度定位，不与下方的分钟刻度重叠 */}
+      <div className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block w-full" style={{ height: H }}>
         <defs>
           <clipPath id={`${rid}-top`}>
@@ -83,6 +85,7 @@ export default function MatchGoldChart({
       {/* 轴标签 */}
       <span className="pointer-events-none absolute left-1 top-0.5 text-[10px] tabular text-faint">+{fmtGoldK(vMax)}</span>
       <span className="pointer-events-none absolute bottom-0.5 left-1 text-[10px] tabular text-faint">-{fmtGoldK(vMax)}</span>
+      </div>
       <div className="relative mt-0.5 h-3 text-[10px] leading-3 tabular text-faint">
         <span className="absolute left-0">0'</span>
         {gridMinutes.map((m) => {

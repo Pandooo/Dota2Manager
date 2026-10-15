@@ -7,7 +7,7 @@ import {
 import { Badge, Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TeamLink, TierBadge, cx } from './common';
 import { TeamEmblem } from './TeamEmblem';
 import { ConfirmButton } from './ConfirmPopover';
-import { TableWrap, num, safe } from './MarketKit';
+import { BODY_FLUSH, Facts, PHONE_LINK, PhoneList, TableWrap, num, safe, useCompactList } from './MarketKit';
 
 const STATUS_LABEL: Record<TransferOffer['status'], { text: string; cls: string }> = {
   pending: { text: '待处理', cls: 'bg-gold/15 text-gold' },
@@ -16,13 +16,13 @@ const STATUS_LABEL: Record<TransferOffer['status'], { text: string; cls: string 
   expired: { text: '已过期', cls: 'bg-panel-3 text-faint' },
 };
 
-function TeamCell({ g, id }: { g: GameState; id: string }) {
+function TeamCell({ g, id, className }: { g: GameState; id: string; className?: string }) {
   const t = g.teams[id];
   if (!t) return <span className="text-faint">未知战队</span>;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex min-w-0 items-center gap-1.5">
       <TeamEmblem tag={t.tag} color={t.color} teamId={t.id} />
-      <TeamLink teamId={t.id} name={t.name} className="font-medium" />
+      <TeamLink teamId={t.id} name={t.name} className={cx('font-medium', className)} />
     </span>
   );
 }
@@ -33,6 +33,7 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
   const setView = useGameStore((s) => s.setView);
   const me = g.settings.playerTeamId;
   const myTeam = g.teams[me];
+  const phone = useCompactList();
 
   const offers = Array.isArray(g.transferOffers) ? g.transferOffers : [];
   const pending = offers.filter((o) => o && o.status === 'pending' && o.toTeamId === me);
@@ -84,17 +85,100 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
     return Math.max(1, o.expiresRound - g.roundIndex);
   };
 
+  /** 一份待处理报价的派生数据（表格与手机卡片共用） */
+  const offerInfo = (o: TransferOffer) => {
+    const p = g.players[o.playerId];
+    const value = p ? safe(() => marketValue(g, p), 0) : 0;
+    const premium = value > 0 ? o.fee / value : null;
+    const left = roundsLeft(o);
+    const acceptBlock = g.gameOver
+      ? '游戏已结束'
+      : !windowOpen
+      ? '转会窗口已锁定（TI 阶段），TI 结束后开放'
+      : !p || p.teamId !== me
+        ? '选手已不在队中，该报价将自动作废'
+        : null;
+    return { p, premium, left, acceptBlock };
+  };
+  const premiumCls = (premium: number | null) => (premium === null ? 'text-faint' : premium >= 1 ? 'text-good' : 'text-bad');
+  const leftTitle = (left: number) => (left <= 1 ? '本回合结束时报价将过期' : `需在第 ${g.roundIndex + left - 1} 回合结束前答复`);
+  const offerBadges = (o: TransferOffer, p: Player) => (
+    <>
+      {starters.has(p.id) && <Badge className="bg-info/15 text-info">首发</Badge>}
+      {o.poach && <Badge className="bg-dota/20 text-dota-2" title="低归属感挖角：违约金可能低于身价">挖角</Badge>}
+      {o.listing && <Badge className="bg-gold/15 text-gold" title="针对挂牌选手的报价（见「我的挂牌」）">挂牌</Badge>}
+    </>
+  );
+  const salaryDelta = (o: TransferOffer, p: Player | undefined) =>
+    p && num(p.salary) > 0 ? (
+      <span className="ml-1 text-[10px] text-faint">
+        ({o.salary >= p.salary ? '+' : ''}{Math.round(((o.salary - p.salary) / p.salary) * 100)}%)
+      </span>
+    ) : null;
+
   return (
     <div className="space-y-4">
       <Card
         title="待处理报价"
         subtitle="AI 战队对你旗下选手的求购；归属感低的选手更容易被盯上"
-        bodyClassName="p-0"
+        bodyClassName={BODY_FLUSH}
       >
         {pending.length === 0 ? (
           <EmptyState text="目前没有收到任何报价。">
             <span className="text-xs text-faint">转会窗口开放期间，AI 战队每回合都可能对你的选手报价，报价会在数回合后过期。</span>
           </EmptyState>
+        ) : phone ? (
+          // 手机：每份报价一张卡片，「接受 / 拒绝」为通栏的两个大按钮
+          <PhoneList>
+            {pending.map((o) => {
+              const { p, premium, left, acceptBlock } = offerInfo(o);
+              return (
+                <li key={o.id} className="space-y-1.5 px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    {p ? (
+                      <>
+                        <TierBadge tier={playerTier(p)} />
+                        <PlayerLink player={p} className={PHONE_LINK} />
+                        <PosBadge pos={p.position} alt={p.altPositions} />
+                        {offerBadges(o, p)}
+                        <span className="ml-auto text-xs text-mute">评分 <span className="tabular text-ink">{overallRating(p).toFixed(1)}</span></span>
+                      </>
+                    ) : (
+                      <span className="text-faint">（选手已离队）</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-mute">
+                    <span className="shrink-0 text-faint">报价方</span>
+                    <TeamCell g={g} id={o.fromTeamId} className="-my-1 py-1 text-ink" />
+                  </div>
+                  <Facts
+                    className="text-xs text-mute"
+                    items={[
+                      ['转会费', <><Gold value={o.fee} className="font-semibold" />{premium !== null && <span className={cx('ml-1 text-[10px]', premiumCls(premium))}>身价 {Math.round(premium * 100)}%</span>}</>],
+                      ['新工资', <><Gold value={o.salary} />{salaryDelta(o, p)}</>],
+                      ['答复期限', <span className={cx('tabular', left <= 1 ? 'text-gold' : 'text-ink')}>{left <= 1 ? '本回合内' : `${left} 回合内`}</span>],
+                    ]}
+                  />
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <ConfirmButton
+                      size="sm"
+                      variant="gold"
+                      className="min-h-10 w-full"
+                      disabled={!!acceptBlock}
+                      title={acceptBlock ?? '接受报价，选手转出'}
+                      confirm={p ? sellConfirm(o, p) : null}
+                      onConfirm={() => respond(o.id, true)}
+                    >
+                      接受
+                    </ConfirmButton>
+                    <Button size="sm" variant="danger" className="min-h-10 w-full" title="拒绝报价（想走的选手归属感会下降）" onClick={() => respond(o.id, false)}>
+                      拒绝
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </PhoneList>
         ) : (
           <TableWrap>
             <table className="tbl">
@@ -113,17 +197,7 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
               </thead>
               <tbody>
                 {pending.map((o) => {
-                  const p = g.players[o.playerId];
-                  const value = p ? safe(() => marketValue(g, p), 0) : 0;
-                  const premium = value > 0 ? o.fee / value : null;
-                  const left = roundsLeft(o);
-                  const acceptBlock = g.gameOver
-                    ? '游戏已结束'
-                    : !windowOpen
-                    ? '转会窗口已锁定（TI 阶段），TI 结束后开放'
-                    : !p || p.teamId !== me
-                      ? '选手已不在队中，该报价将自动作废'
-                      : null;
+                  const { p, premium, left, acceptBlock } = offerInfo(o);
                   return (
                     <tr key={o.id}>
                       <td>
@@ -131,9 +205,7 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
                           <div className="flex items-center gap-1.5">
                             <PlayerLink player={p} />
                             <PosBadge pos={p.position} alt={p.altPositions} />
-                            {starters.has(p.id) && <Badge className="bg-info/15 text-info">首发</Badge>}
-                            {o.poach && <Badge className="bg-dota/20 text-dota-2" title="低归属感挖角：违约金可能低于身价">挖角</Badge>}
-                            {o.listing && <Badge className="bg-gold/15 text-gold" title="针对挂牌选手的报价（见「我的挂牌」）">挂牌</Badge>}
+                            {offerBadges(o, p)}
                           </div>
                         ) : (
                           <span className="text-faint">（选手已离队）</span>
@@ -143,20 +215,16 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
                       <td className="num">{p ? overallRating(p).toFixed(1) : '—'}</td>
                       <td><TeamCell g={g} id={o.fromTeamId} /></td>
                       <td className="num"><Gold value={o.fee} className="font-semibold" /></td>
-                      <td className={cx('num text-xs', premium === null ? 'text-faint' : premium >= 1 ? 'text-good' : 'text-bad')}>
+                      <td className={cx('num text-xs', premiumCls(premium))}>
                         {premium === null ? '—' : `${Math.round(premium * 100)}%`}
                       </td>
                       <td className="num">
                         <Gold value={o.salary} />
-                        {p && num(p.salary) > 0 && (
-                          <span className="ml-1 text-[10px] text-faint">
-                            ({o.salary >= p.salary ? '+' : ''}{Math.round(((o.salary - p.salary) / p.salary) * 100)}%)
-                          </span>
-                        )}
+                        {salaryDelta(o, p)}
                       </td>
                       <td
                         className={cx('num text-xs', left <= 1 ? 'text-gold' : 'text-mute')}
-                        title={left <= 1 ? '本回合结束时报价将过期' : `需在第 ${g.roundIndex + left - 1} 回合结束前答复`}
+                        title={leftTitle(left)}
                       >
                         {left <= 1 ? '本回合内' : `${left} 回合内`}
                       </td>
@@ -185,17 +253,41 @@ export default function MarketOffers({ windowOpen }: { windowOpen: boolean }) {
           </TableWrap>
         )}
         {pending.some((o) => o.poach) && (
-          <div className="border-t border-line px-4 py-2 text-[11px] text-faint">
+          <div className="border-t border-line px-3 py-2 text-[11px] text-faint sm:px-4">
             挖角报价同时会出现在
-            <button className="mx-1 cursor-pointer text-info hover:underline" onClick={() => setView('inbox')}>消息中心</button>
+            <button className="mx-1 cursor-pointer text-info hover:underline pointer-coarse:-my-2 pointer-coarse:py-2" onClick={() => setView('inbox')}>消息中心</button>
             的待决事件中，处理任意一处即可。
           </div>
         )}
       </Card>
 
-      <Card title="报价记录" subtitle="最近已处理的转会报价（含过期）" bodyClassName="p-0">
+      <Card title="报价记录" subtitle="最近已处理的转会报价（含过期）" bodyClassName={BODY_FLUSH}>
         {resolved.length === 0 ? (
           <EmptyState text="暂无报价记录。" />
+        ) : phone ? (
+          <PhoneList className="max-h-96 overflow-y-auto overscroll-contain">
+            {resolved.map((o) => {
+              const p = g.players[o.playerId];
+              const incoming = o.toTeamId === me;
+              const st = STATUS_LABEL[o.status] ?? STATUS_LABEL.expired;
+              return (
+                <li key={o.id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      {p ? <PlayerLink player={p} className={PHONE_LINK} /> : <span className="text-faint">{o.playerId}</span>}
+                      {incoming ? <span className="text-xs text-gold">求购我方</span> : <span className="text-xs text-info">我方求购</span>}
+                      <Gold value={o.fee} className="text-xs" />
+                    </div>
+                    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-mute">
+                      <span className="tabular">{o.season !== undefined ? `TI${o.season} · ` : ''}第{o.createdRound}回合</span>
+                      <TeamCell g={g} id={incoming ? o.fromTeamId : o.toTeamId} className="-my-1 py-1" />
+                    </div>
+                  </div>
+                  <Badge className={st.cls}>{st.text}</Badge>
+                </li>
+              );
+            })}
+          </PhoneList>
         ) : (
           <TableWrap maxH="max-h-80">
             <table className="tbl">

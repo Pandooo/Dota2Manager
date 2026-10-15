@@ -9,10 +9,12 @@ import {
 } from '../../engine';
 import { getAllTiInfo, getTiInfo } from '../../data/index';
 import {
-  Badge, Card, EmptyState, Hint, PlayerLink, PosBadge, RegionBadge, Stat, StatBar, Tabs, TierBadge, cx,
+  Badge, Button, Card, EmptyState, Hint, PlayerLink, PosBadge, RegionBadge, Stat, StatBar, TableScroll, Tabs, TierBadge, cx,
 } from '../components/common';
 import { ScreenHeader } from '../layout/HubKit';
 import { Segmented, TeamName, TourSelect, rankClass, safe, teamInfo } from '../components/TourShared';
+import { PHONE_HIDE, STICKY_TD, STICKY_TH } from '../components/PediaKit';
+import { useIsPhone } from '../mobile';
 
 type TabKey = 'standings' | 'power' | 'players' | 'ti';
 
@@ -107,18 +109,19 @@ function StandingsTab({ game }: { game: GameState }) {
         subtitle={actualInvites ? 'TI 直邀名单已确定' : `积分榜前 ${di || 'N'} 名将在 TI 预选回合开始时获得直邀`}
         bodyClassName="p-0"
       >
-        <div className="overflow-x-auto">
+        {/* 手机（< sm）：战队列固定在左侧（名次并入），赛区 / 荣誉 / 本季冠军 / 上季排名隐藏 */}
+        <TableScroll>
           <table className="tbl">
             <thead>
               <tr>
-                <th className="w-10">#</th>
-                <th>战队</th>
-                <th>赛区</th>
+                <th className={cx('w-10', PHONE_HIDE)}>#</th>
+                <th className={STICKY_TH}>战队</th>
+                <th className={PHONE_HIDE}>赛区</th>
                 <th className="num">积分</th>
-                <th className="num">荣誉</th>
+                <th className={cx('num', PHONE_HIDE)}>荣誉</th>
                 <th className="num" title="首发评分之和 + 教练加成（括号内为战力榜名次）">战力</th>
-                <th className="num">本季冠军</th>
-                <th className="num">上季排名</th>
+                <th className={cx('num', PHONE_HIDE)}>本季冠军</th>
+                <th className={cx('num', PHONE_HIDE)}>上季排名</th>
                 <th>TI 资格</th>
               </tr>
             </thead>
@@ -129,9 +132,10 @@ function StandingsTab({ game }: { game: GameState }) {
                 return (
                   <FragmentRow key={t.id} cutoff={di > 0 && i === di} di={di}>
                     <tr className={cx(isMe && 'bg-gold/10')}>
-                      <td className={cx('tabular', i < 3 ? 'font-semibold text-gold' : 'text-mute')}>{i + 1}</td>
-                      <td className="max-w-56">
-                        <span className="flex items-center gap-1.5">
+                      <td className={cx('tabular', PHONE_HIDE, i < 3 ? 'font-semibold text-gold' : 'text-mute')}>{i + 1}</td>
+                      <td className={STICKY_TD}>
+                        <span className="flex max-w-56 items-center gap-1.5 max-sm:max-w-[10rem]">
+                          <span className={cx('w-5 shrink-0 text-right text-xs tabular sm:hidden', i < 3 ? 'font-semibold text-gold' : 'text-mute')}>{i + 1}</span>
                           <TeamName game={game} teamId={t.id} />
                           {beefIds.has(t.id) && (
                             <Badge className="bg-dota/20 text-dota-2 border border-dota/40" title="本赛季宿敌">
@@ -140,17 +144,17 @@ function StandingsTab({ game }: { game: GameState }) {
                           )}
                         </span>
                       </td>
-                      <td>
+                      <td className={PHONE_HIDE}>
                         <RegionBadge region={t.region} />
                       </td>
                       <td className="num font-semibold">{Math.round(t.points ?? 0)}</td>
-                      <td className="num">{Math.round(t.honor)}</td>
+                      <td className={cx('num', PHONE_HIDE)}>{Math.round(t.honor)}</td>
                       <td className="num">
                         {Math.round(rating)}
                         <span className="ml-1 text-[11px] text-faint">({ratingRank.get(t.id) ?? '-'})</span>
                       </td>
-                      <td className="num">{titles.get(t.id) ? <span className="text-gold">{titles.get(t.id)}</span> : <span className="text-faint">0</span>}</td>
-                      <td className="num text-mute">{t.lastSeasonRank ? `#${t.lastSeasonRank}` : '—'}</td>
+                      <td className={cx('num', PHONE_HIDE)}>{titles.get(t.id) ? <span className="text-gold">{titles.get(t.id)}</span> : <span className="text-faint">0</span>}</td>
+                      <td className={cx('num text-mute', PHONE_HIDE)}>{t.lastSeasonRank ? `#${t.lastSeasonRank}` : '—'}</td>
                       <td className="text-xs">{tiStatus(t.id, i)}</td>
                     </tr>
                   </FragmentRow>
@@ -158,7 +162,7 @@ function StandingsTab({ game }: { game: GameState }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </Card>
     </div>
   );
@@ -171,7 +175,7 @@ function FragmentRow({ cutoff, di, children }: { cutoff: boolean; di: number; ch
       {cutoff && (
         <tr>
           <td colSpan={9} className="!py-0">
-            <div className="flex items-center gap-2 py-1 text-[11px] text-gold">
+            <div className="flex items-center gap-2 py-1 text-[11px] text-gold max-sm:sticky max-sm:left-0 max-sm:w-[calc(100vw-3.5rem)]">
               <span className="h-px flex-1 border-t-2 border-dashed border-gold/60" />
               <span>▲ TI 直邀线（前 {di} 名）</span>
               <span className="h-px flex-1 border-t-2 border-dashed border-gold/60" />
@@ -215,18 +219,19 @@ function PowerTab({ game }: { game: GameState }) {
       {rows.length === 0 ? (
         <EmptyState text="暂无战队数据" />
       ) : (
-        <div className="overflow-x-auto">
+        // 手机：战队列固定在左侧（名次并入），赛区 / 教练 / 荣誉 / 积分隐藏
+        <TableScroll>
           <table className="tbl">
             <thead>
               <tr>
-                <th className="w-10">#</th>
-                <th>战队</th>
-                <th>赛区</th>
-                <th className="w-56">战队评分</th>
+                <th className={cx('w-10', PHONE_HIDE)}>#</th>
+                <th className={STICKY_TH}>战队</th>
+                <th className={PHONE_HIDE}>赛区</th>
+                <th className="w-56 max-sm:w-auto max-sm:min-w-32">战队评分</th>
                 <th>王牌选手</th>
-                <th>教练</th>
-                <th className="num">荣誉</th>
-                <th className="num">积分</th>
+                <th className={PHONE_HIDE}>教练</th>
+                <th className={cx('num', PHONE_HIDE)}>荣誉</th>
+                <th className={cx('num', PHONE_HIDE)}>积分</th>
               </tr>
             </thead>
             <tbody>
@@ -240,11 +245,14 @@ function PowerTab({ game }: { game: GameState }) {
                 const missing = starters.filter((s) => !s.player).length;
                 return (
                   <tr key={r.id} className={cx(r.id === me && 'bg-gold/10')}>
-                    <td className={cx('tabular', r.rank <= 3 ? 'font-semibold text-gold' : 'text-mute')}>{r.rank}</td>
-                    <td className="max-w-52">
-                      <TeamName game={game} teamId={r.id} />
+                    <td className={cx('tabular', PHONE_HIDE, r.rank <= 3 ? 'font-semibold text-gold' : 'text-mute')}>{r.rank}</td>
+                    <td className={STICKY_TD}>
+                      <span className="flex max-w-52 items-center gap-1.5 max-sm:max-w-[9.5rem]">
+                        <span className={cx('w-5 shrink-0 text-right text-xs tabular sm:hidden', r.rank <= 3 ? 'font-semibold text-gold' : 'text-mute')}>{r.rank}</span>
+                        <TeamName game={game} teamId={r.id} />
+                      </span>
                     </td>
-                    <td>
+                    <td className={PHONE_HIDE}>
                       <RegionBadge region={r.team.region} />
                     </td>
                     <td>
@@ -269,7 +277,7 @@ function PowerTab({ game }: { game: GameState }) {
                         <span className="text-faint">—</span>
                       )}
                     </td>
-                    <td className="text-xs">
+                    <td className={cx('text-xs', PHONE_HIDE)}>
                       {coach ? (
                         <span className="flex items-center gap-1.5">
                           <TierBadge tier={coach.tier} />
@@ -279,14 +287,14 @@ function PowerTab({ game }: { game: GameState }) {
                         <span className="text-faint">空缺</span>
                       )}
                     </td>
-                    <td className="num">{Math.round(r.team.honor)}</td>
-                    <td className="num text-mute">{Math.round(r.team.points ?? 0)}</td>
+                    <td className={cx('num', PHONE_HIDE)}>{Math.round(r.team.honor)}</td>
+                    <td className={cx('num text-mute', PHONE_HIDE)}>{Math.round(r.team.points ?? 0)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </Card>
   );
@@ -296,6 +304,8 @@ function PowerTab({ game }: { game: GameState }) {
 // 选手榜
 // ---------------------------------------------------------------------------
 type SortKey = 'overall' | 'power' | 'mmr' | 'insight' | 'talent' | 'age';
+/** 手机上选手榜先列出的人数 */
+const PHONE_ROWS = 30;
 type Scope = 'all' | 'signed' | 'free' | 'mine';
 
 const SORT_LABEL: Record<SortKey, string> = {
@@ -314,6 +324,9 @@ function PlayersTab({ game }: { game: GameState }) {
   const [scope, setScope] = useState<Scope>('all');
   const [sort, setSort] = useState<SortKey>('overall');
   const [q, setQ] = useState('');
+  // 手机：先列前 PHONE_ROWS 名（不用卡片内滚动，避免滑动被表格吞掉），可展开全部
+  const phone = useIsPhone();
+  const [allRows, setAllRows] = useState(false);
 
   // 注意：引擎原地修改 game，不能用 useMemo 依赖 game 引用缓存
   const gacha = new Set(game.gachaPool ?? []);
@@ -352,6 +365,9 @@ function PlayersTab({ game }: { game: GameState }) {
     .map((p) => ({ p, k: safe(() => keyOf(p), 0), ovr: safe(() => overallRating(p), 0) }))
     .sort((a, b) => b.k - a.k || b.ovr - a.ovr)
     .slice(0, 100);
+  const shownRows = phone && !allRows ? rows.slice(0, PHONE_ROWS) : rows;
+  // 手机上隐藏的属性列：当前排序所用的那一列仍显示
+  const hideCol = (k: SortKey) => (sort === k ? undefined : PHONE_HIDE);
 
   return (
     <Card
@@ -390,34 +406,36 @@ function PlayersTab({ game }: { game: GameState }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜索选手 ID…"
-          className="ml-auto w-44 rounded-md border border-line bg-panel-2 px-2 py-1.5 text-sm outline-none placeholder:text-faint focus:border-dota"
+          className="w-full rounded-md border border-line bg-panel-2 px-2 py-1.5 text-sm outline-none placeholder:text-faint focus:border-dota sm:ml-auto sm:w-44"
         />
       </div>
       {rows.length === 0 ? (
         <EmptyState text="没有符合筛选条件的选手" />
       ) : (
-        <div className="max-h-[640px] overflow-auto">
+        // 桌面：表格内滚动（最高 640px）；手机：选手列固定在左侧（名次并入），年龄 / 赛区 / 灵性 / 天赋隐藏（排序所用的列除外）
+        <TableScroll className="lg:max-h-[640px] lg:overflow-y-auto">
           <table className="tbl">
             <thead>
               <tr>
-                <th className="w-10">#</th>
-                <th>选手</th>
+                <th className={cx('w-10', PHONE_HIDE)}>#</th>
+                <th className={STICKY_TH}>选手</th>
                 <th>位置</th>
                 <th>天梯</th>
-                <th className="num">年龄</th>
+                <th className={cx('num', hideCol('age'))}>年龄</th>
                 <th>战队</th>
-                <th>赛区</th>
+                <th className={PHONE_HIDE}>赛区</th>
                 <th className="num">战斗力</th>
-                <th className="num">灵性</th>
-                <th className="num">天赋</th>
+                <th className={cx('num', hideCol('insight'))}>灵性</th>
+                <th className={cx('num', hideCol('talent'))}>天赋</th>
                 <th className="num" title="本位置评分 = 有效战力 × 天梯倍数">综合</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ p, ovr }, i) => (
+              {shownRows.map(({ p, ovr }, i) => (
                 <tr key={p.id} className={cx(p.teamId === me && 'bg-gold/10')}>
-                  <td className={cx('tabular', i < 3 ? 'font-semibold text-gold' : 'text-mute')}>{i + 1}</td>
-                  <td>
+                  <td className={cx('tabular', PHONE_HIDE, i < 3 ? 'font-semibold text-gold' : 'text-mute')}>{i + 1}</td>
+                  <td className={STICKY_TD}>
+                    <span className={cx('mr-1.5 inline-block w-6 text-right text-xs tabular sm:hidden', i < 3 ? 'font-semibold text-gold' : 'text-mute')}>{i + 1}</span>
                     <PlayerLink player={p} />
                     {p.isRookie && <span className="ml-1 text-[10px] text-good">新秀</span>}
                   </td>
@@ -427,21 +445,28 @@ function PlayersTab({ game }: { game: GameState }) {
                   <td>
                     <TierBadge tier={safe(() => playerTier(p), 'C')} />
                   </td>
-                  <td className="num">{safe(() => ageOf(game, p), 0)}</td>
+                  <td className={cx('num', hideCol('age'))}>{safe(() => ageOf(game, p), 0)}</td>
                   <td className="max-w-40">
                     {p.teamId ? <TeamName game={game} teamId={p.teamId} mode="tag" /> : <span className="text-xs text-faint">自由选手</span>}
                   </td>
-                  <td>
+                  <td className={PHONE_HIDE}>
                     <RegionBadge region={p.region} />
                   </td>
                   <td className="num">{safe(() => effectivePower(p), p.power).toFixed(1)}</td>
-                  <td className="num text-mute">{Math.round(safe(() => effectiveAttr(p, 'insight'), p.insight))}</td>
-                  <td className="num text-mute">{Math.round(p.talent)}</td>
+                  <td className={cx('num text-mute', hideCol('insight'))}>{Math.round(safe(() => effectiveAttr(p, 'insight'), p.insight))}</td>
+                  <td className={cx('num text-mute', hideCol('talent'))}>{Math.round(p.talent)}</td>
                   <td className="num font-semibold">{ovr.toFixed(1)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </TableScroll>
+      )}
+      {shownRows.length < rows.length && (
+        <div className="flex justify-center border-t border-line py-2">
+          <Button size="sm" variant="ghost" onClick={() => setAllRows(true)}>
+            显示全部 {rows.length} 名
+          </Button>
         </div>
       )}
     </Card>
@@ -472,15 +497,16 @@ function TiHistoryTab({ game }: { game: GameState }) {
         <Stat label="当前赛季" value={`TI${game.season.ti}`} hint={String(game.season.year)} />
       </div>
       <Card title="TI 历史" subtitle="真实历史冠军 vs 本存档中的结果（存档范围内的届次以左侧金线标出）" bodyClassName="p-0">
-        <div className="overflow-x-auto">
+        {/* 手机：届次列固定在左侧，举办地 / 奖金池 / 真实亚军隐藏 */}
+        <TableScroll>
           <table className="tbl">
             <thead>
               <tr>
-                <th>届次</th>
-                <th>举办地</th>
-                <th className="num">真实奖金池</th>
+                <th className={STICKY_TH}>届次</th>
+                <th className={PHONE_HIDE}>举办地</th>
+                <th className={cx('num', PHONE_HIDE)}>真实奖金池</th>
                 <th>真实冠军</th>
-                <th>真实亚军</th>
+                <th className={PHONE_HIDE}>真实亚军</th>
                 <th>本存档冠军</th>
                 <th>我的成绩</th>
               </tr>
@@ -493,22 +519,22 @@ function TiHistoryTab({ game }: { game: GameState }) {
                 const isCur = info.ti === game.season.ti;
                 return (
                   <tr key={info.ti} className={cx(isCur && 'bg-gold/5', !inRange && 'opacity-60')}>
-                    <td className="relative">
+                    <td className={cx('relative', STICKY_TD)}>
                       {inRange && <span className="absolute bottom-1 left-0 top-1 w-1 rounded-r bg-gold/70" />}
                       <span className="font-semibold">TI{info.ti}</span>
                       <span className="ml-1.5 text-xs text-faint">{info.year}</span>
                       {info.projected && <Badge className="ml-1.5 bg-panel-3 text-faint">推演</Badge>}
                       {isCur && <Badge className="ml-1.5 bg-gold text-black">本赛季</Badge>}
                     </td>
-                    <td className="text-xs text-mute">
+                    <td className={cx('text-xs text-mute', PHONE_HIDE)}>
                       {info.city}
                       {info.country ? ` · ${info.country}` : ''}
                     </td>
-                    <td className="num" title="真实奖金池（美元）">
+                    <td className={cx('num', PHONE_HIDE)} title="真实奖金池（美元）">
                       ${Math.round(info.prizePool ?? 0).toLocaleString('en-US')}
                     </td>
                     <td className="text-xs">{info.champion ? <span className="text-ink">{nameOf(info.champion)}</span> : <span className="text-faint">—</span>}</td>
-                    <td className="text-xs text-mute">{info.runnerUp ? nameOf(info.runnerUp) : '—'}</td>
+                    <td className={cx('text-xs text-mute', PHONE_HIDE)}>{info.runnerUp ? nameOf(info.runnerUp) : '—'}</td>
                     <td className="text-xs">
                       {h ? (
                         <span className={cx('flex items-center gap-1', h.championId === me && 'font-semibold')}>
@@ -535,7 +561,7 @@ function TiHistoryTab({ game }: { game: GameState }) {
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </Card>
       <Hint>真实冠军仅作展示；本存档中的 TI 由模拟决出，历史可能被改写。</Hint>
     </div>

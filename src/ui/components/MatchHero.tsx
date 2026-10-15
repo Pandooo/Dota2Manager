@@ -6,7 +6,7 @@ import type { HeroAttr, HeroInfo, Position } from '../../engine/types';
 import { POSITIONS } from '../../engine/types';
 import { POSITION_SHORT, heroById, heroName } from '../../engine';
 import { cx } from './common';
-import { safe } from './MatchShared';
+import { safe, tapTip } from './MatchShared';
 
 export const ATTR_LABEL: Record<HeroAttr, string> = { str: '力量', agi: '敏捷', int: '智力', uni: '全才' };
 
@@ -57,13 +57,23 @@ export function heroFitPositions(h: HeroInfo | undefined, min = 0.6): Position[]
 export function heroTooltip(id: string, meta?: number): string {
   const h = heroInfo(id);
   if (!h) return id;
+  return [`${h.cn}（${h.name}）`, heroBrief(id, meta)].filter(Boolean).join(' · ');
+}
+
+/** 英雄简介（不含名字）：主属性 · 适合位置 · 版本强度（触屏 BP 选中时写在底栏） */
+export function heroBrief(id: string, meta?: number): string {
+  const h = heroInfo(id);
+  if (!h) return '';
   const fits = heroFitPositions(h).map((p) => `${POSITION_SHORT[p]}号位`).join('/');
-  const parts = [`${h.cn}（${h.name}）`, ATTR_LABEL[h.attr] ?? '', fits ? `适合 ${fits}` : ''];
+  const parts = [ATTR_LABEL[h.attr] ?? '', fits ? `适合 ${fits}` : ''];
   if (meta !== undefined && Number.isFinite(meta)) parts.push(`版本强度 ${meta > 0 ? '+' : ''}${meta.toFixed(1)}`);
   return parts.filter(Boolean).join(' · ');
 }
 
-/** 首字头像：取中文名首字，背景色按主属性 */
+/**
+ * 首字头像：取中文名首字，背景色按主属性。
+ * tip：头像不在按钮里、只靠 title 说明是哪个英雄时（禁用位、招牌英雄、阵容回顾）传 true——触屏点按显示同一段说明（tapTip）。
+ */
 export function HeroAvatar({
   heroId,
   size = 'md',
@@ -71,6 +81,7 @@ export function HeroAvatar({
   dim,
   className,
   title,
+  tip,
 }: {
   heroId: string | null | undefined;
   size?: keyof typeof SIZE;
@@ -78,13 +89,15 @@ export function HeroAvatar({
   dim?: boolean;
   className?: string;
   title?: string;
+  tip?: boolean;
 }) {
   const h = heroId ? heroInfo(heroId) : undefined;
   const cn = heroId ? h?.cn ?? heroCn(heroId) : '';
   const ch = cn ? Array.from(cn)[0] : '?';
+  const text = title ?? (heroId ? heroTooltip(heroId) : undefined);
   return (
     <span
-      title={title ?? (heroId ? heroTooltip(heroId) : undefined)}
+      {...(tip ? tapTip(text) : { title: text })}
       className={cx(
         'relative inline-grid shrink-0 select-none place-items-center overflow-hidden font-black text-white shadow-inner ring-1 ring-black/40',
         SIZE[size],

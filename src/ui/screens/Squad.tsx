@@ -11,7 +11,7 @@ import {
 } from '../../engine';
 import type { GameState, Player, Position, RoleFit, SalaryMood, Team, Tournament } from '../../engine';
 import {
-  Button, Card, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TierBadge, cx,
+  Button, Card, EmptyState, Gold, Hint, PlayerLink, PosBadge, Stat, TableScroll, TierBadge, cx,
 } from '../components/common';
 import { ConfirmButton } from '../components/ConfirmPopover';
 import NewBadge from '../components/NewBadge';
@@ -296,7 +296,7 @@ export default function Squad() {
           </EmptyState>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {starters.map(({ pos, player }) => (
                 <SlotCard
                   key={pos}
@@ -311,7 +311,7 @@ export default function Squad() {
               ))}
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 <Stat
                   label="战队评分"
@@ -405,9 +405,10 @@ export default function Squad() {
         subtitle="点击表头排序，点击选手查看详情"
         bodyClassName="p-0"
         actions={
-          <div className="flex items-center gap-3 text-xs text-mute">
+          // 窄屏可换行：已选 / 批量操作 / 合计放不下时折到下一行（不撑出卡片）
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 text-xs text-mute">
             {selectedPlayers.length > 0 && (
-              <span className="flex items-center gap-2">
+              <span className="flex flex-wrap items-center gap-2">
                 <span className="text-ink">已选 {selectedPlayers.length} 人</span>
                 <Button size="xs" variant="ghost" onClick={() => setSelected(new Set())}>
                   清空
@@ -508,11 +509,13 @@ export default function Squad() {
         {roster.length === 0 ? (
           <EmptyState text="还没有签约任何选手。" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="tbl">
+          // 手机：表格横向滑动，勾选框与「选手」两列固定在左侧（STICKY_*）；「阵位」列不显示（状态列已有首发 / 替补）
+          <TableScroll>
+            {/* 手机上表格按内容宽度排开（max-content，! 盖过 .tbl 的 width: 100%）：否则各列被压到最小宽度，状态标签折成多行、每行很高 */}
+            <table className="tbl max-sm:w-max!">
               <thead>
                 <tr>
-                  <th className="w-8" onClick={(e) => e.stopPropagation()}>
+                  <th className={cx('w-8', STICKY_CHECK, 'max-sm:z-[3]!')} onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       className="cursor-pointer accent-[var(--color-dota)]"
@@ -521,8 +524,8 @@ export default function Squad() {
                       onChange={(e) => setSelected(e.target.checked ? new Set(releasable.map((p) => p.id)) : new Set())}
                     />
                   </th>
-                  <SortTh k="lineup" sort={sort} defaultDir="asc" title="按首发位置 → 替补排序">阵位</SortTh>
-                  <SortTh k="handle" sort={sort} defaultDir="asc">选手</SortTh>
+                  <SortTh k="lineup" sort={sort} defaultDir="asc" title="按首发位置 → 替补排序" className="max-sm:hidden">阵位</SortTh>
+                  <SortTh k="handle" sort={sort} defaultDir="asc" className={cx(STICKY_NAME, 'max-sm:z-[3]!')}>选手</SortTh>
                   <SortTh k="pos" sort={sort} defaultDir="asc">
                     位置 <NewBadge feature="altPositions" dismissOn="view" />
                   </SortTh>
@@ -554,7 +557,7 @@ export default function Squad() {
                       className={cx('cursor-pointer', inactive && 'opacity-50')}
                       onClick={() => openPlayer(p.id)}
                     >
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td className={STICKY_CHECK} onClick={(e) => e.stopPropagation()}>
                         {canRelease(p) && (
                           <input
                             type="checkbox"
@@ -565,7 +568,7 @@ export default function Squad() {
                           />
                         )}
                       </td>
-                      <td>
+                      <td className="max-sm:hidden">
                         {slot ? (
                           <span className={cx('text-xs font-semibold', ROLE_FIT_TEXT[roleFit(p, slot)])} title={`${POSITION_LABEL[slot]}首发 · ${roleFitTitle(p, slot)}`}>
                             首发·{POSITION_SHORT[slot]}
@@ -574,7 +577,7 @@ export default function Squad() {
                           <span className="text-xs text-faint">{inactive ? '—' : '替补'}</span>
                         )}
                       </td>
-                      <td>
+                      <td className={STICKY_NAME}>
                         <span className="inline-flex items-center gap-1.5">
                           <Flag cc={p.nationality} />
                           <PlayerLink player={p} />
@@ -631,12 +634,19 @@ export default function Squad() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
       </Card>
     </div>
   );
 }
+
+/**
+ * 手机（< sm）全部选手表：勾选框列（w-8 = 2rem）与选手列固定在左侧，横向滑动时始终可见（实色底遮住滑过的列）。
+ * 表头格的层级要加 !：index.css 的 `.tbl th { z-index: 1 }` 不在 @layer 里，优先于 Tailwind 工具类
+ */
+const STICKY_CHECK = 'max-sm:sticky max-sm:left-0 max-sm:z-[2] max-sm:bg-panel';
+const STICKY_NAME = 'max-sm:sticky max-sm:left-8 max-sm:z-[2] max-sm:bg-panel max-sm:shadow-[1px_0_0_var(--color-line)]';
 
 /** 就近确认气泡里的选手清单（批量挂牌 / 解约）：位置 · ID · 等级 + 右侧金额，人多时滚动 */
 function PlayerConfirmList({ players, right }: { players: Player[]; right: (p: Player) => ReactNode }) {
@@ -693,11 +703,20 @@ function SlotCard({
         (blocked || otherTemp) && 'border-bad/60',
       )}
     >
+      {/* 手机（< sm）：五张卡片纵向排列，压缩高度——选手名并入位置行、三项数值改为一行小字（≥ sm 与以前一样） */}
       <div className="flex items-center justify-between gap-2">
-        <PosBadge pos={pos} full />
+        <span className="flex min-w-0 items-center gap-1.5">
+          <PosBadge pos={pos} full />
+          {player && (
+            <span className="flex min-w-0 items-center gap-1 sm:hidden">
+              <PlayerLink player={player} className="truncate pointer-coarse:-my-1.5 pointer-coarse:py-1.5" />
+              <TierBadge tier={safe(() => playerTier(player), 'C' as const)} />
+            </span>
+          )}
+        </span>
         {player && (
-          <span className="text-right leading-none">
-            <span className="block text-[10px] text-faint">位置评分</span>
+          <span className="shrink-0 text-right leading-none">
+            <span className="block text-[10px] text-faint max-sm:hidden">位置评分</span>
             <span className={cx('text-base font-bold tabular', ROLE_FIT_TEXT[fit])} title={roleFitTitle(player, pos)}>{rating.toFixed(1)}</span>
           </span>
         )}
@@ -705,15 +724,27 @@ function SlotCard({
 
       {player ? (
         <>
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 max-sm:hidden">
             <Flag cc={player.nationality} />
             <PlayerLink player={player} className="truncate text-base" />
             <TierBadge tier={safe(() => playerTier(player), 'C' as const)} />
           </div>
-          <div className="grid grid-cols-3 gap-1 text-[11px]">
+          <div className="grid grid-cols-3 gap-1 text-[11px] max-sm:hidden">
             <MiniStat label="战力" value={<PowerValue player={player} />} />
             <MiniStat label="天梯" value={Math.round(safe(() => effectiveAttr(player, 'mmr'), player.mmr))} />
             <MiniStat label="年龄" value={ageOf(game, player)} />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-faint sm:hidden">
+            <Flag cc={player.nationality} />
+            <span>
+              战力 <span className="tabular text-ink"><PowerValue player={player} /></span>
+            </span>
+            <span>
+              天梯 <span className="tabular text-ink">{Math.round(safe(() => effectiveAttr(player, 'mmr'), player.mmr))}</span>
+            </span>
+            <span>
+              <span className="tabular text-ink">{ageOf(game, player)}</span> 岁
+            </span>
           </div>
           <div className="flex min-h-5 flex-wrap gap-1">
             <RoleFitChip player={player} slot={pos} />
@@ -741,7 +772,7 @@ function SlotCard({
       <select
         value={player?.id ?? ''}
         onChange={(e) => onAssign(e.target.value)}
-        className="mt-auto w-full cursor-pointer rounded-md border border-line bg-panel px-2 py-1 text-xs text-ink [color-scheme:dark] focus:border-dota focus:outline-none"
+        className="mt-auto w-full cursor-pointer rounded-md border border-line bg-panel px-2 py-1 text-xs text-ink [color-scheme:dark] focus:border-dota focus:outline-none pointer-coarse:min-h-10"
         title="选择该位置首发"
       >
         <option value="">— 空缺 —</option>

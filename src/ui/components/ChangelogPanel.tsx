@@ -1,6 +1,7 @@
 // 更新说明：顶栏右上角的版本芯片（有未读新版本时带红点）→ 点击打开面板，按版本倒序列出每次更新的内容，
 // 当前版本默认展开、旧版本折叠可展开；标有 New 的条目在游戏内对应入口旁也有徽标。
 // 入口有两处，打开的是同一个面板：游戏内顶栏的芯片（variant="chip"，< sm 显示为「更新」），主菜单页脚的版本号（variant="footer"）。
+// 手机（< sm）顶栏放不下芯片：改为导航抽屉底部的「更新说明」一行（TopBar 渲染 ChangelogModal），有未读时 ☰ 带蓝点。
 // 「标为已读」把最新版本记为已读：红点与全部 New 徽标一起消失。打开面板不自动算已读（理由见 src/ui/changelog.ts 文件头）。
 // 数据与状态见 src/ui/changelog.ts；状态按浏览器存 localStorage，不进存档、不经 call()。
 import { useState } from 'react';
@@ -52,7 +53,8 @@ export default function ChangelogButton({ variant = 'chip', className }: { varia
   );
 }
 
-function ChangelogModal({ onClose }: { onClose: () => void }) {
+/** 更新说明面板（Modal）。顶栏 / 主菜单的按钮自带；手机导航抽屉里的入口由 TopBar 直接打开（抽屉收起后按钮已卸载，面板不能挂在按钮里） */
+export function ChangelogModal({ onClose }: { onClose: () => void }) {
   const state = useChangelogState();
   const unread = hasUnread(state.seen);
   return (
