@@ -17,6 +17,7 @@ import { rollFunEvents, resolveFunDecision } from './funEvents';
 import { inSeatOf, removePendingDecisionsEverywhere } from './seat';
 import { syncSynergies } from './synergy';
 import { resolveHomeRookieDecision } from './gacha';
+import { resaleLocked } from './listingRules';
 import {
   onRookieContract, salaryGap, salaryMoodLevel, salaryMoodOf, unhappyStarPoachChance,
 } from './salary';
@@ -609,13 +610,17 @@ export function processLoyaltyDepartures(state: GameState): void {
       const calming = calm > 0 && typeof retained === 'number' && Number.isFinite(retained) && key - retained < calm;
       if (!calming && rng.chance(clamp(L.leaveChancePerRound * (1 + Math.max(0, P.leaveGapMult) * gap), 0, 1))) {
         createLeaveRequest(state, team, p, loyalty, gap);
-      } else if (!pendingOffers.has(p.id) && rng.chance(clamp(L.poachChancePerRound * (1 + Math.max(0, P.poachGapMult) * gap), 0, 1))) {
+      } else if (
+        !pendingOffers.has(p.id) && !resaleLocked(state, p)
+        && rng.chance(clamp(L.poachChancePerRound * (1 + Math.max(0, P.poachGapMult) * gap), 0, 1))
+      ) {
         createPoach(state, team, p, rng);
       }
       continue;
     }
-    // 对薪资强烈不满的明星：外部俱乐部趁机接触（同一选手本赛季内有冷却）
-    if (pendingOffers.has(p.id) || recentlyPoached(state, p.id)) continue;
+    // 对薪资强烈不满的明星：外部俱乐部趁机接触（同一选手本赛季内有冷却）；
+    // 加盟门槛未满足（随队场数 / 入队转会回合）/ 抽卡新秀转售冷却中的选手不会被挖角（与挂牌、AI 随机求购同口径，listingRules.resaleLocked）
+    if (pendingOffers.has(p.id) || recentlyPoached(state, p.id) || resaleLocked(state, p)) continue;
     const chance = unhappyStarPoachChance(p, loyalty, gap);
     if (chance > 0 && rng.chance(chance)) createPoach(state, team, p, rng, true);
   }

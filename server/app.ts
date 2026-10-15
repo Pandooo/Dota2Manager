@@ -1,5 +1,5 @@
 // ============================================================================
-// 组装 HTTP（静态前端 + /healthz、/api/info、/api/status）+ WebSocket（/ws）服务器。
+// 组装 HTTP（静态前端 + /healthz、/api/info、/api/status（仅本机））+ WebSocket（/ws）服务器。
 // index.ts 是命令行入口；e2e/测试直接调用 startServer。
 // ============================================================================
 import { createServer, type IncomingMessage, type Server } from 'node:http';
@@ -9,7 +9,7 @@ import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { DEFAULT_SERVER_PORT, PROTOCOL_VERSION, WS_PATH } from '../src/shared/protocol';
 import { defaultEngine, type MpEngine } from './engine';
-import { clientAddress, isPrivateAddress, isPrivateOrigin, lanUrls as computeLanUrls } from './net';
+import { clientAddress, isLoopbackRequest, isPrivateAddress, isPrivateOrigin, lanUrls as computeLanUrls } from './net';
 import { RoomStore } from './persistence';
 import { RoomManager, type Conn } from './rooms';
 import { createStaticHandler } from './static';
@@ -161,8 +161,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
   const http = createServer((req, res) => {
     try {
       const path = (req.url ?? '/').split('?')[0];
-      const json = (data: unknown) => {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      const json = (data: unknown, code = 200) => {
+        res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(req.method === 'HEAD' ? undefined : JSON.stringify(data));
       };
       if (path === '/healthz' || path === '/api/info') {
@@ -176,12 +176,18 @@ export async function startServer(opts: ServerOptions = {}): Promise<RunningServ
           frontend: serveStatic.hasIndex(),
         };
         if (path === '/healthz') return json(base);
-        // /api/info 另附在线人数（详细统计见 /api/status）
+        // /api/info 另附当前在线人数（大厅也向所有人显示这几个数）；峰值、每日汇总等详细统计只在 /api/status（仅本机）
         const c = rooms.onlineCounts();
         return json({ ...base, online: c.online, inGame: c.inGame, playing: c.rooms.active });
       }
-      // 在线统计：只有人数与时间（不含昵称、会话 ID、IP）
-      if (path === '/api/status') return json(stats.status());
+      // 在线统计：只有人数与时间（不含昵称、会话 ID、IP）；只回答服务器本机的请求（2026-10-15 用户决策），
+      // 只看套接字地址，转发头不能冒充本机（经本机反向代理转发的外部请求带有非回环的转发来源，同样拒绝）
+      if (path === '/api/status') {
+        if (!isLoopbackRequest(req.socket.remoteAddress, req.headers)) {
+          return json({ ok: false, error: '在线统计只允许在服务器本机访问' }, 403);
+        }
+        return json(stats.status());
+      }
       serveStatic(req, res);
     } catch (err) {
       log(`HTTP 处理出错：${(err as Error).message}`);

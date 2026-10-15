@@ -9,10 +9,10 @@ import {
   activeListing, listingBidOutlook, listingDurationLabel, listingListedAtLabel, listingOffers, listingProgress, listingRoundStatus, raiseSalaryPreview,
   talkSuccessChance, talkedThisRound,
   SALARY_MOOD_LABEL, playerMoodSummary, renewalAsk, draftedRookieReleaseBlock, gachaDiscardBlock, gachaDiscardRefund, GACHA_KIND_LABEL,
-  gachaResaleLockText,
+  gachaResaleLockText, listingJoinLock, listingJoinLockTitle,
   developmentOutlook, GROWTH_OUTLOOK_HINT, ROLE_FIT_LABEL, roleFit, roleFitFactor,
 } from '../../engine';
-import type { GameState, GrowthOutlook, OverallMood, Player, RoleFit, SalaryMood, Team } from '../../engine';
+import type { GameState, GrowthOutlook, ListingJoinLock, OverallMood, Player, RoleFit, SalaryMood, Team } from '../../engine';
 import {
   AttrRow, Badge, Button, EmptyState, Gold, Modal, PosBadge, RegionBadge, StatBar, TeamLink, TeamTag, TierBadge, cx,
 } from './common';
@@ -762,6 +762,7 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
       挂牌期为{durationLabel}：每个常规赛回合结束时计一次（赛季初与 TI 阶段转会锁定期间不计时），在下赛季的同一时间点到期。
       其他俱乐部可能在回合结束时报价：标价越低、选手越抢手，越容易收到报价；前 {S.listingFreshRolls} 次报价机会之后，标价高于身价的挂牌挂得越久，报价意愿越低（撤牌后不久重新挂牌，次数继续累计）。
       报价出现在「转会市场 → 我的挂牌 / 收到的报价」；常规赛最后一回合结束后转会窗口锁定，未处理的报价作废。
+      新加盟的选手（签约、转会、交易、抽卡等任何途径）须随队满 {CONFIG.squadOps.listingMinTeamMatches} 场比赛（系列赛，不要求本人上场）且入队满 {CONFIG.squadOps.listingMinTransferRounds} 个转会回合才能挂牌。
       <span className="text-gold">若整个挂牌期都没有收到任何报价，到期自动解约成为自由选手（不支付解约补偿、不扣荣誉）；收到过报价（含普通求购报价）但未成交，则挂牌期满后挂牌结束、选手留队。</span>
     </div>
   );
@@ -873,10 +874,16 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
   }
 
   const [minM, maxM] = S.listingPriceRange;
+  // 加盟门槛（【用户指定】新加盟的选手随队满 N 场比赛且入队满 M 个转会回合才能挂牌）优先于抽卡新秀的转售冷却
+  const join = safe<ListingJoinLock | null>(() => listingJoinLock(game, p), null);
+  const joinTitle = safe<string | null>(() => listingJoinLockTitle(game, p), null);
   const resale = safe<string | null>(() => gachaResaleLockText(game, p), null);
-  const reason = !windowOpen ? WINDOW_LOCKED : resale ? resale : !(price > 0) ? '身价数据异常，无法挂牌' : '';
+  const reason = !windowOpen
+    ? WINDOW_LOCKED
+    : joinTitle ? joinTitle : resale ? resale : !(price > 0) ? '身价数据异常，无法挂牌' : '';
   return (
     <Panel title="挂牌转会">
+      {join?.locked && <JoinLockProgress join={join} title={joinTitle} />}
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="text-[11px] text-faint">
           标价（身价 <Gold value={value} /> 的 {Math.round(mult * 100)}%）
@@ -931,6 +938,60 @@ function ListingPanel({ game, p, windowOpen }: { game: GameState; p: Player; win
       </div>
       {rule}
     </Panel>
+  );
+}
+
+/**
+ * 挂牌的加盟门槛进度（随队比赛 N / 10 场 · 入队转会回合 M / 6）：只列出有记录的条件（无记录 = 开局阵容 / 旧存档，视为已满足），
+ * 进度条、说明与引擎的失败说明 / 按钮提示（listingJoinLockText / listingJoinLockTitle）列出同样的条件。
+ * 仍在转售冷却中的本队抽卡新秀，入队转会回合按冷却报（M / 18，`join.gachaHold`）。
+ */
+function JoinLockProgress({ join, title }: { join: ListingJoinLock; title: string | null }) {
+  const showMatches = join.minMatches > 0 && join.matches !== null;
+  const showRounds = join.minRounds > 0 && join.rounds !== null;
+  const matches = join.matches ?? 0;
+  const rounds = join.rounds ?? 0;
+  const missing = [
+    join.matchLeft > 0 ? `${join.matchLeft} 场比赛` : '',
+    join.roundLeft > 0 ? `${join.roundLeft} 个转会回合` : '',
+  ].filter(Boolean).join('、');
+  const need = [
+    showMatches ? `随队满 ${join.minMatches} 场比赛（系列赛，不要求本人上场）` : '',
+    showRounds
+      ? `入队满 ${join.minRounds} 个转会回合（${join.gachaHold ? '抽卡新秀的转售冷却；' : ''}每个常规赛回合结束时计一次，赛季初与 TI 锁定期间不计）`
+      : '',
+  ].filter(Boolean).join('且');
+  const who = join.gachaHold ? '本队抽卡得到的新秀' : '新加盟的选手';
+  return (
+    <div className="mb-2 rounded-md border border-line bg-panel-2 px-2.5 py-2 text-xs" title={title ?? undefined}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="text-mute">加盟后挂牌门槛</span>
+        <span className="tabular text-faint">
+          {showMatches && (
+            <>
+              比赛 <span className={cx('font-semibold', join.matchLeft > 0 ? 'text-ink' : 'text-good')}>{matches}</span> / {join.minMatches} 场
+            </>
+          )}
+          {showMatches && showRounds && ' · '}
+          {showRounds && (
+            <>
+              转会回合 <span className={cx('font-semibold', join.roundLeft > 0 ? 'text-ink' : 'text-good')}>{rounds}</span> / {join.minRounds}
+            </>
+          )}
+        </span>
+      </div>
+      <div className={cx('mt-1 grid gap-2', showMatches && showRounds ? 'grid-cols-2' : 'grid-cols-1')}>
+        {showMatches && (
+          <StatBar value={matches} max={Math.max(1, join.minMatches)} color={join.matchLeft > 0 ? 'bg-gold' : 'bg-good'} />
+        )}
+        {showRounds && (
+          <StatBar value={rounds} max={Math.max(1, join.minRounds)} color={join.roundLeft > 0 ? 'bg-gold' : 'bg-good'} />
+        )}
+      </div>
+      <div className="mt-1 leading-relaxed text-faint">
+        {who}须{need}才能挂牌，还差 {missing}；在此之前其他俱乐部也不会主动求购他。
+      </div>
+    </div>
   );
 }
 

@@ -6,7 +6,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useCall, useGame, useGameStore } from '../../store/gameStore';
 import {
   CONFIG, GACHA_KIND_LABEL, ageOf, effectiveAttr, effectivePower, formatGold, gachaDiscardBlock, gachaHistory, gachaLog,
-  gachaOverCapAfter, gachaPullBlock, gachaRookieWageCap, gachaTierProbabilities, gachaView, isTransferWindowOpen, pediaHasPlayer, playerTier, rosterOverCap,
+  gachaListingRuleText, gachaOverCapAfter, gachaPullBlock, gachaRookieWageCap, gachaTierProbabilities, gachaView, isTransferWindowOpen, pediaHasPlayer, playerTier, rosterOverCap,
   rosterOverCapNotice, rosterOverflowNotice, rosterSigningNote, rosterSize,
   type GachaCardKind, type GachaPullRecord, type GachaSeasonRecord, type GachaView, type GameState, type Player, type Tier,
 } from '../../engine';
@@ -192,6 +192,8 @@ export default function Gacha() {
   const overCapNote = windowOpen ? safe<string | null>(() => rosterOverCapNotice(g, me), null) : null;
   const lazy = useGameStore((st) => st.lazyAdvance);
   const wageCap = safe(() => gachaRookieWageCap(g), Infinity);
+  // 挂牌条件（抽卡转售冷却 + 加盟门槛，与「真实新秀」待决事件同一说法）
+  const resaleRule = safe(() => gachaListingRuleText(), '');
   // 从总览 / 侧栏直接进入本页时，「转会 › 新秀抽卡」标签上的 New 徽标也算找到了
   const { show: badgeShown, dismiss: dismissBadge } = useNewFeature('gacha');
   useEffect(() => {
@@ -232,7 +234,7 @@ export default function Gacha() {
       confirmLabel: n === 10 ? `十连 · ${formatGold(view.ten)}` : `单抽 · ${formatGold(view.single)}`,
       message: (
         <>
-          花费 <b className="text-ink">{formatGold(n === 10 ? view.ten : view.single)}</b> 从卡池（剩余 {view.remaining} 张）均匀抽 {n} 张，新秀立即签下新秀合同入队（工资按等级标准 × 新秀折扣{Number.isFinite(wageCap) ? `，不超过 ${formatGold(wageCap)}/回合` : ''}）。本回合内可退回，返还单抽价格的 {Math.round(num(CONFIG.gacha.discardRefundRatio) * 100)}%；之后入队满 {CONFIG.gacha.resaleHoldRounds} 个转会回合（约一个赛季）前不能挂牌出售。
+          花费 <b className="text-ink">{formatGold(n === 10 ? view.ten : view.single)}</b> 从卡池（剩余 {view.remaining} 张）均匀抽 {n} 张，新秀立即签下新秀合同入队（工资按等级标准 × 新秀折扣{Number.isFinite(wageCap) ? `，不超过 ${formatGold(wageCap)}/回合` : ''}）。本回合内可退回，返还单抽价格的 {Math.round(num(CONFIG.gacha.discardRefundRatio) * 100)}%；{resaleRule ? `之后${resaleRule}前不能挂牌出售。` : ''}
           {pityLeft <= n && <span className="mt-1 block text-gold">这次将触发 SSR 保底。</span>}
           {over > 0 ? (
             <span className="mt-1 block text-bad">
@@ -474,7 +476,7 @@ export default function Gacha() {
               <b className="text-[#c39cff]">请神</b>：虚拟新秀与名人堂成员（DotA1 时代传奇、开局届之前真实历史中达到过 SS / SSR 的选手与本局历届 SS / SSR 选手）构建请神关系——原型的出道等级与卡的等级相同，新秀复制原型的出道能力、天赋与位置，之后每个赛季的成长走势复制原型的生涯。同一原型每赛季至多 {CONFIG.gacha.summonMaxPerPrototype} 张，所以联赛里可能同时有一名真身和几名请神新秀。
             </p>
             <p>
-              价格随年代经济指数变化（TI1 单抽 {formatGold(CONFIG.gacha.singleCost)}），十连 = {CONFIG.gacha.tenMult} × 单抽。SSR 保底：距上一张 SSR 第 {view.pityThreshold} 抽必出（计数随战队、跨赛季）。十连 / 单抽总是抽满：抽完超过绝对上限 {hard} 人时，须在本回合内放弃新秀或解约，退回 {hard} 人才能进入下一回合（超编期间不能再抽）。新秀合同 {CONFIG.gacha.rookieContractSeasons} 个赛季{Number.isFinite(wageCap) ? `，工资不超过 ${formatGold(wageCap)}/回合` : ''}；抽到的新秀在同一回合内可退回，返还单抽价格的 {Math.round(num(CONFIG.gacha.discardRefundRatio) * 100)}%；入队满 {CONFIG.gacha.resaleHoldRounds} 个转会回合（约一个赛季）前不能挂牌出售，作为交易抵价时按签字费估值。
+              价格随年代经济指数变化（TI1 单抽 {formatGold(CONFIG.gacha.singleCost)}），十连 = {CONFIG.gacha.tenMult} × 单抽。SSR 保底：距上一张 SSR 第 {view.pityThreshold} 抽必出（计数随战队、跨赛季）。十连 / 单抽总是抽满：抽完超过绝对上限 {hard} 人时，须在本回合内放弃新秀或解约，退回 {hard} 人才能进入下一回合（超编期间不能再抽）。新秀合同 {CONFIG.gacha.rookieContractSeasons} 个赛季{Number.isFinite(wageCap) ? `，工资不超过 ${formatGold(wageCap)}/回合` : ''}；抽到的新秀在同一回合内可退回，返还单抽价格的 {Math.round(num(CONFIG.gacha.discardRefundRatio) * 100)}%；{resaleRule ? `${resaleRule}前不能挂牌出售，` : ''}作为交易抵价时按签字费估值。
             </p>
             <p>
               AI 战队在第 1 回合开始前（你先抽）与赛季中期按资金与阵容空位自动抽卡（每赛季至多 {CONFIG.gacha.aiMaxPullsPerSeason} 张；资金不足或阵容已满时可能不抽，开局赛季常常不抽）。TI 预选赛转会锁定时卡池关闭。

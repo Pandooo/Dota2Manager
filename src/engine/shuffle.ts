@@ -36,6 +36,7 @@ import {
 import { orgTeam, peakOrgsOfPlayer } from './clubs';
 import { lineupPriorityLocks } from './lineupPriority';
 import { naturalPositions, playsNaturally, roleFactor, uncoveredPositions } from './roles';
+import { resaleLocked } from './listingRules';
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -1101,7 +1102,8 @@ function humanInterest(w: World, report: ShuffleReport): void {
   for (const team of activeTeams(state)) {
     if (!team.isPlayer || team.disbanded) continue;
     const sat = w.sat.get(team.id)?.sat ?? 0;
-    const roster = rng.shuffle(regular(state, team.id).filter((p) => !p.transferListing && !pending.has(p.id)));
+    // 加盟门槛未满足（随队场数 / 入队转会回合）/ 抽卡新秀转售冷却中的选手不被求购（与挂牌、普通随机求购同口径，listingRules.resaleLocked）
+    const roster = rng.shuffle(regular(state, team.id).filter((p) => !p.transferListing && !pending.has(p.id) && !resaleLocked(state, p)));
     let offers = 0;
     for (const p of roster) {
       if (offers >= c.humanMaxOffers) break;
@@ -1156,7 +1158,7 @@ function missionOffersToHumans(w: World, report: ShuffleReport): void {
     let sent = false;
     for (const p of regular(state, team.id)) {
       if (sent) break;
-      if (p.transferListing || pending.has(p.id)) continue;
+      if (p.transferListing || pending.has(p.id) || resaleLocked(state, p)) continue;
       for (const org of peakOrgsOfPlayer(p.id)) {
         const buyer = orgTeam(state, org);
         if (!buyer || buyer.id === team.id || !w.ctxs.has(buyer.id) || !missionInEffect(state, buyer.id)) continue;

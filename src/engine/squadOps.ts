@@ -15,8 +15,8 @@ import { addFinance, econ, roundWageBill } from './economy';
 import { createTransferOffer, departToFreeAgency, isTransferWindowOpen, playerTeamOrNull, roundFee } from './market';
 import { SALARY_MOOD_LABEL, raiseGapMultiplier, salaryGap, salaryMoodOf, type SalaryMood } from './salary';
 import {
-  LISTING_RULE_VERSION, gachaResaleLockText, listingClock, listingDurationLabel, listingDurationRounds, listingProgress,
-  listingRoundsPerSeason,
+  LISTING_RULE_VERSION, listingClock, listingDurationLabel, listingDurationRounds, listingProgress,
+  listingRoundsPerSeason, resaleLockText,
 } from './listingRules';
 
 // ---------------------------------------------------------------------------
@@ -257,9 +257,13 @@ export function teamBuilding(state: GameState): OpResult {
 // 挂牌期规则（整赛季挂牌）的纯函数在 listingRules.ts（market 的合同到期提示也要用，避免循环引用），这里转出
 export {
   LISTING_RULE_VERSION, listingRoundsPerSeason, listingDurationRounds, listingDurationLabel, listingProgress, listingClock,
-  listingListedAtLabel, gachaResaleLockLeft, gachaResaleLockText,
+  listingListedAtLabel, gachaResaleLockLeft, gachaResaleLockText, gachaResaleLockBrief, gachaResaleHoldRounds,
+  listingMinTeamMatches, teamSeriesCount, teamMatchesSinceJoin, listingMatchLockLeft,
+  listingMinTransferRounds, transferRoundsSinceJoin, listingRoundLockLeft,
+  listingJoinLock, listingJoinLocked, listingJoinLockText, listingJoinLockTitle, listingJoinLockBrief, gachaListingRuleText,
+  resaleLockText, resaleLocked,
 } from './listingRules';
-export type { ListingProgress } from './listingRules';
+export type { ListingProgress, ListingJoinLock } from './listingRules';
 
 /** 旧存档的挂牌迁移到整赛季挂牌期（幂等、确定性、不消耗随机数）；返回是否有改动 */
 export function migrateListing(L: TransferListing | null | undefined): boolean {
@@ -357,7 +361,9 @@ export function listingOffers(state: GameState, playerId: string): TransferOffer
 
 /**
  * 挂牌：选手进入转会名单，等待 AI 俱乐部报价（标价默认 = 身价，允许身价 50%~200%）。
- * 需转会窗口开放；临时替补不可挂牌；同一选手不可重复挂牌。
+ * 需转会窗口开放；临时替补不可挂牌；同一选手不可重复挂牌；加盟后随队不满 CONFIG.squadOps.listingMinTeamMatches 场
+ * （【用户指定】10 场系列赛，不要求本人上场）或入队不满 CONFIG.squadOps.listingMinTransferRounds 个转会回合（【用户指定】6 个，
+ * 两个条件都要满足），或抽卡新秀转售冷却中，不可挂牌（listingRules.resaleLockText）。
  */
 export function listPlayerForTransfer(state: GameState, playerId: string, askingPrice?: number | null): OpResult {
   const ctx = ownRegularPlayer(state, playerId);
@@ -365,7 +371,7 @@ export function listPlayerForTransfer(state: GameState, playerId: string, asking
   const { team, p } = ctx;
   if (!isTransferWindowOpen(state)) return { ok: false, message: '转会窗口已关闭（TI 预选与正赛期间锁定），暂时无法挂牌' };
   if (activeListing(state, p)) return { ok: false, message: `${p.handle} 已在挂牌名单中` };
-  const resale = gachaResaleLockText(state, p);
+  const resale = resaleLockText(state, p);
   if (resale) return { ok: false, message: resale };
 
   const mv = Math.max(0, marketValue(state, p));
@@ -429,7 +435,7 @@ function relistCarriedRolls(state: GameState, p: Player): number {
   return elapsed >= 0 && elapsed < window ? Math.max(0, Math.floor(memo.rolls)) : 0;
 }
 
-/** 批量挂牌（标价 = 各自身价），汇总结果（任一成功即 ok） */
+/** 批量挂牌（标价 = 各自身价），汇总结果（任一成功即 ok）；不能挂牌的选手跳过并逐人写明原因 */
 export function listPlayersForTransfer(state: GameState, playerIds: string[]): OpResult {
   const ids = Array.isArray(playerIds) ? playerIds.filter((x): x is string => typeof x === 'string') : [];
   const done: string[] = [];
@@ -439,11 +445,13 @@ export function listPlayersForTransfer(state: GameState, playerIds: string[]): O
     if (!p) continue;
     const r = listPlayerForTransfer(state, id);
     if (r.ok) done.push(p.handle);
-    else failed.push(`${p.handle}（${r.message}）`);
+    else failed.push(r.message.startsWith(p.handle) ? r.message : `${p.handle}：${r.message}`);
   }
-  if (!done.length) return { ok: false, message: failed.length ? `挂牌失败：${failed.join('；')}` : '未选择选手' };
+  if (!done.length) {
+    return { ok: false, message: failed.length ? `挂牌失败（${failed.length} 人）：${failed.join('；')}` : '未选择选手' };
+  }
   let message = `已挂牌 ${done.length} 人：${done.join('、')}（标价 = 身价）。挂牌期为${listingDurationLabel()}，期满仍未收到任何报价将自动解约（不支付补偿）。`;
-  if (failed.length) message += `\n未能挂牌：${failed.join('；')}`;
+  if (failed.length) message += `\n跳过 ${failed.length} 人：${failed.join('；')}`;
   return { ok: true, message };
 }
 

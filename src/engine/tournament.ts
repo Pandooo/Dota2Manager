@@ -26,6 +26,7 @@ import { addNews, pushPopup } from './news';
 import { reportTiGroupStage, reportTournamentResult, reportTournamentUpsets } from './newsroom';
 import { activeHumanIds, humanTeamIds, isMultiplayer, withSeat } from './seat';
 import { recordPrizeSplit, recordSeriesStats, recordTournamentStats } from './stats';
+import { teamSeriesCount } from './listingRules';
 
 // ===========================================================================
 // 通用小工具
@@ -807,6 +808,11 @@ export function recordSeriesResult(state: GameState, tournamentId: string, serie
   const res: SeriesResult = { winnerId, loserId, scoreA, scoreB, games: keepFull ? games : games.map(compactGame) };
   if (result.forfeit === 'A' || result.forfeit === 'B') res.forfeit = result.forfeit;
   s.result = res;
+  // 随队场数（挂牌门槛 CONFIG.squadOps.listingMinTeamMatches，listingRules.teamMatchesSinceJoin）：双方各计一场（含 Bo2 平局与弃权）
+  for (const id of [s.teamA, s.teamB]) {
+    const tm = ownEntry(state.teams, id);
+    if (tm) tm.seriesCount = teamSeriesCount(tm) + 1;
+  }
 
   if (stage?.type === 'groups') updateStandings(stage, s, res, isDraw);
   recordSeriesStats(state, t, s, res, isDraw); // DotaPedia：系列赛胜平负（stats.ts）

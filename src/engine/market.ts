@@ -5,7 +5,7 @@ import { CONFIG, POSITION_LABEL } from './config';
 import { rngOf, seededRng, hashSeed, type Rng } from './rng';
 import { clamp, formatGold, lerp, nextId, ownEntry, sigmoid } from './util';
 import { addNews } from './news';
-import { gachaResaleLockLeft, listingClock, listingProgress } from './listingRules';
+import { listingClock, listingProgress, resaleLocked } from './listingRules';
 import {
   computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex,
 } from './player';
@@ -607,8 +607,9 @@ export function generateAiOffers(state: GameState): void {
   if (!team) return;
   const rng = rngOf(state);
   const pending = new Set(state.transferOffers.filter((o) => o.status === 'pending').map((o) => o.playerId));
-  // 抽卡新秀转售冷却期内不接随机求购（CONFIG.gacha.resaleHoldRounds）
-  const cands = regularRoster(state, team.id).filter((p) => !isTempOrWild(p) && !pending.has(p.id) && !gachaResaleLockLeft(state, p));
+  // 不接随机求购：加盟门槛未满足（随队场数 CONFIG.squadOps.listingMinTeamMatches / 入队转会回合 listingMinTransferRounds）、
+  // 抽卡新秀转售冷却期内（CONFIG.gacha.resaleHoldRounds）——与挂牌同口径（listingRules.resaleLocked）
+  const cands = regularRoster(state, team.id).filter((p) => !isTempOrWild(p) && !pending.has(p.id) && !resaleLocked(state, p));
   const gaps = cands.map((p) => Math.max(0, salaryGap(state, p)));
   const maxGap = gaps.reduce((m, g) => Math.max(m, g), 0);
   if (!rng.chance(aiOfferChance(CONFIG.market.aiOfferChancePerRound, maxGap))) return;

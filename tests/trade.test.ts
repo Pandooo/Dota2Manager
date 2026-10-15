@@ -352,6 +352,11 @@ describe('trade · 成交', () => {
     fa.freeAgentSignedClock = at - (T.freeAgentHoldRounds - 1);
     expect(tradeValuation(s, 't1-M', [fa.id]).items[0].factor).toBe(T.freeAgentSignedCap);
     fa.freeAgentSignedClock = at - T.freeAgentHoldRounds;
+    // v0.3.1：未满足挂牌的加盟门槛（随队场数 / 入队转会回合）时同样按签字费估值（见 tests/listingLock.test.ts），这里让两项也满足
+    expect(fa.joinedTeamClock).toBe(at);
+    fa.joinedTeamClock = at - T.freeAgentHoldRounds; // 与 freeAgentSignedClock 同一时刻签下
+    expect(tradeValuation(s, 't1-M', [fa.id]).items[0].factor).toBe(T.freeAgentSignedCap);
+    s.teams.t0.seriesCount = (s.teams.t0.seriesCount ?? 0) + CONFIG.squadOps.listingMinTeamMatches;
     const free = tradeValuation(s, 't1-M', [fa.id]).items[0];
     expect(free.factor).toBeGreaterThan(T.freeAgentSignedCap);
     expect(free.notes.join('')).not.toContain('自由市场');

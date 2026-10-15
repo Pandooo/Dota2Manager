@@ -180,13 +180,15 @@ systemd 单元以 `ProtectSystem=strict` 运行，只有 `/opt/dota2manager-data
 ### 查看在线人数（服务器上）
 
 ```bash
-curl -s http://127.0.0.1:8686/api/status                 # 当前在线、大厅 / 房间 / 对局中人数、房间数、峰值、运行时长、今天的汇总
+curl -s http://127.0.0.1:8686/api/status                 # 当前在线、大厅 / 房间 / 对局中人数、房间数、峰值、运行时长、今天的汇总（只允许服务器本机访问）
 journalctl -u dota2manager | grep 在线                     # 每 10 分钟一行（只在有变化时）+ 创新高 + 每天零点的前一天汇总
 journalctl -u dota2manager --since today | grep 在线
 cat /opt/dota2manager-data/stats/online-$(date +%Y-%m).jsonl   # 每日汇总（每天一行；同一日期以最后一行为准）
 ```
 
-在本机看也可以先 `ssh -L 8686:127.0.0.1:8686 root@你的服务器` 再打开 `http://127.0.0.1:8686/api/status`（`/api/status` 只有数字，对外开放也不会泄露玩家信息）。
+`/api/status` **只回答服务器本机的请求**（v0.3.1，用户决策 2026-10-15）：必须在服务器上用 `curl -s http://127.0.0.1:8686/api/status` 查询，从外网访问 `http://<公网 IP>:8686/api/status` 回复 403
+`{"ok":false,"error":"在线统计只允许在服务器本机访问"}`。想在自己电脑的浏览器里看，可以先 `ssh -L 8686:127.0.0.1:8686 root@你的服务器`，再打开 `http://127.0.0.1:8686/api/status`
+（经 SSH 隧道的请求在服务器上来自 127.0.0.1，算本机）。大厅显示给所有人的在线人数（WebSocket `serverStats` 推送与 `/api/info` 的 `online / inGame / playing`）不受影响。
 
 ## 14. 公网服务器：在线统计与内网地址（2026-10-14）
 用户需求：「在计划中增加当前在线人数统计，用于远端服务上查看支持了多少玩家在线玩。」「多人模式开始时取消对局域网ip暴露，因为已经上服务器了，不安全。」
@@ -194,7 +196,12 @@ cat /opt/dota2manager-data/stats/online-$(date +%Y-%m).jsonl   # 每日汇总（
 ### 在线统计（`server/stats.ts`）
 - **口径**（`RoomManager.onlineCounts`，只有数字）：`connections` WebSocket 连接数（含尚未 hello 的）；`online` 在线玩家（不同会话，同一浏览器多标签被顶替时只算一个，`?as=` 测试身份各算一个）；`inLobby` 在大厅；`inRoom` 在房间座位上（等待中 / 进行中 / 已结束的房间）；`inGame` 其中在进行中对局里的；`rooms.total / waiting / playing / active / finished`（`active` = 进行中且至少一名玩家在线的对局，`playing` 含暂时无人在线、仍保留的对局）。
 - **峰值**：自启动以来的同时在线峰值与时间、对局中玩家峰值（`peak`）；当天的峰值见 `today`。
-- **`GET /api/status`**：`{ ok, time, startedAt, uptimeSec, uptimeText, connections, online, inLobby, inRoom, inGame, rooms, peak, today, sinceStart }`，只有人数与时间，不含昵称、会话 ID、IP；`Cache-Control: no-store`。`/healthz` 字段保持不变（向后兼容）；`/api/info` 另附 `online / inGame / playing`。
+- **`GET /api/status`**：`{ ok, time, startedAt, uptimeSec, uptimeText, connections, online, inLobby, inRoom, inGame, rooms, peak, today, sinceStart }`，只有人数与时间，不含昵称、会话 ID、IP；`Cache-Control: no-store`。`/healthz` 字段保持不变（向后兼容）；`/api/info` 另附 `online / inGame / playing`（与大厅显示给所有人的数字相同；峰值、每日汇总、运行时长等详细统计只在 `/api/status`）。
+- **只允许服务器本机访问**（v0.3.1，用户决策 2026-10-15「/api/status 只允许服务器本机访问」；`server/net.ts` 的 `isLoopbackRequest`）：只回答套接字对端地址为回环地址（127.0.0.0/8、`::1`、`::ffff:127.x.x.x`）的请求，
+  其他一律 403 + `{"ok":false,"error":"在线统计只允许在服务器本机访问"}`（HEAD 同样 403、无正文）。局域网内的其他电脑不算本机。**不信任转发头**：`X-Forwarded-For` / `X-Real-IP` / `Forwarded: for=` 不能让请求变成「本机」
+  （直接对外监听时伪造这些头没有任何作用，套接字地址就不是回环；`--trust-proxy` 也不改变这一点）；反过来，套接字是回环、但转发头里声明了非回环来源的请求（本机 nginx 等反向代理转发的外部请求）同样拒绝。
+  在反向代理后面部署时，代理须照常附带 `X-Forwarded-For`（nginx 的 `proxy_add_x_forwarded_for`），否则外部请求在服务器看来都来自本机；也可以干脆不把 `/api/status` 转发出去。
+  `/healthz`、`/api/info` 与 WebSocket 的 `serverStats` 推送不变。
 - **推送给客户端**：可选消息 `{ t: 'serverStats', online, inGame, rooms, playing }`（`rooms` = 等待中 + 进行中的房间，`playing` = 有人在线的进行中对局）。hello 后立即发一次；之后在人数 / 房间变化时推送给所有已 hello 的连接，**至多每 2 秒一次、内容不变不发**（同一连接收到过相同内容也不再发）。旧客户端忽略该消息，旧服务器不发送时客户端不显示统计，协议版本不变（v2）。
 - **界面**：大厅「服务器」卡片在连接状态下方显示「当前在线 N 人 · 对局中 M 局 · 房间 R 个」（悬停说明口径）；房间页顶栏显示「在线 N 人」（手机宽度 < 640px 时隐藏，保证房间码与连接状态不被挤出；
   同时「‹ 离开房间」缩为「‹ 离开」、房间码字距收窄。大厅顶栏的按钮 / 标题 / 连接状态不换行，服务器名与「玩家」字样在手机宽度隐藏；公网模式不显示 `?as=` 多开测试提示）。
@@ -206,7 +213,8 @@ cat /opt/dota2manager-data/stats/online-$(date +%Y-%m).jsonl   # 每日汇总（
 - **非公网模式**也只把局域网地址发给来自局域网的连接（`server/net.ts` 的 `isPrivateOrigin`）：套接字对端地址必须是回环 / 私有 / 链路本地地址（127/8、10/8、172.16/12、192.168/16、169.254/16、::1、fc00::/7、fe80::/10 及其 IPv4 映射写法），并且请求头声明的每个转发来源（`X-Forwarded-For` / `X-Real-IP` / `Forwarded: for=`）也都是——转发头可被伪造，不能单独把公网连接变成内网；在本机反向代理后面时，代理带上的公网来源会让连接按公网处理。无法识别的来源一律按公网处理。
 - **错误信息**：公网模式下，引擎 / 服务器异常发给客户端前经 `publicSafeErrorText` 过滤（引擎把异常包装成失败结果的情况见 §15）：只有明显是给玩家看的中文提示（如「英雄不可选：帕克」）原样保留；含文件路径、调用栈、`ENOENT:` 等系统错误码、URL、源文件名、多行或不含中文（多为 TypeError 等程序异常）的一律改为「服务器内部错误，请稍后再试」，完整信息只写服务器日志。涉及：消息处理异常、开局失败、RPC 抛出异常、准备 / 推进回合异常、生成视图失败。局域网模式保留详细信息便于房主排查。其他下发内容复核：服务器名称默认「刀塔经理服务器」（不用主机名）；`/healthz` / `/api/info` / `/api/status` 只有计数；静态托管的错误页不含路径；房间信息只含座位键（§13）。
 - **客户端**：`mp.serverMode`（`unknown` / `lan` / `public`，来自 welcome）与 `mp.serverStats`。没有局域网地址时，「邀请朋友打开」显示当前页面地址（`window.location.origin`；手动连接了其他服务器时为该服务器的网页地址）并带复制按钮。公网模式下大厅标题为「多人对战」，服务器卡片、手动地址提示、未连接提示、「怎么开局」改为中性说明（「把本页地址发给朋友，进入「多人对战」后用房间码加入」），房间页「邀请朋友」同样；局域网模式保留原来的房主 / 局域网说明。断线遮罩与「离开对局」对话框在公网模式下不提「房主的服务器」。主菜单入口改为「多人对战」（说明「与朋友在线或在局域网同场竞技」），因为进入大厅前还不知道服务器类型。
-- **验证**：`tests/serverStats.test.ts`（地址判断与转发头、错误过滤、连接 / 加入 / 离开 / 断线 / 开局时的人数与峰值、`/api/status` 不含会话 ID / 昵称 / IP、推送节流与去重、日志、每日汇总文件与重启续计、换日与跨月、公网模式不发局域网地址、局域网来源过滤、公网模式错误过滤）；`tests/mpClient.test.ts`（welcome 区分服务器类型、serverStats 写入 store）；`scripts/mp-e2e.ts` 检查开局后收到对局中人数推送与 `/api/status`。
+- **验证**：`tests/serverStats.test.ts`（地址判断与转发头、错误过滤、连接 / 加入 / 离开 / 断线 / 开局时的人数与峰值、`/api/status` 不含会话 ID / 昵称 / IP、推送节流与去重、日志、每日汇总文件与重启续计、换日与跨月、公网模式不发局域网地址、局域网来源过滤、公网模式错误过滤；
+  v0.3.1：回环地址判断、本机 200、带外部转发来源 403（含 `--trust-proxy`、HEAD、查询串）、从本机非回环网卡发起的真实请求 403 且伪造 `X-Forwarded-For: 127.0.0.1` 无效（没有可用网卡时跳过这一项）、`/healthz` 与 `/api/info` 字段不变且不含峰值 / 每日汇总）；`tests/mpClient.test.ts`（welcome 区分服务器类型、serverStats 写入 store）；`scripts/mp-e2e.ts` 检查开局后收到对局中人数推送与 `/api/status`。
 
 ## 15. 公网服务器的防护（v0.3 审查修复，2026-10-14）
 审查用一次性服务器（`--public --no-save`）实测：单个客户端能占满全部 256 个连接（之后所有人 503）、64 个「开局后立即离开」的对局 3.6 秒占满全部房间位且要 14 天才释放、
@@ -230,4 +238,4 @@ cat /opt/dota2manager-data/stats/online-$(date +%Y-%m).jsonl   # 每日汇总（
 - **验证**：`tests/serverLimits.test.ts`（来源地址解析、连接数 429 与断开后恢复、本机默认不受限、等待中房间与每小时开局上限、房间位清理与关闭开关、聊天限速、公网模式过滤包装的异常、
   谈判密钥写入与视图清空、抽卡前混入随机数）；`tests/gachaReview.test.ts`（引擎：视图不含 `rngState` / 密钥 / 他队保底，谈判骰子随密钥改变）；
   `scripts/mp-e2e.ts` 检查真实服务器下发的视图不含随机数状态与密钥，抢签用例改用服务器端状态挑「双方都会被接受」的目标（客户端已无法预测）。
-- **仍开放**：房间列表对所有人列出等待中的房间与房间码（陌生人可以加入朋友的房间），是否增加「私密房间」由用户决定（ROADMAP v0.3.0）。
+- **房间列表**：对所有人列出等待中的房间与房间码（陌生人可以加入朋友的房间）；「私密房间」用户 2026-10-15 决定暂不需要（ROADMAP v0.3.1）。

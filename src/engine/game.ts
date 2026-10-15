@@ -13,7 +13,7 @@ import { advanceTournamentUntilPlayer, isTeamEliminated, playerNextSeries, recor
 import { getPlayerIndex, loadRoster } from '../data/index';
 import { aiEnsureRosters } from './ai';
 import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './generation';
-import { addPlayerToTeam, autoLineup, lineupPlayers, rosterOverCapNotice, validateLineup } from './team';
+import { addPlayerToTeam, autoLineup, clearFoundingJoinMarks, lineupPlayers, rosterOverCapNotice, validateLineup } from './team';
 import {
   addFinance, extraTrainingCost, newClubStartingFunds, scrimCost, seedTeamStartingFunds,
 } from './economy';
@@ -336,6 +336,8 @@ export async function createNewGame(opts: NewGameOptions): Promise<GameState> {
   autoLineup(state, playerTeamId);
   // 接管真实俱乐部：工资对齐到隐藏的预期薪资附近（数据工资不含荣誉 / 明星系数，第八波平衡）
   if (!opts.newClub) alignInitialSalaries(state, playerTeamId);
+  // 开局阵容不受挂牌的加盟门槛限制（随队场数与入队转会回合的起点都清除；之后任何途径加盟的选手从 0 开始计）
+  clearFoundingJoinMarks(state);
 
   startSeason(state, startTi);
 

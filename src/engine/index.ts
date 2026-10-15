@@ -49,7 +49,7 @@ export {
   signingFee, aiAcceptChance, importanceInTeam,
 } from './market';
 // 选手交易（现金 + 本队选手抵价求购；玩家操作 tradeForPlayer 为白名单 RPC，tradeValuation / tradeQuote 为界面只读估值）
-export { tradeForPlayer, tradeValuation, tradeQuote, tradeOfferBlock } from './trade';
+export { tradeForPlayer, tradeValuation, tradeQuote, tradeOfferBlock, tradeHoldRoundsLabel } from './trade';
 export type { TradeItem, TradeValuation, TradeQuote } from './trade';
 // 新秀选秀（2026-10-14 起默认关闭：CONFIG.draft.enabled；保留一个版本供旧存档查看往届选秀）
 export {
@@ -76,9 +76,11 @@ export {
   listPlayerForTransfer, listPlayersForTransfer, unlistPlayer, listingBidOutlook, processTransferListings,
   LISTING_RULE_VERSION, listingRoundsPerSeason, listingDurationRounds, listingDurationLabel, listingProgress, migrateListing,
   migrateTransferListings, listingStaleFactor, listingRoundStatus, listingClock, listingListedAtLabel, gachaResaleLockLeft,
-  gachaResaleLockText,
+  gachaResaleLockText, gachaResaleLockBrief, gachaResaleHoldRounds, listingMinTeamMatches, teamSeriesCount, teamMatchesSinceJoin, listingMatchLockLeft,
+  listingMinTransferRounds, transferRoundsSinceJoin, listingRoundLockLeft, listingJoinLock, listingJoinLocked,
+  listingJoinLockText, listingJoinLockTitle, listingJoinLockBrief, gachaListingRuleText, resaleLockText, resaleLocked,
 } from './squadOps';
-export type { RaisePreview, ListingBidOutlook, ListingProgress, ListingRoundStatus } from './squadOps';
+export type { RaisePreview, ListingBidOutlook, ListingProgress, ListingRoundStatus, ListingJoinLock } from './squadOps';
 // 薪资情绪（只导出定性信息；隐藏的预期薪资数值不在界面展示）
 export {
   SALARY_MOOD_LABEL, OVERALL_MOOD_LABEL, playerSalaryMood, playerMoodSummary, renewalAsk, salaryMoodOf,

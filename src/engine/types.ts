@@ -266,6 +266,18 @@ export interface Player {
    * 旧存档缺失 = 无记录。
    */
   freeAgentSignedClock?: number;
+  /**
+   * 加盟当前战队时该战队的累计系列赛场数（Team.seriesCount；team.addPlayerToTeam 在换队时写入，离队时清除）。
+   * 随队场数 = 战队当前 seriesCount − 此值（不要求本人上场）：随队不满 CONFIG.squadOps.listingMinTeamMatches 场时不能挂牌、
+   * AI 不主动求购（listingRules.listingMatchLockLeft）。缺失 = 无记录（开局阵容 / 旧存档 / 自由选手），视为已满足。
+   */
+  joinedTeamSeries?: number;
+  /**
+   * 加盟当前战队时的转会回合时钟（listingRules.listingClock；team.addPlayerToTeam 在换队时写入，离队时清除，只记人类战队）。
+   * 入队转会回合数 = 当前时钟 − 此值：不满 CONFIG.squadOps.listingMinTransferRounds 时不能挂牌、AI 不主动求购（listingRules.listingRoundLockLeft）。
+   * 缺失 = 无记录（开局阵容 / 旧存档 / 自由选手），视为已满足。
+   */
+  joinedTeamClock?: number;
   /** 最近一次加薪的赛季（TI 序号）：每名选手每赛季最多加薪一次（squadOps.raiseSalary） */
   lastRaiseSeason?: number;
   /** 最近一次一对一谈心的回合键（赛季 × 100 + 回合，squadOps.squadRoundKey）：每回合最多一次 */
@@ -658,6 +670,11 @@ export interface Team {
   momentum?: TeamMomentum;
   /** 新秀抽卡计数（gacha.ts：SSR 保底、累计 / 本赛季张数、人类玩家本赛季记录）；旧存档缺失 = 未抽过 */
   gacha?: TeamGachaState;
+  /**
+   * 累计完成的系列赛场数（任何赛事，含 TI 预选 / TI、Bo2 平局与弃权；tournament.recordSeriesResult 计数，人机共用）。
+   * 只用于「随队场数」（Player.joinedTeamSeries）；旧存档缺失 = 0（从读档后开始累计）
+   */
+  seriesCount?: number;
 }
 
 /**

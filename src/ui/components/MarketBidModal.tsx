@@ -5,7 +5,7 @@ import { useCall, useGame } from '../../store/gameStore';
 import {
   CONFIG, ageOf, effectiveAttr, effectivePower, formatGold, marketValue, overallRating, playerTier,
   playerWillingness, rosterSigningBlock, rosterSigningNote, signingSalary, suggestedFee, REGION_LABEL,
-  teamPlayers, tradeQuote, tradeValuation,
+  teamPlayers, tradeHoldRoundsLabel, tradeQuote, tradeValuation,
   type OpResult, type Player, type TradeItem,
 } from '../../engine';
 import { Button, Gold, Modal, PosBadge, TeamTag, TierBadge, cx } from './common';
@@ -356,7 +356,7 @@ export default function MarketBidModal({
           {showTradeList && (
             <>
               <div className="mt-2 text-[11px] leading-relaxed text-faint">
-                {owner?.name ?? '对方'} 按「身价 × 系数」接收抵价选手：基础 {T.baseRatio}；对方缺该位置或能顶替其首发时溢价（最高 {T.ratioRange[1]}），位置重叠、年龄偏大、等级低于其首发时折价（最低 {T.ratioRange[0]}）；不愿加盟对方的选手会被拒收；刚从自由市场签下（不满 {T.freeAgentHoldRounds} 个转会回合）的选手与本队抽卡得到的新秀（入队不满 {CONFIG.gacha.resaleHoldRounds} 个转会回合）按签字费估值（身价 × {T.freeAgentSignedCap}）。
+                {owner?.name ?? '对方'} 按「身价 × 系数」接收抵价选手：基础 {T.baseRatio}；对方缺该位置或能顶替其首发时溢价（最高 {T.ratioRange[1]}），位置重叠、年龄偏大、等级低于其首发时折价（最低 {T.ratioRange[0]}）；不愿加盟对方的选手会被拒收；刚从自由市场签下（入队不满 {tradeHoldRoundsLabel('freeAgent')} 个转会回合或随队不满 {CONFIG.squadOps.listingMinTeamMatches} 场比赛）的选手与本队抽卡得到的新秀（入队不满 {tradeHoldRoundsLabel('gacha')} 个转会回合或随队不满 {CONFIG.squadOps.listingMinTeamMatches} 场比赛）按签字费估值（身价 × {T.freeAgentSignedCap}）。
                 {freeSlots < T.maxPlayers && maxIncoming > freeSlots &&
                   `${owner?.name ?? '对方'} 阵容接近上限（${CONFIG.ai.maxRoster} 人）：${freeSlots > 0 ? `接收超过 ${freeSlots} 名时` : '每接收 1 名都'}会放走替补腾位置（不放首发）。`}
                 {maxIncoming < T.maxPlayers && `${owner?.name ?? '对方'} 目前最多只能接收 ${maxIncoming} 名选手。`}

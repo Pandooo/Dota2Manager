@@ -6,7 +6,8 @@ import {
   getCoach, getPlayerTeam, marketValue, overallRating, playerRating, playerTier, rankTeamsByRating,
   rosterRoom, roundWageBill, teamInsight, teamRating, validateLineup, releaseCompensation,
   isTransferWindowOpen, formatGold, activeListing, listingDurationLabel, listingProgress, teamBuildingCost,
-  teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood, ROLE_FIT_LABEL, roleFit, roleFitFactor, gachaResaleLockLeft,
+  teamBuildingDoneThisRound, SALARY_MOOD_LABEL, playerSalaryMood, ROLE_FIT_LABEL, roleFit, roleFitFactor, gachaResaleLockBrief,
+  listingJoinLockBrief, listingJoinLockTitle,
 } from '../../engine';
 import type { GameState, Player, Position, RoleFit, SalaryMood, Team, Tournament } from '../../engine';
 import {
@@ -186,9 +187,25 @@ export default function Squad() {
     });
 
   // ---- 批量挂牌（标价 = 身价）----
-  // 已在挂牌中的、抽卡新秀转售冷却期内的（入队不满一个赛季）不能挂牌
-  const resaleLocked = selectedPlayers.filter((p) => safe(() => gachaResaleLockLeft(game, p), 0) > 0);
-  const listable = selectedPlayers.filter((p) => !safe(() => activeListing(game, p), null) && !resaleLocked.includes(p));
+  // 跳过（逐人写明原因）：已在挂牌中、加盟门槛未满足（【用户指定】随队满 N 场比赛且入队满 M 个转会回合）、抽卡新秀转售冷却期内（入队不满一个赛季）；
+  // 抽卡新秀的入队转会回合按冷却报（「入队 5 / 18 个转会回合（抽卡新秀）」），门槛满足前后同一读数
+  const listSkipReason = (p: Player): string | null => {
+    if (safe(() => activeListing(game, p), null)) return '已在挂牌中';
+    const joinLock = safe<string | null>(() => listingJoinLockBrief(game, p), null);
+    if (joinLock) return joinLock;
+    const gachaLock = safe<string | null>(() => gachaResaleLockBrief(game, p), null);
+    if (gachaLock) return gachaLock;
+    return null;
+  };
+  const listSkipped = selectedPlayers
+    .map((p) => ({ p, reason: listSkipReason(p) }))
+    .filter((x): x is { p: Player; reason: string } => !!x.reason);
+  const listable = selectedPlayers.filter((p) => !listSkipped.some((x) => x.p === p));
+  const skippedText = listSkipped.map((x) => `${x.p.handle}（${x.reason}）`).join('；');
+  // 全部不能挂牌时的按钮提示：只选了一人且是加盟门槛未满足 → 与选手详情相同的说法「随队满 10 场且入队满 6 个转会回合后可挂牌（已随队 N 场、入队 M 个转会回合）」
+  const singleMatchLock = selectedPlayers.length === 1 && listSkipped.length === 1
+    ? safe<string | null>(() => listingJoinLockTitle(game, selectedPlayers[0]), null)
+    : null;
 
   // ---- 团建 ----
   const tbCost = safe(() => teamBuildingCost(game), CONFIG.squadOps.teamBuildingCost);
@@ -403,10 +420,9 @@ export default function Squad() {
                     !windowOpen
                       ? '转会窗口已锁定（TI 阶段），无法挂牌'
                       : listable.length === 0
-                        ? resaleLocked.length
-                          ? `选中的选手已在挂牌中，或是入队不满 ${CONFIG.gacha.resaleHoldRounds} 个转会回合的抽卡新秀（${resaleLocked.map((p) => p.handle).join('、')}），暂不能挂牌`
-                          : '选中的选手均已在挂牌中'
+                        ? singleMatchLock ?? `选中的选手暂不能挂牌：${skippedText}`
                         : `将选中的选手按身价挂牌出售（挂牌期为${safe(() => listingDurationLabel(), '一整个赛季')}，整个挂牌期没有收到任何报价则自动解约，无补偿）`
+                          + (listSkipped.length ? `；跳过 ${listSkipped.length} 人：${skippedText}` : '')
                   }
                   confirm={{
                     title: `批量挂牌（${listable.length} 人）`,
@@ -421,6 +437,11 @@ export default function Squad() {
                             </>
                           )}
                         />
+                        {listSkipped.length > 0 && (
+                          <span className="mt-1.5 block text-gold">
+                            跳过 {listSkipped.length} 人：{skippedText}
+                          </span>
+                        )}
                         <span className="mt-1.5 block">
                           标价 = 身价。挂牌期为{safe(() => listingDurationLabel(), '一整个赛季')}，期间报价在「转会市场 → 我的挂牌」处理；
                           整个挂牌期没有收到任何报价则自动解约（无补偿、不扣荣誉），收到过报价则期满后挂牌结束、选手留队。自定义标价请在选手详情中单独挂牌。
@@ -429,7 +450,8 @@ export default function Squad() {
                     ),
                   }}
                   onConfirm={() => {
-                    void call('listPlayersForTransfer', listable.map((p) => p.id));
+                    // 提交全部选中的选手：引擎逐人复核，跳过的选手与原因写在结果提示里（「跳过 N 人：……」）
+                    void call('listPlayersForTransfer', selectedPlayers.map((p) => p.id));
                     setSelected(new Set());
                   }}
                 >

@@ -8,8 +8,9 @@
 //     只能当替补（位置重叠） → 折价（overlapMult）；超过所打位置的巅峰年龄 → 折价；天梯等级低于该位置首发 → 折价。
 //     对方首发被首发优先级锁定（使命 / 巅峰选手，lineupPriority）时视为位置重叠。同一位置的第二名抵价选手与前一名比较。
 //     意愿：抵价选手对卖方的加盟意愿低于 minWillingness → 卖方拒收（失败原因点名该选手）；否则按意愿线性折价。
-//     刚从自由市场签下的选手（Player.freeAgentSignedClock，不满 freeAgentHoldRounds 个转会回合）：系数最多 freeAgentSignedCap
-//     （= 签字费比例），「签自由选手 → 立即抵价」无利可图。
+//     刚从自由市场签下的选手（Player.freeAgentSignedClock，不满 freeAgentHoldRounds 个转会回合，或未满足挂牌的加盟门槛——
+//     随队 CONFIG.squadOps.listingMinTeamMatches 场 / 入队 listingMinTransferRounds 个转会回合）：系数最多 freeAgentSignedCap（= 签字费比例），
+//     「签自由选手 → 立即抵价」无利可图。本队抽卡得到的新秀（抽卡转售冷却 CONFIG.gacha.resaleHoldRounds 未满，或未满足加盟门槛，与挂牌同口径）同样封顶。
 // - 报价总额 = 现金 + Σ 估值；对方接受概率沿用 market.aiAcceptChance（fee := 总额）；目标选手加盟意愿照旧另判。
 //   谈判骰子与 bidForPlayer 同一组盐值：同一回合里现金报价与交易报价掷的是同一枚骰子（不能靠切换方式刷概率）。
 // - 卖方限制：一次最多 maxPlayers 名；卖方阵容在目标离队后超过 CONFIG.ai.maxRoster 时，同回合放走保留价值最低的替补
@@ -36,7 +37,7 @@ import { syncSynergies } from './synergy';
 import { aiKeepValue } from './rookieDraft';
 import { aiLineupPriority, lineupPriorityLocks } from './lineupPriority';
 import { isMissionPlayerOf } from './missions';
-import { gachaResaleLockLeft, listingClock } from './listingRules';
+import { gachaResaleLockLeft, listingClock, listingJoinLocked, listingMinTeamMatches, listingMinTransferRounds } from './listingRules';
 import { signingSalary } from './salary';
 import {
   aiAcceptChance, bidForPlayer, contractLength, departToFreeAgency, executeTransfer, fillRosterFromMarket, isHighProfile,
@@ -145,10 +146,34 @@ export function tradeOfferBlock(state: GameState, p: Player | null | undefined, 
   return null;
 }
 
-/** 刚从自由市场签下：signFreeAgent 记下的转会回合时钟距今不满 freeAgentHoldRounds（离队时记录清除） */
+/**
+ * 刚从自由市场签下：signFreeAgent 记下的转会回合时钟距今不满 freeAgentHoldRounds，或未满足挂牌的加盟门槛
+ * （随队 CONFIG.squadOps.listingMinTeamMatches 场 / 入队 listingMinTransferRounds 个转会回合，与挂牌同一计数；2026-10-15）
+ * ——任一成立即按签字费估值（离队时记录清除）。入队转会回合与 freeAgentHoldRounds 同一时钟、同一起点，18 ≥ 6 时实际由 18 回合决定。
+ */
 function freshFreeAgentSigning(state: GameState, p: Player): boolean {
   const at = p.freeAgentSignedClock;
-  return typeof at === 'number' && Number.isFinite(at) && listingClock(state) - at < CONFIG.market.trade.freeAgentHoldRounds;
+  if (typeof at !== 'number' || !Number.isFinite(at)) return false;
+  return listingClock(state) - at < CONFIG.market.trade.freeAgentHoldRounds || listingJoinLocked(state, p);
+}
+
+/**
+ * 本队抽卡得到的新秀仍受转售限制（与挂牌同口径）：入队不满 gacha.resaleHoldRounds 个转会回合，或未满足挂牌的加盟门槛
+ * （随队场数 / 入队转会回合）——任一成立即按签字费估值。只看抽中他的战队（离队后不再受限）。
+ */
+function gachaRookieResaleLocked(state: GameState, p: Player): boolean {
+  if (gachaResaleLockLeft(state, p) > 0) return true;
+  return !!p.gacha && !!p.teamId && p.gacha.teamId === p.teamId && listingJoinLocked(state, p);
+}
+
+/**
+ * 抵价说明里的「入队不满 N 个转会回合」：持有期与加盟门槛的入队转会回合取较长者（默认 18 ≥ 6，即持有期本身）。
+ * kind = 'freeAgent'：刚从自由市场签下（market.trade.freeAgentHoldRounds）；'gacha'：本队抽卡得到的新秀（gacha.resaleHoldRounds）。
+ * 引擎的估值说明与界面的规则文字（报价弹窗、规则说明）共用，配置改动后两边不会对不上。
+ */
+export function tradeHoldRoundsLabel(kind: 'freeAgent' | 'gacha'): number {
+  const hold = kind === 'gacha' ? CONFIG.gacha.resaleHoldRounds : CONFIG.market.trade.freeAgentHoldRounds;
+  return Math.max(Math.floor(Number(hold) || 0), listingMinTransferRounds());
 }
 
 /** 卖方某位置的比较基准（首发 / 目标离队后顶上的替补 / 已接收的抵价选手） */
@@ -333,11 +358,11 @@ export function tradeValuation(state: GameState, targetPlayerId: string, offered
     let factor = ratio * willMult;
     if (freshFreeAgentSigning(state, p) && factor > T.freeAgentSignedCap) {
       factor = T.freeAgentSignedCap;
-      notes.push(`刚从自由市场签下（不满 ${T.freeAgentHoldRounds} 个转会回合），对方按签字费估值（身价 × ${T.freeAgentSignedCap}）`);
-    } else if (gachaResaleLockLeft(state, p) > 0 && factor > T.freeAgentSignedCap) {
-      // 抽卡新秀转售冷却（CONFIG.gacha.resaleHoldRounds）：堵住「抽卡 → 立即抵价」的套利
+      notes.push(`刚从自由市场签下（入队不满 ${tradeHoldRoundsLabel('freeAgent')} 个转会回合或随队不满 ${listingMinTeamMatches()} 场比赛），对方按签字费估值（身价 × ${T.freeAgentSignedCap}）`);
+    } else if (gachaRookieResaleLocked(state, p) && factor > T.freeAgentSignedCap) {
+      // 抽卡新秀转售限制（CONFIG.gacha.resaleHoldRounds / 加盟门槛）：堵住「抽卡 → 立即抵价」的套利
       factor = T.freeAgentSignedCap;
-      notes.push(`本队抽卡得到的新秀（入队不满 ${CONFIG.gacha.resaleHoldRounds} 个转会回合），对方按签字费估值（身价 × ${T.freeAgentSignedCap}）`);
+      notes.push(`本队抽卡得到的新秀（入队不满 ${tradeHoldRoundsLabel('gacha')} 个转会回合或随队不满 ${listingMinTeamMatches()} 场比赛），对方按签字费估值（身价 × ${T.freeAgentSignedCap}）`);
     }
     const value = roundFee(mv * factor);
     items.push({ ...blank, marketValue: mv, slot, ratio, willingness: w, willMult, factor, value, notes });

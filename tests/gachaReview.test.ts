@@ -71,9 +71,12 @@ describe('抽卡新秀：工资上限与转售冷却', () => {
     const id = ids[0];
     const p = s.players[id];
     expect(gachaResaleLockLeft(s, p)).toBe(CONFIG.gacha.resaleHoldRounds);
+    // 加盟门槛（v0.3.1：随队场数 + 入队转会回合）另外叠加：先满足加盟门槛，再看转售冷却
+    s.teams.t0.seriesCount = CONFIG.squadOps.listingMinTeamMatches;
+    p.joinedTeamClock = (p.joinedTeamClock ?? 0) - CONFIG.squadOps.listingMinTransferRounds;
     const listed = listPlayerForTransfer(s, id, null);
     expect(listed.ok).toBe(false);
-    expect(listed.message).toContain('入队满');
+    expect(listed.message).toContain('本队抽卡得到的新秀，入队满');
     // 交易抵价：按签字费比例封顶
     const target = s.teams.t1.playerIds[0];
     const v = tradeValuation(s, target, [id]);

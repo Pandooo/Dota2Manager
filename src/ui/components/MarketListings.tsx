@@ -56,6 +56,7 @@ export default function MarketListings({ windowOpen }: { windowOpen: boolean }) 
         每个常规赛回合结束时计一次（赛季初与 TI 阶段转会锁定期间不计时），挂牌在下赛季的同一时间点到期；常规赛最后一回合结束后转会窗口锁定，那一回合不会再收到新报价，未处理的报价作废。
         前 {S.listingFreshRolls} 次报价机会之后，标价高于身价的挂牌挂得越久，俱乐部的报价意愿越低（标价不高于身价不受影响；撤牌后不久重新挂牌，次数继续累计）。
         若整个挂牌期都没有收到任何报价，到期自动解约成为自由选手——不支付解约补偿、不扣俱乐部荣誉；收到过报价（含普通求购报价）但未成交，则挂牌期满后挂牌结束、选手留队。
+        新加盟的选手（签约、转会、交易、抽卡等任何途径）须随队满 {S.listingMinTeamMatches} 场比赛（系列赛，不要求本人上场）且入队满 {S.listingMinTransferRounds} 个转会回合才能挂牌，在此之前其他俱乐部也不会主动求购他。
         {status.note && <span className="ml-1 font-semibold">当前：{status.note}。</span>}
       </Banner>
 

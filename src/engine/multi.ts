@@ -33,7 +33,7 @@ import { finalizePlayerTournamentIfDone, initPatchBaseline, multiplayerCareerSum
 import { advanceTournamentUntilPlayer, readySeries } from './tournament';
 import { coachFromSeed, generatePlayer, playerFromSeed, teamFromSeed } from './generation';
 import { aiEnsureRosters } from './ai';
-import { autoLineup, rosterOverCap, setLineupSlot } from './team';
+import { autoLineup, clearFoundingJoinMarks, rosterOverCap, setLineupSlot } from './team';
 import { ROLE_DATA_VERSION } from './roles';
 import { migrateRealRoles } from './roleSync';
 import { computeSalary } from './player';
@@ -268,6 +268,8 @@ export async function createMultiplayerGame(opts: MpNewGameOptions): Promise<Gam
       t.lastSeasonRank = i + 1;
     });
   for (const id of ids) autoLineup(state, id);
+  // 开局阵容不受挂牌的加盟门槛限制（随队场数与入队转会回合的起点都清除；之后任何途径加盟的选手从 0 开始计）
+  clearFoundingJoinMarks(state);
 
   startSeason(state, startTi);
 

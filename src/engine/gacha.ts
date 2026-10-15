@@ -16,7 +16,7 @@
 //    须在本回合内放弃本回合抽到的新秀或解约 / 出售其他队员（game.getAdvanceBlockers 的 roster_over_cap；懒人推进 / 多人托管自动处理，
 //    autoRound.planOverCapTrim）；已经超编时不能再抽。
 //    转售冷却：本队抽到的新秀入队不满 resaleHoldRounds 个转会回合（约一个赛季）时不能挂牌、不接 AI 随机求购，抵价按签字费比例估值
-//    （listingRules.gachaResaleLockLeft）。
+//    （listingRules.gachaResaleLockLeft）；另与所有新加盟选手的加盟门槛（随队场数 / 入队转会回合）叠加（listingRules.resaleLocked）。
 //    SSR 保底：战队距上一张 SSR 第 pityThreshold 抽必出 SSR（计数在 Team.gacha，多人模式各座位独立）。
 //    同一回合内可退回抽到的新秀（gachaDiscard，白名单 RPC）：离队进入自由市场，返还单抽价格 × discardRefundRatio。
 // 3. AI 战队：第 1 回合开始前（人类玩家先抽）与赛季中期各自动抽一次，按资金盈余与阵容空位，每赛季至多 aiMaxPullsPerSeason 张；
@@ -48,6 +48,7 @@ import { addFinance, roundWageBill } from './economy';
 import { inSeatOf, isHumanTeam, seatInPlay } from './seat';
 import { syncSynergies } from './synergy';
 import { aiKeepValue } from './rookieDraft';
+import { gachaListingRuleText } from './listingRules';
 import { realRoleFor } from './roles';
 import { heroById } from './heroes';
 import { ensureHallOfFame, hofMember, prototypeDebut, summonPrototypes } from './hallOfFame';
@@ -891,7 +892,8 @@ function offerHomeRookie(state: GameState, team: Team, id: string, tier: Tier, t
   const info = homeRookieInfo(state, id);
   if (!info) return false;
   const seasons = rookieContractSeasons();
-  const hold = Math.max(0, Math.floor(num(CONFIG.gacha.resaleHoldRounds, 0)));
+  // 挂牌限制（与抽卡页规则同一说法）：抽卡转售冷却 + 加盟门槛（随队场数 / 入队转会回合，CONFIG.squadOps）
+  const resaleRule = gachaListingRuleText();
   inSeatOf(state, team.id, () => {
     const d: PendingDecision = {
       id: nextId(state, 'd'),
@@ -900,7 +902,7 @@ function offerHomeRookie(state: GameState, team: Team, id: string, tier: Tier, t
       body: `${info.handle}（${tier} · ${POSITION_LABEL[info.pos]} · ${info.age} 岁）是 TI${ti} 登场的真实新秀，现实中从 ${team.name} 出道。`
         + `本赛季开赛前没有战队抽到他，他希望按真实出道去向加盟。\n`
         + `· 签下：新秀合同 ${seasons} 个赛季，工资 ${formatGold(info.salary)}/回合，无签字费`
-        + `${hold > 0 ? `；入队满 ${hold} 个转会回合（约一个赛季）前不能挂牌出售` : ''}。\n`
+        + `${resaleRule ? `；${resaleRule}前不能挂牌出售` : ''}。\n`
         + '· 放弃：他将加盟其他职业战队，或进入自由市场。',
       choices: [
         { id: 'sign', label: '签下', description: `工资 ${formatGold(info.salary)}/回合，新秀合同 ${seasons} 个赛季` },

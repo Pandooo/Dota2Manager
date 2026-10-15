@@ -6,6 +6,7 @@ import { aiLineupPriority } from './lineupPriority';
 import { teamMomentumMult } from './momentum';
 import { naturalPositions } from './roles';
 import { ownEntry } from './util';
+import { listingClock, teamSeriesCount } from './listingRules';
 import type { Coach, GameState, InMatchEvent, Player, Position, Team } from './types';
 import { POSITIONS } from './types';
 
@@ -301,6 +302,17 @@ export function addPlayerToTeam(
   if (p.teamId !== teamId) removePlayerFromTeam(state, playerId);
 
   const ti = state.season?.ti ?? state.settings.startTi;
+  // 挂牌门槛的两个起点（listingRules.teamMatchesSinceJoin / transferRoundsSinceJoin）：任何途径换队都从 0 开始计——
+  // 加盟时战队的累计系列赛场数与转会回合时钟。只有人类战队用得到（挂牌 / AI 求购人类选手），AI 战队的选手不记，省存档
+  if (p.teamId !== teamId) {
+    if (team.isPlayer) {
+      p.joinedTeamSeries = teamSeriesCount(team);
+      p.joinedTeamClock = listingClock(state);
+    } else {
+      delete p.joinedTeamSeries;
+      delete p.joinedTeamClock;
+    }
+  }
   p.teamId = teamId;
   p.joinedSeason = ti;
   p.benchRounds = 0;
@@ -338,6 +350,19 @@ export function addPlayerToTeam(
   }
 }
 
+/**
+ * 开局阵容（新游戏 / 多人开局在第一个赛季开始之前调用）：清除建队时 addPlayerToTeam 记下的挂牌门槛起点（随队场数 / 转会回合时钟），
+ * 开局时已在队的选手与旧存档中已在队的选手一样不受挂牌门槛限制（CONFIG.squadOps.listingMinTeamMatches / listingMinTransferRounds）。
+ */
+export function clearFoundingJoinMarks(state: GameState): void {
+  for (const id in state.players) {
+    const p = state.players[id];
+    if (!p) continue;
+    if (p.joinedTeamSeries !== undefined) delete p.joinedTeamSeries;
+    if (p.joinedTeamClock !== undefined) delete p.joinedTeamClock;
+  }
+}
+
 /** 移出选手：teamId=null，从 playerIds 与 lineup 中移除（不改变 status） */
 export function removePlayerFromTeam(state: GameState, playerId: string): void {
   const p = ownEntry(state.players, playerId);
@@ -357,6 +382,8 @@ export function removePlayerFromTeam(state: GameState, playerId: string): void {
     if (p.teamId) p.lastTeamId = p.teamId;
     p.teamId = null;
     p.benchRounds = 0;
+    delete p.joinedTeamSeries;
+    delete p.joinedTeamClock;
   }
 }
 

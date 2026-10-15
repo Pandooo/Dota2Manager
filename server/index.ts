@@ -4,7 +4,7 @@
 //                      [--keep-finished-hours 2] [--keep-idle-days 14] [--public] [--trust-proxy] [--stats-interval-min 10]
 //       npm run mp   （先 vite build 前端，再启动服务器）
 // 局域网：朋友在浏览器打开启动时打印的局域网地址即可加入；公网（--public）：不打印、不下发任何内网地址。
-// WebSocket 路径为 /ws；在线统计见 GET /api/status。
+// WebSocket 路径为 /ws；在线统计见 GET /api/status（只回答服务器本机的请求）。
 // ============================================================================
 import { resolve } from 'node:path';
 import { registerNodeRosterLoader } from '../scripts/nodeData';
@@ -52,7 +52,7 @@ const HELP = `刀塔经理 · 多人服务器（局域网 / 公网）
                     房间数满时会清理连续 1 小时无人在线的进行中对局（从未推进过的优先）
   --stats-interval-min <分钟>
                     在线统计日志间隔（默认 ${DEFAULT_STATS_LOG_INTERVAL_MS / 60_000}，只在人数有变化时输出；0 = 不输出）。
-                    详细统计：curl -s http://127.0.0.1:<端口>/api/status；每日汇总在 <存档目录>/stats/
+                    详细统计（只允许服务器本机访问）：curl -s http://127.0.0.1:<端口>/api/status；每日汇总在 <存档目录>/stats/
   --no-save         不保存房间与统计（测试用）
   --help            显示帮助`;
 
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
       '  内网地址：   （公网模式下不显示，也不会发给客户端）',
       '',
       `  WebSocket：  ${WS_PATH}    房间存档：${dataDir ?? '（不保存）'}`,
-      `  在线统计：   curl -s ${statsUrl}`,
+      `  在线统计（只允许本机访问）：curl -s ${statsUrl}`,
       `  让朋友在浏览器打开服务器的公网地址或域名（端口 ${server.port}），在入口页选择「多人对战」即可加入。`,
       '',
     ]
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
           : '  局域网访问： （未检测到局域网 IPv4 地址，请检查网络连接）']),
       '',
       `  WebSocket：  ${WS_PATH}    房间存档：${dataDir ?? '（不保存）'}`,
-      `  在线统计：   ${statsUrl}`,
+      `  在线统计（只允许本机访问）：curl -s ${statsUrl}`,
       `  让朋友在浏览器打开上面的局域网地址，在入口页选择「多人对战」即可加入。按 Ctrl+C 停止（进度会自动保存）。`,
       '  部署到公网时请加 --public（不向客户端发送内网地址）。',
       '',

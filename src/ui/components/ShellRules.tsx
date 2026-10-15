@@ -1,6 +1,6 @@
 // 「玩法说明」内容（主菜单弹窗使用）。数值从 CONFIG 读取，保持与引擎一致。
 import type { ReactNode } from 'react';
-import { CONFIG, formatGold } from '../../engine';
+import { CONFIG, formatGold, tradeHoldRoundsLabel } from '../../engine';
 import { FUN_EVENTS, type FunEffects } from '../../engine/funEvents';
 import { getPlayerIndex } from '../../data/index';
 import { cx } from './common';
@@ -188,8 +188,12 @@ export default function ShellRules() {
             签约 / 求购的绝对上限为 {CONFIG.team.hardMaxRoster} 人；新秀抽卡（单抽 / 十连总是抽满）可以超出，但<B>超编时须在本回合内放弃新秀或解约，退回 {CONFIG.team.hardMaxRoster} 人后才能进入下一回合</B>。
           </p>
           <p>
+            <B>挂牌出售</B>：新加盟的选手（签约、转会、交易、抽卡等任何途径）须<B>随队满 {CONFIG.squadOps.listingMinTeamMatches} 场比赛</B>（系列赛，不要求本人上场）<B>且入队满 {CONFIG.squadOps.listingMinTransferRounds} 个转会回合</B>（每个常规赛回合结束时计一次，赛季初与 TI 锁定期间不计）才能挂牌，
+            在此之前其他俱乐部也不会主动求购他；解约不受此限制（照常支付补偿）。
+          </p>
+          <p>
             向 AI 战队求购时可以发起<B>选手交易</B>：现金 + 最多 {CONFIG.market.trade.maxPlayers} 名本队选手抵价，对方按「身价 × 系数」估值
-            （缺该位置或能顶替首发时溢价，位置重叠、年龄偏大时折价，刚从自由市场签下的按签字费估值），现金与估值合计越高越容易放人；对方阵容超员时会放走替补腾位置。
+            （缺该位置或能顶替首发时溢价，位置重叠、年龄偏大时折价，刚从自由市场签下的——入队不满 {tradeHoldRoundsLabel('freeAgent')} 个转会回合或随队不满 {CONFIG.squadOps.listingMinTeamMatches} 场比赛——按签字费估值），现金与估值合计越高越容易放人；对方阵容超员时会放走替补腾位置。
           </p>
           <p>
             首发凑不齐 5 人（签证、伤病、禁赛、离队）时需招募<B>临时替补</B>，否则该场系列赛<span className="font-semibold text-bad">弃权判负</span>。

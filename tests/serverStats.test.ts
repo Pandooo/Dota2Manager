@@ -10,7 +10,9 @@ import type { MpNewGameOptions } from '../src/engine/multi';
 import type { MpEngine } from '../server/engine';
 import { startServer, type RunningServer, type ServerOptions } from '../server/app';
 import { TestClient, until } from '../server/testClient';
-import { GENERIC_SERVER_ERROR, isPrivateAddress, isPrivateOrigin, publicSafeErrorText } from '../server/net';
+import {
+  GENERIC_SERVER_ERROR, isLoopbackAddress, isLoopbackRequest, isPrivateAddress, isPrivateOrigin, lanAddresses, publicSafeErrorText,
+} from '../server/net';
 import { ServerStats, dayKeyOf, zeroCounts, type OnlineCounts, type StatsSource } from '../server/stats';
 import { mySeat } from '../src/shared/protocol';
 
@@ -126,6 +128,22 @@ function get(server: RunningServer, path: string): Promise<{ status: number; bod
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }));
     });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** 任意来源地址 / 请求头的 GET（localAddress：从指定网卡发起，服务器看到的套接字地址即该地址） */
+function httpGet(o: { port: number; path: string; host?: string; localAddress?: string; headers?: Record<string, string>; method?: string }): Promise<{ status: number; body: string; type: string }> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      { host: o.host ?? '127.0.0.1', port: o.port, path: o.path, localAddress: o.localAddress, headers: o.headers, method: o.method ?? 'GET' },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8'), type: String(res.headers['content-type'] ?? '') }));
+      },
+    );
     req.on('error', reject);
     req.end();
   });
@@ -536,3 +554,95 @@ describe('server · 公网模式与局域网地址', () => {
 });
 
 const LAN_PATH_FRAGMENT = '/opt/dota2manager/secret';
+
+// ---------------------------------------------------------------------------
+// /api/status 只允许服务器本机访问（2026-10-15 用户决策）
+// ---------------------------------------------------------------------------
+const STATUS_DENIED = { ok: false, error: '在线统计只允许在服务器本机访问' };
+/** 本机的一个非回环 IPv4 地址（没有可用网卡时跳过真实网卡用例） */
+const LAN_IP = lanAddresses()[0] ?? null;
+
+describe('server · /api/status 只允许服务器本机访问', () => {
+  it('地址判断：只有回环地址算本机（局域网私有地址不算）；转发头只能让请求变成「非本机」，不能冒充本机', () => {
+    for (const ip of ['127.0.0.1', '127.8.9.10', '127.255.255.254', '::1', '[::1]', '[::1]:8686', '::ffff:127.0.0.1', '::ffff:127.1.2.3', '::ffff:7f00:1', '127.0.0.1:51234', '0:0:0:0:0:0:0:1']) {
+      expect(isLoopbackAddress(ip), ip).toBe(true);
+    }
+    for (const ip of [
+      '10.1.2.3', '192.168.1.5', '172.16.0.1', '169.254.3.4', '::ffff:192.168.0.9', '::ffff:c0a8:105', 'fe80::1', 'fe80::1%lo0', 'fc00::1',
+      '8.8.8.8', '128.0.0.1', '126.255.255.255', '::2', '::', '::ffff:8.8.8.8', '', 'localhost', 'unknown', '[::1', undefined, null,
+    ]) expect(isLoopbackAddress(ip as string), String(ip)).toBe(false);
+
+    expect(isLoopbackRequest('127.0.0.1')).toBe(true);
+    expect(isLoopbackRequest('::1', {})).toBe(true);
+    expect(isLoopbackRequest('::ffff:127.0.0.1', {})).toBe(true);
+    // 局域网内的其他电脑不算本机
+    expect(isLoopbackRequest('192.168.1.20', {})).toBe(false);
+    expect(isLoopbackRequest(undefined, {})).toBe(false);
+    // 伪造的转发头不能冒充本机（X-Forwarded-For 不被信任）
+    expect(isLoopbackRequest('203.0.113.9', { 'x-forwarded-for': '127.0.0.1' })).toBe(false);
+    expect(isLoopbackRequest('192.168.1.20', { 'x-real-ip': '127.0.0.1', forwarded: 'for=127.0.0.1' })).toBe(false);
+    // 本机反向代理转发的外部请求（套接字是回环，转发来源不是）
+    expect(isLoopbackRequest('127.0.0.1', { 'x-forwarded-for': '203.0.113.9' })).toBe(false);
+    expect(isLoopbackRequest('127.0.0.1', { 'x-forwarded-for': '127.0.0.1, 203.0.113.9' })).toBe(false);
+    expect(isLoopbackRequest('127.0.0.1', { 'x-forwarded-for': '192.168.1.20' })).toBe(false);
+    expect(isLoopbackRequest('::1', { forwarded: 'for="[2001:db8::1]:4711"' })).toBe(false);
+    expect(isLoopbackRequest('127.0.0.1', { forwarded: 'for=unknown' })).toBe(false);
+    // 在服务器上经本机代理访问
+    expect(isLoopbackRequest('127.0.0.1', { 'x-forwarded-for': '127.0.0.1' })).toBe(true);
+  });
+
+  it('本机 200；带外部转发来源的请求 403 与中文说明（--trust-proxy 也一样）；/healthz、/api/info 不受影响，/api/info 不含峰值与每日汇总', async () => {
+    const s = await boot({ trustProxy: true });
+    const ok = await httpGet({ port: s.port, path: '/api/status' });
+    expect(ok.status).toBe(200);
+    expect(JSON.parse(ok.body)).toMatchObject({ ok: true, online: 0 });
+    expect(JSON.parse(ok.body)).toHaveProperty('peak');
+    expect(JSON.parse(ok.body)).toHaveProperty('today');
+
+    for (const headers of <Record<string, string>[]>[
+      { 'x-forwarded-for': '203.0.113.9' },
+      { 'x-forwarded-for': '127.0.0.1, 203.0.113.9' },
+      { 'x-real-ip': '198.51.100.7' },
+      { forwarded: 'for=192.168.1.20;proto=https' },
+    ]) {
+      const r = await httpGet({ port: s.port, path: '/api/status', headers });
+      expect(r.status, JSON.stringify(headers)).toBe(403);
+      expect(r.type).toContain('application/json');
+      expect(JSON.parse(r.body)).toEqual(STATUS_DENIED);
+    }
+    const head = await httpGet({ port: s.port, path: '/api/status', method: 'HEAD', headers: { 'x-forwarded-for': '203.0.113.9' } });
+    expect(head.status).toBe(403);
+    expect(head.body).toBe('');
+    // 查询串不影响判断
+    expect((await httpGet({ port: s.port, path: '/api/status?x=1', headers: { 'x-forwarded-for': '203.0.113.9' } })).status).toBe(403);
+
+    // /healthz 与 /api/info 对外照常（大厅向所有人显示的在线人数可以留在 /api/info）
+    const ext = { 'x-forwarded-for': '203.0.113.9' };
+    const health = await httpGet({ port: s.port, path: '/healthz', headers: ext });
+    expect(health.status).toBe(200);
+    expect(Object.keys(JSON.parse(health.body)).sort()).toEqual(['connections', 'frontend', 'name', 'ok', 'protocol', 'rooms', 'wsPath']);
+    const info = await httpGet({ port: s.port, path: '/api/info', headers: ext });
+    expect(info.status).toBe(200);
+    expect(Object.keys(JSON.parse(info.body)).sort()).toEqual(
+      ['connections', 'frontend', 'inGame', 'name', 'ok', 'online', 'playing', 'protocol', 'rooms', 'wsPath'],
+    );
+    expect(info.body).not.toMatch(/peak|today|sinceStart|uptime|startedAt|uniquePlayers/);
+  });
+
+  it.runIf(!!LAN_IP)('来自非回环网卡的真实请求 403，伪造 X-Forwarded-For / X-Real-IP / Forwarded 为 127.0.0.1 也一样（含 --trust-proxy）', async () => {
+    const ip = LAN_IP as string;
+    for (const trustProxy of [false, true]) {
+      const s = await boot({ host: ip, trustProxy });
+      const plain = await httpGet({ host: ip, localAddress: ip, port: s.port, path: '/api/status' });
+      expect(plain.status).toBe(403);
+      expect(JSON.parse(plain.body)).toEqual(STATUS_DENIED);
+      const spoofed = await httpGet({
+        host: ip, localAddress: ip, port: s.port, path: '/api/status',
+        headers: { 'x-forwarded-for': '127.0.0.1', 'x-real-ip': '127.0.0.1', forwarded: 'for=127.0.0.1' },
+      });
+      expect(spoofed.status).toBe(403);
+      // 同一来源的 /api/info 照常
+      expect((await httpGet({ host: ip, localAddress: ip, port: s.port, path: '/api/info' })).status).toBe(200);
+    }
+  });
+});

@@ -92,6 +92,45 @@ export function isPrivateAddress(raw: string | null | undefined): boolean {
   return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80; // fc00::/7、fe80::/10
 }
 
+/** 去掉方括号、端口与 IPv6 区域标识后的地址文本 */
+function bareAddress(raw: string): string {
+  let ip = String(raw).trim();
+  if (ip.startsWith('[')) {
+    const end = ip.indexOf(']');
+    if (end < 0) return '';
+    ip = ip.slice(1, end);
+  } else if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(ip)) {
+    ip = ip.slice(0, ip.lastIndexOf(':'));
+  }
+  const zone = ip.indexOf('%');
+  return zone >= 0 ? ip.slice(0, zone) : ip;
+}
+
+/**
+ * 是否为回环地址：127.0.0.0/8、::1，以及 IPv4 映射写法（::ffff:127.x.x.x / ::ffff:7f00:1）。
+ * 可带方括号、端口与 IPv6 区域标识。只认回环，不含局域网私有网段（局域网内其他电脑不算「服务器本机」）。
+ */
+export function isLoopbackAddress(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  const ip = bareAddress(raw);
+  const v4 = ipv4Octets(ip);
+  if (v4) return v4[0] === 127;
+  const g = ipv6Groups(ip);
+  if (!g) return false;
+  if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return true; // ::1
+  return g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff && g[6] >> 8 === 127; // ::ffff:127.x.x.x
+}
+
+/**
+ * 请求是否来自服务器本机（GET /api/status 只回答本机，2026-10-15 用户决策）：套接字的对端地址必须是回环地址。
+ * 转发头（X-Forwarded-For 等）不能让请求变成「本机」——只会让它变成「非本机」：请求头里声明了任何非回环的转发来源时
+ * （本机反向代理转发的外部请求），一律按外部请求处理。直接对外监听时伪造的转发头没有任何作用（套接字地址就不是回环）。
+ */
+export function isLoopbackRequest(remoteAddress: string | null | undefined, headers: IncomingHttpHeaders = {}): boolean {
+  if (!isLoopbackAddress(remoteAddress)) return false;
+  return forwardedAddresses(headers).every((a) => isLoopbackAddress(a));
+}
+
 /** 请求头中声明的转发来源地址（X-Forwarded-For / X-Real-IP / Forwarded: for=） */
 function forwardedAddresses(headers: IncomingHttpHeaders): string[] {
   const out: string[] = [];
