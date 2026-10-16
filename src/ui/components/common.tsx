@@ -484,20 +484,15 @@ export function TableScroll({
 // Toasts（App 中挂载一次）
 // ---------------------------------------------------------------------------
 /**
- * 提示的位置（单机 ToastHost 与多人 MpToastHost 共用）：默认在顶栏下方（--chrome-top 为顶栏实际高度，多人窄屏两行时也不压住第二行）；
- * 手机（< sm）游戏内改在底栏上方（--chrome-bottom），自下而上出现——不挡顶栏，也在拇指附近。
+ * 提示的位置（单机 ToastHost 与多人 MpToastHost 共用）：所有屏幕宽度都在顶栏下方（--chrome-top 为顶栏实际高度，多人窄屏两行时也不压住第二行），
+ * 自上而下出现——不遮挡底部操作栏（用户要求，v0.4.1）。同时最多显示 store.TOAST_MAX_VISIBLE 条，超出时最早的一条提前渐隐（.toast-out）。
  * 层级 z-[75]：高于弹窗（z-50）与底栏的通栏抽屉（BarPopover z-[70]，否则在手机上约练后结果提示被抽屉盖住），低于确认气泡（z-[80]）。
  */
 export function useToastPlacement(): { className: string; style: CSSProperties; anim: string } {
-  const phone = useIsPhone();
-  const inGame = useGameStore((s) => s.screen === 'game');
-  const bottom = phone && inGame;
   return {
     className: 'pointer-events-none fixed left-1/2 z-[75] flex w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-col items-stretch gap-2',
-    style: bottom
-      ? { bottom: 'calc(var(--chrome-bottom, env(safe-area-inset-bottom, 0px)) + 8px)' }
-      : { top: 'calc(var(--chrome-top, calc(56px + env(safe-area-inset-top, 0px))) + 8px)' },
-    anim: bottom ? 'toast-rise' : 'toast-drop',
+    style: { top: 'calc(var(--chrome-top, calc(56px + env(safe-area-inset-top, 0px))) + 8px)' },
+    anim: 'toast-drop',
   };
 }
 
@@ -531,14 +526,15 @@ export function ToastCard({ toast: t, anim }: { toast: Toast; anim: string }) {
   return (
     <div
       onClick={() => {
+        if (t.leaving) return;
         if (folded) {
           setOpen(true);
           hold(t.id);
         } else dismiss(t.id);
       }}
       className={cx(
-        anim,
-        'pointer-events-auto flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-2xl shadow-black/50 whitespace-pre-line backdrop-blur',
+        t.leaving ? 'toast-out pointer-events-none' : cx(anim, 'pointer-events-auto'),
+        'flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-2xl shadow-black/50 whitespace-pre-line backdrop-blur',
         t.ok ? 'border-good/50 bg-[#10241b]/95 text-ink' : 'border-bad/60 bg-[#2a1416]/95 text-[#ffd0d0]',
       )}
       title="点击关闭"

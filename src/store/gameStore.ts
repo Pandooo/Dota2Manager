@@ -142,9 +142,16 @@ export interface Toast {
   id: number;
   text: string;
   ok: boolean;
+  /** 出现顺序（与多人快讯共用一个序列；同时显示超过 TOAST_MAX_VISIBLE 条时最早的先渐隐） */
+  order: number;
   /** 玩家点开了全文（手机上长提示先收起）：不再按原时限消失，改为 holdToast 的较长时限 */
   held?: boolean;
+  /** 正在渐隐（TOAST_FADE_MS 后移除；不再响应点按、不计入同时显示的条数） */
+  leaving?: boolean;
 }
+
+/** 正在显示的多人快讯提示（服务器快讯 + 界面状态） */
+export type FeedToast = FeedItem & { order: number; leaving?: boolean };
 
 // ---------------------------------------------------------------------------
 // call()：UI 修改游戏状态的唯一入口（引擎函数名 + 参数）
@@ -206,7 +213,7 @@ export interface MpState {
   /** 实时快讯（新 → 旧，最多 FEED_MAX 条） */
   feed: FeedItem[];
   /** 正在显示的快讯提示 */
-  feedToasts: FeedItem[];
+  feedToasts: FeedToast[];
   /** 房间聊天 */
   chat: ChatLine[];
   chatUnread: number;
@@ -382,8 +389,17 @@ function writeLazyAdvance(on: boolean): void {
 }
 
 let toastSeq = 0;
+/** 提示与多人快讯共用的出现顺序 */
+let toastOrder = 0;
 /** 展开全文后的提示再保留多久（毫秒） */
 const TOAST_HOLD_MS = 12000;
+/** 界面上同时最多显示几条提示（操作提示 + 多人快讯合计）；新的一条出现时，超出的最早一条提前渐隐（用户要求：最多 2 条） */
+export const TOAST_MAX_VISIBLE = 2;
+/** 渐隐动画时长（毫秒，与 index.css 的 .toast-out 一致） */
+export const TOAST_FADE_MS = 220;
+/** 提示默认停留时长（毫秒）：成功 / 失败 */
+const TOAST_MS_OK = 3500;
+const TOAST_MS_ERROR = 6000;
 let cardFocusSeq = 0;
 let reqSeq = 0;
 let chatSeq = 0;
@@ -541,14 +557,17 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     toast: (text, ok = true) => {
       const id = ++toastSeq;
-      set((s) => ({ toasts: [...s.toasts.slice(-4), { id, text, ok }] }));
+      const order = ++toastOrder;
+      // 正在渐隐的条目不计数；列表本身也限长，避免连续操作时堆积
+      set((s) => ({ toasts: [...s.toasts.slice(-(TOAST_MAX_VISIBLE + 3)), { id, text, ok, order }] }));
+      capToasts();
       setTimeout(() => {
         if (!get().toasts.find((t) => t.id === id)?.held) get().dismissToast(id);
-      }, ok ? 3500 : 6000);
+      }, ok ? TOAST_MS_OK : TOAST_MS_ERROR);
     },
-    dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+    dismissToast: (id) => fadeToast(id),
     holdToast: (id) => {
-      if (!get().toasts.some((t) => t.id === id && !t.held)) return;
+      if (!get().toasts.some((t) => t.id === id && !t.held && !t.leaving)) return;
       set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, held: true } : t)) }));
       setTimeout(() => get().dismissToast(id), TOAST_HOLD_MS);
     },
@@ -733,7 +752,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       });
     },
 
-    mpDismissFeed: (id) => setMp((mp) => ({ feedToasts: mp.feedToasts.filter((f) => f.id !== id) })),
+    mpDismissFeed: (id) => fadeFeedToast(id),
     mpResumeIfNeeded: () => {
       if (get().mode === 'multi' || get().screen !== 'menu' || !getMpResume()) return false;
       get().mpOpenLobby();
@@ -759,6 +778,48 @@ function keepStableRefs(prev: GameState | null, next: GameState): void {
     if (a.games && b.games && a.games.length === b.games.length && JSON.stringify(a.games) === JSON.stringify(b.games)) b.games = a.games;
   } catch {
     /* ignore */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 提示的同时显示上限与渐隐（操作提示 toasts + 多人快讯 feedToasts 合计）
+// ---------------------------------------------------------------------------
+
+/** 一条操作提示开始渐隐，TOAST_FADE_MS 后移除（已在渐隐 / 不存在则忽略） */
+function fadeToast(id: number): void {
+  const store = useGameStore;
+  if (!store.getState().toasts.some((t) => t.id === id && !t.leaving)) return;
+  store.setState((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t)) }));
+  setTimeout(() => store.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), TOAST_FADE_MS);
+}
+
+/** 一条多人快讯提示开始渐隐，TOAST_FADE_MS 后移除 */
+function fadeFeedToast(id: string): void {
+  const store = useGameStore;
+  if (!store.getState().mp.feedToasts.some((f) => f.id === id && !f.leaving)) return;
+  store.setState((s) => ({ mp: { ...s.mp, feedToasts: s.mp.feedToasts.map((f) => (f.id === id ? { ...f, leaving: true } : f)) } }));
+  setTimeout(
+    () => store.setState((s) => ({ mp: { ...s.mp, feedToasts: s.mp.feedToasts.filter((f) => f.id !== id) } })),
+    TOAST_FADE_MS,
+  );
+}
+
+/**
+ * 同时显示的提示超过 TOAST_MAX_VISIBLE 条时，最早出现的提前渐隐（不等它的停留时长结束）。
+ * 玩家点开全文留住的提示（held）最后才让位，免得正在读的被新提示挤掉。
+ */
+function capToasts(): void {
+  const st = useGameStore.getState();
+  const visible = [
+    ...st.toasts.filter((t) => !t.leaving).map((t) => ({ kind: 'toast' as const, id: t.id, order: t.order, held: !!t.held })),
+    ...st.mp.feedToasts.filter((f) => !f.leaving).map((f) => ({ kind: 'feed' as const, id: f.id, order: f.order, held: false })),
+  ].sort((a, b) => a.order - b.order);
+  const excess = visible.length - TOAST_MAX_VISIBLE;
+  if (excess <= 0) return;
+  const victims = [...visible.filter((v) => !v.held), ...visible.filter((v) => v.held)].slice(0, excess);
+  for (const v of victims) {
+    if (v.kind === 'toast') fadeToast(v.id);
+    else fadeFeedToast(v.id);
   }
 }
 
@@ -875,10 +936,16 @@ function handleServerMsg(msg: ServerMsg): void {
         .reverse();
       if (!add.length) return;
       const show = add.slice(0, FEED_TOAST_MAX);
+      // add 为新 → 旧：从旧到新编号，最新的一条顺序最大（同时显示超出上限时最早的先渐隐）
+      const n = show.length;
+      const base = toastOrder;
+      toastOrder += n;
+      const shown: FeedToast[] = show.map((f, i) => ({ ...f, order: base + (n - i) }));
       setMp((mp) => ({
         feed: [...add, ...mp.feed].slice(0, FEED_MAX),
-        feedToasts: [...show, ...mp.feedToasts].slice(0, FEED_TOAST_MAX),
+        feedToasts: [...shown, ...mp.feedToasts].slice(0, FEED_TOAST_MAX + TOAST_MAX_VISIBLE + 2),
       }));
+      capToasts();
       for (const f of show) setTimeout(() => useGameStore.getState().mpDismissFeed(f.id), FEED_TOAST_MS);
       return;
     }

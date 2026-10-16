@@ -6,6 +6,7 @@
 - 状态：
   - 读：`const game = useGame()`（任何引擎操作后自动重渲染）。
   - 写：`const call = useCall(); call('someOp', ...args)`（引擎函数名 + 除 state 外的参数，类型由引擎签名推导）。单机在本地执行并自动存档；多人模式作为白名单 RPC（`src/shared/protocol.ts` RPC_WHITELIST）发给服务器。返回 `Promise`，需要结果时 `.then(res => …)`；返回 `OpResult` 时自动 toast 提示；成功时不提示用 `useCallSilent()`。
+- **提示（toast）**（v0.4.1，用户要求）：单机 `ToastHost` 与多人 `MpToastHost` 都显示在顶栏下方（不遮挡底部操作栏）；界面上同时最多 `TOAST_MAX_VISIBLE`（2）条（操作提示 + 多人快讯合计，按出现顺序排列），新的一条出现时最早的一条提前渐隐（`.toast-out`，`TOAST_FADE_MS`），玩家点开全文留住的提示最后才让位。停留时长：成功 3.5 秒、失败 6 秒、快讯 6.5 秒；点按即渐隐关闭。
   - 需要多步逻辑的修改在 `src/engine/uiActions.ts` 新增具名引擎函数（并加入 RPC_WHITELIST），不要在 UI 回调里拼装；`act()` 只保留给单机专用的本地操作（多人模式下会被拒绝）。
   - 导航：`useGameStore(s => s.setView)('squad')`；选手详情 `openPlayer(id)`；战队详情 `openTeam(id)`。
   - **禁止在组件里直接修改 game 对象**，一切修改必须经 `call()` 调用引擎函数（`src/engine/index.ts` 导出）。
@@ -157,7 +158,7 @@
 `common.tsx`（`Button` / `Modal` / `Tabs` / `TableScroll` / `useToastPlacement`）、`layout/`（`TopBar` / `SideNav` / `ActionBar` / `HubKit`）。各页面按下面的约定适配，桌面（≥ 1024px）外观不变。
 
 - **断点**（与 Tailwind 默认一致，`mobile.ts` 的 `BREAKPOINT`）：
-  - `< sm`（640px）= 手机布局：底栏三行（`PhoneBar`）、`Modal` 为底部抽屉、游戏内提示在底栏上方、顶栏的「更新」芯片与「存档」收进导航抽屉。
+  - `< sm`（640px）= 手机布局：底栏三行（`PhoneBar`）、`Modal` 为底部抽屉、顶栏的「更新」芯片与「存档」收进导航抽屉。
   - `< md`（768px）= 没有侧栏：顶栏最左侧 ☰ 打开导航抽屉；`NoticeBadge` 不显示。横屏手机（`short` 且 < lg）同样没有侧栏（`useSideNav()`，见「导航」）。
   - `≥ lg`（1024px）= 桌面布局。`short` 自定义变体 = `@media (max-height: 480px)`（横屏手机）：顶栏 44px、底栏与侧栏行距收紧、sm–lg 的补充提示行隐藏。
   - 判断用 CSS 变体（`max-sm:` / `sm:` / `md:` / `short:` / `pointer-coarse:`）优先；需要换结构时用 `useIsPhone()` / `useMinWidth(px)` / `useCoarsePointer()`（同一查询共用一个 `MediaQueryList`，可以放心在每个按钮里调用）。
@@ -166,7 +167,7 @@
   - `#root` 高度 `100dvh`（随移动浏览器工具栏伸缩）；页面本身不滚动（`body` `overscroll-behavior: none`），滚动发生在 `main` 等容器里（`overscroll-contain`）。
   - 根容器 `pt-safe px-safe`（刘海 / 状态栏与横屏刘海）；**贴底的栏自己让出底部**：`ActionBar` 与 `MatchDock` 用 `pb-safe`（背景铺到 Home 横条下方）。新增贴底的 fixed 元素用 `env(safe-area-inset-bottom)` 或 `--chrome-bottom` 定位。工具类：`pt-safe` / `pb-safe` / `px-safe` / `no-scrollbar`（`index.css` 的 `@utility`）。
   - CSS 变量：`--chrome-top` = 顶栏底边到视口顶部（多人窄屏两行时约 106px），`--chrome-bottom` = 底栏（或比赛页 `MatchDock`）顶边到视口底部，都含安全区，由 `useChromeVar` 写在 `<html>` 上、卸载时移除。
-    提示（`useToastPlacement`）、TI 预选横幅、底部抽屉、「查看生涯总结」浮动按钮据此避开两条栏；新增浮层同样用 `calc(var(--chrome-bottom, 0px) + 8px)` 之类的写法，不要写死 `top-16` / `bottom-24`。
+    提示（`useToastPlacement`，所有宽度都在顶栏下方）、TI 预选横幅、底部抽屉、「查看生涯总结」浮动按钮据此避开两条栏；新增浮层同样用 `calc(var(--chrome-bottom, 0px) + 8px)` 之类的写法，不要写死 `top-16` / `bottom-24`。
   - 应用图标 `public/icons/`：由原创冠军盾矢量图（`TiTransition.tsx` 的 `AegisSvg`，默认主题）渲染（`icon-192/512.png` 为圆角深色底，`icon-maskable-*.png` 为满版底、盾在 60% 安全区内，`apple-touch-icon.png` 180px，`favicon-32.png` / `icon.svg` 为标签页图标）。不得换成 Valve 美术。
 - **导航**（`layout/SideNav.tsx`）：< md 与横屏手机（矮视口 `short` 且 < lg）时 App 不渲染侧栏，顶栏最左侧为 ☰（`NavToggle`）。是否有侧栏一律用 `mobile.ts` 的 `useSideNav()`（App、TopBar 的 ☰、抽屉的自动收起共用；横屏手机只有约 390px 高，160px 的侧栏会把内容挤窄；≥ lg 的窗口再矮也保留侧栏）。点开为左侧抽屉（`NavDrawer`，portal 到 body，z-[55]）：与侧栏同一份入口、徽标与 `open()` 逻辑（`useNavModel`），
   每个入口下方直接写出说明（触屏没有悬停），顶部为俱乐部与「TI 赛季 · 回合」，底部为顶栏放不下的入口（单机「存档管理」、「更新说明」，由 TopBar 通过 `footer` 传入，`DrawerRow`）。

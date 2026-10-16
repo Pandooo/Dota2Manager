@@ -270,12 +270,12 @@ body {
   to { transform: translateY(0); opacity: 1; }
 }
 .toast-drop { animation: toast-drop 0.22s ease-out both; }
-/* 手机：提示在底栏上方，自下而上出现 */
-@keyframes toast-rise {
-  from { transform: translateY(12px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+/* 提示提前让位 / 到时消失：向上渐隐（时长与 store.TOAST_FADE_MS 一致） */
+@keyframes toast-out {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-8px); opacity: 0; }
 }
-.toast-rise { animation: toast-rise 0.22s ease-out both; }
+.toast-out { animation: toast-out 0.22s ease-in both; }
 
 /* 手机：底部抽屉（Modal / 「更多」）自下而上滑入；导航抽屉自左滑入 */
 @keyframes sheet-up {
@@ -294,7 +294,8 @@ body {
 }
 .backdrop-in { animation: backdrop-in 0.2s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
-  .toast-rise, .sheet-up, .drawer-in, .backdrop-in { animation: none; }
+  .toast-drop, .sheet-up, .drawer-in, .backdrop-in { animation: none; }
+  .toast-out { animation: none; opacity: 0; }
 }
 
 /* ---------------------------------------------------------------------------

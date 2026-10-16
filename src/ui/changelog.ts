@@ -53,6 +53,14 @@ export interface ChangelogVersion {
 /** 更新内容（版本倒序，最新在前） */
 export const CHANGELOG: readonly ChangelogVersion[] = [
   {
+    version: '0.4.1',
+    date: '2026-10-16',
+    items: [
+      { text: '操作提示统一显示在顶栏下方，不再遮挡底部的操作按钮。' },
+      { text: '界面上同时最多显示 2 条提示：新的一条出现时，最早的一条提前渐隐消失，连续快速操作时不会叠满屏幕（多人模式下其他玩家的动态也计入这 2 条）。' },
+    ],
+  },
+  {
     version: '0.4.0',
     date: '2026-10-16',
     items: [
