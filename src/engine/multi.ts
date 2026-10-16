@@ -50,6 +50,7 @@ import { tradeForPlayer } from './trade';
 import { releaseDraftedRookie } from './rookieDraft';
 import { gachaDiscard, gachaPull } from './gacha';
 import { hallOfFameNeedsMigration, migrateHallOfFame } from './hallOfFame';
+import { migrateRealCareerComebacks, realCareerNeedsMigration } from './realCareer';
 import { setPrizeShare } from './prizeShare';
 import { resolveDecision } from './events';
 import { autoHandleRound, type AutoRoundReport } from './autoRound';
@@ -635,17 +636,21 @@ export function allSeatsReady(state: GameState): boolean {
 /**
  * 多人房间的存档迁移（服务器载入房间时由 server/rooms.ts 经 MpEngine.migrate 调用；回合推进与 RPC 前再兜底一次——幂等，
  * 已是最新版本时只做一次版本比较）。真实生涯位置（第十三波，roleSync.migrateRealRoles：旧房间的真实选手同步到当届
- * 真实位置、补齐副位置，各人类玩家战队收到一条私有的修正汇总）；名人堂与开局补录（hallOfFame.migrateHallOfFame）。在中性上下文中执行。返回是否执行了迁移。
+ * 真实位置、补齐副位置，各人类玩家战队收到一条私有的修正汇总）；真实生涯复出（v0.4.2，realCareer.migrateRealCareerComebacks：
+ * 提前退役、真实生涯仍在继续的真实选手以自由身复出，公开新闻 + 各座位一条通知）；名人堂与开局补录（hallOfFame.migrateHallOfFame）。
+ * 在中性上下文中执行。返回是否执行了迁移。
  */
 export function migrateRoomState(state: GameState): boolean {
   if (!state?.multiplayer) return false;
   const roles = !(Number(state.roleDataVersion) >= ROLE_DATA_VERSION);
+  const career = realCareerNeedsMigration(state);
   // 名人堂（2026-10-14 抽卡回归，hallOfFame.migrateHallOfFame）：旧房间没有名人堂 → 以初始成员 + 开局补录创建并补录当前 SS / SSR；
   // 有名人堂但没有开局补录（2026-10-15「补录」之前的房间）→ 补录开局届之前的真实 SS / SSR 与当前 SS / SSR（按 backfillVersion 一次）
   const hof = hallOfFameNeedsMigration(state);
-  if (!roles && !hof) return false;
+  if (!roles && !career && !hof) return false;
   ensureNeutral(state);
   if (roles) migrateRealRoles(state);
+  if (career) migrateRealCareerComebacks(state);
   if (hof) migrateHallOfFame(state);
   return true;
 }

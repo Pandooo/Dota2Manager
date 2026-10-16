@@ -1601,6 +1601,12 @@ export interface GameState {
    * 全局标记（非座位私有）。
    */
   roleDataVersion?: number;
+  /**
+   * 真实生涯复出迁移版本（v0.4.2，realCareer.REAL_CAREER_VERSION）：新游戏创建时写入；旧存档 / 旧房间缺失或落后时，
+   * 读档（save.upgradeLoadedState，含「继续游戏」与导入）/ 多人房间载入（multi.migrateRoomState）时执行一次：
+   * 已提前退役、真实生涯在当前届次或之后仍在继续的真实选手以自由身复出（realCareer.migrateRealCareerComebacks）。全局标记（非座位私有）。
+   */
+  realCareerVersion?: number;
 
   /** 多人对局（局域网，src/engine/multi.ts）；单机为空 */
   multiplayer?: MultiplayerInfo;

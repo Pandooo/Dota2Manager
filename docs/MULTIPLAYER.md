@@ -105,6 +105,11 @@
 - **新秀抽卡（2026-10-14 取代选秀）**：卡池 `GameState.gacha`、名人堂 `GameState.hallOfFame` 为全局状态（赛季初在中性上下文建池一次，所有座位共享、按 RPC 到达顺序先到先得）；SSR 保底计数、本赛季张数与逐张记录挂在各战队的 `Team.gacha` 上（无需座位换入字段），`seatView` 剥离其他战队的逐张记录（卡池构成与各队阵容公开）。`gachaPull`（单抽 / 十连）与 `gachaDiscard`（只能退回本座位本回合抽到的新秀）在 RPC 白名单中；抽卡结果是该座位的私有新闻，S 级以上另发公开新闻。AI 抽卡在回合推进（第 1 回合开始前、赛季中期）的全局部分执行，跳过全部人类座位。旧房间载入时 `migrateRoomState` 补建名人堂，卡池从下个赛季初开始；补录（2026-10-15「补录」）之前的房间按 `hallOfFame.backfillVersion` 补录一次开局届之前的真实 SS / SSR 与当前在役的 SS / SSR（中性上下文、幂等；版本 2 另按现行口径重算真实成员的巅峰等级，去掉未来数据，DESIGN.md 3.3.4）。
   抽卡超编（十连 / 单抽总是抽满）：该座位不能准备，须在本回合内退回 / 解约；「下一回合」（`setRoundReady.auto`）与房主托管自动退回本回合抽到的新秀中评分最低者（仍超编再解约替补中代价最低者，DESIGN.md 3.3.2）；
   已按「下一回合」等待自动准备（`autoReady`）的座位抽卡后超编时，`callAsSeat` 撤销该意图（不立刻替玩家退回刚抽到的新秀），玩家手动处理或再按一次「下一回合」。选秀默认关闭（`CONFIG.draft.enabled`），`releaseDraftedRookie` 保留一个版本供旧房间使用。
+- **真实生涯复出（v0.4.2，`realCareer.ts`）**：复出迁移的版本 `GameState.realCareerVersion` 是全局标记（非座位私有）；旧房间载入时 `migrateRoomState` 在中性上下文执行一次
+  （提前退役、真实生涯在当前届次或之后仍在继续的真实选手以自由身复出；转任的自由教练记录删除，引用它的「是否聘为教练」待决事件从全部座位移除（含非当前座位 `seat.saved` 中的）；
+  在 AI 战队执教的卸任后复出；在某个座位的战队执教的不替该座位做决定、继续执教），公开新闻一条，各未出局座位的总览「通知」各一条（`inSeatOf` 路由）。
+  该座位之后经 RPC 解雇他（`fireCoach`）、签约新教练替换（`hireCoach`）或聘请退役旧部替换（`resolveDecision`）时，只要真实生涯仍在继续，他随即以自由身复出（公开新闻，
+  `realCareer.comebackAfterCoachRelease`，在调用者座位上下文中执行，修改的是全局的选手 / 教练表）。TI 结算的退役保护人机共用，不涉及座位状态（DESIGN.md 2.4「真实生涯保护」）。
 - **出局**：荣誉 < 0 → `team.disbanded` + `seat.eliminated`（不设 `gameOver`）；下一次 RPC/推进后选手全部成为自由选手、教练进入市场、该座位只能观战（RPC 返回失败，弹窗/已读类操作除外）。全部座位出局或到达终点 TI 时 `gameOver`。
   俱乐部全员假赛曝光（`scandal.banClub`，回合开始时在中性上下文执行）同样使该座位出局：选手永久禁赛而不是成为自由选手；全部座位都因假赛出局时 `gameOver.reason = 'banned'`。出局收尾时冻结该座位的生涯档案（`legacy.recordLegacyPartial`）。
   破产（第十波 #1，`bankruptcy.checkBankruptcy`，在 `endRound` 末尾、中性上下文中逐座位检查）：标记 `team.bankrupt` + `disbanded` + `seat.eliminated` 并立即冻结生涯档案（ending = `bankrupt`），选手离队等收尾与荣誉出局相同（`processEliminations`）；破产预警新闻为该座位私有。全部座位都破产时 `gameOver.reason = 'bankrupt'`，混合原因时为 `disbanded`（各座位结算页仍按自己的结局展示）。

@@ -16,6 +16,7 @@ import {
 import { rollFunEvents, resolveFunDecision } from './funEvents';
 import { inSeatOf, removePendingDecisionsEverywhere } from './seat';
 import { syncSynergies } from './synergy';
+import { comebackAfterCoachRelease, comebackReleaseNote } from './realCareer';
 import { resolveHomeRookieDecision } from './gacha';
 import { resaleLocked } from './listingRules';
 import {
@@ -963,5 +964,7 @@ function resolveRetire(state: GameState, team: Team, decision: PendingDecision, 
     `昔日的队员 ${coach.name} 挂靴后留队担任主教练（${coach.tier} 级，灵性 ${Math.round(coach.insight)}）。${current && current.id !== coach.id ? `原主教练 ${current.name} 离任。` : ''}`,
     true,
   );
-  return { ok: true, message: `${coach.name} 出任主教练（免签字费）` };
+  // 原主教练是读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：离任后以自由身复出（realCareer.ts）
+  const back = current && current.id !== coach.id ? comebackAfterCoachRelease(state, current) : null;
+  return { ok: true, message: `${coach.name} 出任主教练（免签字费）${comebackReleaseNote(back)}` };
 }

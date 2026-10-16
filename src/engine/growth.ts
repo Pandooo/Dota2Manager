@@ -12,6 +12,7 @@ import { positionAgeGrowthMult, trendDeclineMult, trendGrowthMult, yearsPastPeak
 import { clamp, lerp, ownEntry, round2 } from './util';
 import { isHumanTeam } from './seat';
 import { loyaltyEnvironment, prizeShareLoyaltyDelta, recordSalaryGap, updateSalaryTrack } from './salary';
+import { retirementProtected } from './realCareer';
 
 // ---------------------------------------------------------------------------
 // 基础公式
@@ -368,6 +369,8 @@ function becomesCoach(p: Player, wasOnTeam: boolean): boolean {
 /**
  * TI 结算退役：年龄 >25（按位置后移 CONFIG.aging.retireAgeShift，辅助更晚）的 active 选手按概率退役
  * （status='retired'，移出战队）；仍保持高战力的选手概率折减（retireStar*）。
+ * 真实生涯保护（v0.4.2，CONFIG.aging.protectRealCareer，realCareer.retirementProtected）：真实阵容数据中还有晚于本届记录的
+ * 真实选手不退役（不掷骰），最后一届真实数据之后照旧。
  * 每名退役选手按其天梯等级生成教练（generation.coachFromRetiredPlayer），返回列表。
  * 不处理玩家战队的"是否聘为教练"决策（由 season.ts 生成 PendingDecision）。
  * 退役选手的原战队记录在 player.lastTeamId。
@@ -385,6 +388,7 @@ export function processRetirements(state: GameState): { retired: Player[]; newCo
     if (p.isWildSub) continue; // 野外替补候选是一次性程序化选手（未雇佣即删除），不参与退役/转教练
     const age = ageOf(state, p) - (a.retireAgeShift[p.position] ?? 0); // 辅助职业生涯更长
     if (age < a.retireMinAge) continue;
+    if (retirementProtected(state, p)) continue; // 现实中的职业生涯仍在继续（之后的届次还有真实阵容数据）
     const tier = playerTier(p);
     const star = clamp(((Number.isFinite(p.power) ? p.power : 0) - a.retireStarFrom) / Math.max(1e-6, a.retireStarRange), 0, 1);
     const prob = Math.min(a.retireMax, a.retireBase * (age - anchor) + (a.retireLowTierBonus[tier] ?? 0))

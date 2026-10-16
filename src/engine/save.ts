@@ -7,6 +7,7 @@ import { stripLegacyGameBoxes } from './stats';
 import { migrateTransferListings } from './squadOps';
 import { migrateRealRoles } from './roleSync';
 import { migrateHallOfFame } from './hallOfFame';
+import { migrateRealCareerComebacks } from './realCareer';
 import { initMomentumOnLoad } from './momentum';
 
 export interface SaveMeta {
@@ -287,6 +288,9 @@ export function upgradeLoadedState(state: GameState): GameState {
   // 真实生涯位置（第十三波，roleSync.migrateRealRoles，按 roleDataVersion 幂等）：旧存档的真实选手位置沿用首次登场时的位置，
   // 一次性同步到当届真实位置并补齐副位置，人类玩家战队收到一条修正汇总
   migrateRealRoles(state);
+  // 真实生涯复出（v0.4.2，realCareer.migrateRealCareerComebacks，按 realCareerVersion 只执行一次）：旧版本中提前退役、
+  // 真实生涯在当前届次或之后仍在继续的真实选手以自由身回到转会市场（转任的自由教练记录删除；已被聘用的教练不复出）
+  migrateRealCareerComebacks(state);
   // 新秀抽卡回归（2026-10-14，gacha.ts / hallOfFame.ts，幂等）：旧存档没有名人堂 → 以初始成员（DotA1 时代传奇）+ 开局补录创建，
   // 并补录当前在役的 SS / SSR 选手（不发新闻）；本赛季已举行过选秀，卡池从下个赛季初开始。
   // 开局补录（2026-10-15 用户决策「补录」，按 hallOfFame.backfillVersion 只执行一次）：已有名人堂的存档补录开局届之前
