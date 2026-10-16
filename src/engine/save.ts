@@ -8,6 +8,7 @@ import { migrateTransferListings } from './squadOps';
 import { migrateRealRoles } from './roleSync';
 import { migrateHallOfFame } from './hallOfFame';
 import { migrateRealCareerComebacks } from './realCareer';
+import { migrateRealEntry } from './realEntry';
 import { initMomentumOnLoad } from './momentum';
 
 export interface SaveMeta {
@@ -291,6 +292,10 @@ export function upgradeLoadedState(state: GameState): GameState {
   // 真实生涯复出（v0.4.2，realCareer.migrateRealCareerComebacks，按 realCareerVersion 只执行一次）：旧版本中提前退役、
   // 真实生涯在当前届次或之后仍在继续的真实选手以自由身回到转会市场（转任的自由教练记录删除；已被聘用的教练不复出）
   migrateRealCareerComebacks(state);
+  // 真实选手入场（v0.4.3，realEntry.migrateRealEntry，按 realEntryVersion 只执行一次）：当届真实阵容中有、本局还没有出现过的真实选手
+  // （非本届新秀，如 TI6 开局的存档中 TI8 起重返赛场的 Ceb）以自由身进入自由市场；待决的「真实新秀希望加盟」事件改为该新秀直接进入自由市场。
+  // 放在复出迁移之后：已退役的真实选手由复出迁移处理，这里只处理本局中不存在的 id
+  migrateRealEntry(state);
   // 新秀抽卡回归（2026-10-14，gacha.ts / hallOfFame.ts，幂等）：旧存档没有名人堂 → 以初始成员（DotA1 时代传奇）+ 开局补录创建，
   // 并补录当前在役的 SS / SSR 选手（不发新闻）；本赛季已举行过选秀，卡池从下个赛季初开始。
   // 开局补录（2026-10-15 用户决策「补录」，按 hallOfFame.backfillVersion 只执行一次）：已有名人堂的存档补录开局届之前

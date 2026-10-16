@@ -22,6 +22,7 @@ import { generateTempSubCandidates, hireTempSub, isTransferWindowOpen, tempSubCo
 import { isAvailable, overallRating, tierIndex } from './player';
 import { ROLE_DATA_VERSION } from './roles';
 import { REAL_CAREER_VERSION, comebackAfterCoachRelease, comebackReleaseNote } from './realCareer';
+import { REAL_ENTRY_VERSION, realEntryAfterCoachRelease, realEntryReleaseNote } from './realEntry';
 import { heroName } from './heroes';
 import { hashSeed, rngOf } from './rng';
 import {
@@ -181,6 +182,8 @@ function blankState(opts: {
     roleDataVersion: ROLE_DATA_VERSION,
     // 真实生涯保护（v0.4.2）：新游戏从开局就受保护，无需复出迁移
     realCareerVersion: REAL_CAREER_VERSION,
+    // 真实选手入场（v0.4.3）：新游戏从开局就按新规则入场，无需迁移
+    realEntryVersion: REAL_ENTRY_VERSION,
   };
 }
 
@@ -768,9 +771,11 @@ export function hireCoach(state: GameState, coachId: string): OpResult {
       `${coach.tier} 级教练，灵性 ${Math.round(coach.insight)}，工资 ${formatGold(coach.salary)}/回合。`
         + (old ? `前任主教练 ${old.name} 离队。` : ''),
     );
-    // 前任是读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：离任后以自由身复出（realCareer.ts）
+    // 前任是读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：离任后以自由身复出（realCareer.ts）；
+    // 或与当届真实阵容中的真实选手同 id、因在本队执教而暂未入场的真实教练：离任后以自由身进入自由市场（realEntry.ts，v0.4.3）
     const back = comebackAfterCoachRelease(state, old);
-    return ok(`签约 ${coach.name} 成功，签字费 ${formatGold(fee)}${comebackReleaseNote(back)}`);
+    const entered = back ? null : realEntryAfterCoachRelease(state, old);
+    return ok(`签约 ${coach.name} 成功，签字费 ${formatGold(fee)}${comebackReleaseNote(back)}${realEntryReleaseNote(entered)}`);
   });
 }
 
@@ -783,15 +788,17 @@ export function fireCoach(state: GameState): OpResult {
     const coach = state.coaches[team.coachId];
     team.coachId = null;
     if (coach) coach.teamId = null;
-    // 读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：解雇后以自由身复出（realCareer.ts）
+    // 读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：解雇后以自由身复出（realCareer.ts）；
+    // 与当届真实阵容中的真实选手同 id、因在本队执教而暂未入场的真实教练：解雇后以自由身进入自由市场（realEntry.ts，v0.4.3）
     const back = comebackAfterCoachRelease(state, coach);
+    const entered = back ? null : realEntryAfterCoachRelease(state, coach);
     addNews(
       state,
       'transfer',
       `${team.name} 与主教练分道扬镳`,
-      back ? `${coach?.name ?? back} 离开球队，以选手身份复出。` : `${coach?.name ?? '主教练'} 离开球队，进入教练市场。`,
+      back || entered ? `${coach?.name ?? back ?? entered} 离开球队，以选手身份回到赛场。` : `${coach?.name ?? '主教练'} 离开球队，进入教练市场。`,
     );
-    return ok(`已解雇 ${coach?.name ?? '主教练'}${comebackReleaseNote(back)}`);
+    return ok(`已解雇 ${coach?.name ?? '主教练'}${comebackReleaseNote(back)}${realEntryReleaseNote(entered)}`);
   });
 }
 

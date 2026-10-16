@@ -22,6 +22,7 @@ import {
 } from './market';
 import { realOrgOf, realPlayerHandle, type ClubOrg, type ClubPeak } from './clubs';
 import { isHumanTeam } from './seat';
+import { aiSigningHeld } from './marketEntry';
 
 // ---------------------------------------------------------------------------
 // 定义与查询
@@ -258,6 +259,8 @@ export function aiPursueMission(
     if (missionWillingness(state, p, team.id) < minWill) continue;
     const fromId = p.teamId;
     if (!fromId) {
+      // 本回合刚入场的真实选手（v0.4.3 公平窗口，marketEntry.aiSigningHeld）：入场的回合内不签
+      if (aiSigningHeld(state, p)) continue;
       const fee = signingFee(state, p);
       if (!missionCanAfford(state, team, fee, salary)) continue;
       aiSignFreeAgent(state, team, p, pool);

@@ -67,6 +67,10 @@ export type { GachaView, GachaTierView, GachaPullResult } from './gacha';
 export { HOF_SOURCE_LABEL, hallOfFameRows, hofMember, livingSummonsOf, isSummonable } from './hallOfFame';
 export type { HallOfFameRow } from './hallOfFame';
 export { resolveDecision } from './events';
+// 真实选手入场自由市场（v0.4.3）：入场的回合内 AI 不签、下一回合结束时 AI 接手（界面在自由市场中标注「新入场」）
+export { inMarketEntryRound, aiSigningHeld, marketEntryStatus } from './marketEntry';
+export type { MarketEntryStatus } from './marketEntry';
+export { entryRealTeam } from './entryPass';
 export { allPatches, patchByVersion, patchAt } from './patches';
 export { tiYear, currentRound, regularRoundCount, roundKindForPlayer } from './calendar';
 export { addNews } from './news';

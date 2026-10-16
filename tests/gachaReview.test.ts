@@ -1,5 +1,5 @@
-// v0.3 审查修复（2026-10-14）：抽卡新秀工资上限、转售冷却（挂牌 / AI 求购 / 交易抵价）、真实新秀第 1 回合前离池按出道去向加盟
-// （人类出道战队收到「签下 / 放弃」事件）、AI 超编抽卡门槛与退回返还、欢迎弹窗文案、荣誉势头的旧存档 / 赛季中记录、
+// v0.3 审查修复（2026-10-14）：抽卡新秀工资上限、转售冷却（挂牌 / AI 求购 / 交易抵价）、真实新秀第 1 回合前离池
+// （v0.4.3 起进入自由市场，入场回合 AI 不签）、AI 超编抽卡门槛与退回返还、欢迎弹窗文案、荣誉势头的旧存档 / 赛季中记录、
 // 多人座位视图不含随机数状态 / 谈判密钥 / 他队保底、谈判骰子混入服务器密钥、原型链上的 id。
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { GameState, OpResult, Team, Tier } from '../src/engine/types';
@@ -14,7 +14,9 @@ import {
 import { gachaResaleLockLeft, listingRoundsPerSeason } from '../src/engine/listingRules';
 import { listPlayerForTransfer } from '../src/engine/squadOps';
 import { tradeValuation } from '../src/engine/trade';
-import { generateAiOffers, negotiationRoll } from '../src/engine/market';
+import { fillRosterFromMarket, freeAgents, generateAiOffers, negotiationRoll, pickAffordableFreeAgent, signFreeAgent } from '../src/engine/market';
+import { aiSigningHeld } from '../src/engine/marketEntry';
+import { withConfig } from './e4-fakes/mocks';
 import { resolveDecision } from '../src/engine/events';
 import { autoHandleRound } from '../src/engine/autoRound';
 import { createNewGame } from '../src/engine/game';
@@ -103,7 +105,7 @@ describe('抽卡新秀：工资上限与转售冷却', () => {
   });
 });
 
-describe('真实新秀：第 1 回合开始前离池，按真实出道去向加盟', () => {
+describe('真实新秀：第 1 回合开始前离池，进入自由市场（v0.4.3【用户指定】「真实新秀如果没抽到则直接上场到自由市场中」）', () => {
   /** TI11：OG（人类）有 bzm / misha / yuragi 三名出道新秀，Team Secret（AI）有 crystallis */
   function setup(): GameState {
     const s = makeTestState(4);
@@ -122,7 +124,7 @@ describe('真实新秀：第 1 回合开始前离池，按真实出道去向加�
     return s;
   }
 
-  it('离池：真实卡全部离开、同等级补入请神 / 虚构卡（剩余张数与各等级比例不变）；AI 出道战队直接签下；人类出道战队收到待决事件', () => {
+  it('离池：真实卡全部离开、同等级补入请神 / 虚构卡（剩余张数与各等级比例不变）；不论出道战队是谁，全部以自由身进入自由市场，不发待决事件', () => {
     const s = setup();
     const pool = currentGachaPool(s)!;
     const real = TIERS.flatMap((t) => pool.real[t] ?? []);
@@ -135,69 +137,124 @@ describe('真实新秀：第 1 回合开始前离池，按真实出道去向加�
     expect(gachaView(s).realReleased).toBe(true);
     // 同一赛季只执行一次
     expect(releaseRealRookieCards(s)).toBe(0);
-    // AI 出道战队：直接加盟（新秀合同，工资不超过上限），标记 placed
-    const cr = s.players.crystallis;
-    expect(cr.teamId).toBe('team-secret');
-    expect(cr.gacha).toMatchObject({ kind: 'real', placed: true, teamId: 'team-secret', ti: 11 });
-    expect(cr.salary).toBeLessThanOrEqual(gachaRookieWageCap(s));
-    // 人类出道战队：三条「签下 / 放弃」事件，新秀尚未生成
-    const ds = s.pendingDecisions.filter((d) => d.kind === 'rookie_home');
-    expect(ds.map((d) => d.ctx.rookieId).sort()).toEqual(['bzm', 'misha', 'yuragi']);
-    expect(ds.every((d) => d.blocking && d.choices.map((c) => c.id).join() === 'sign,decline')).toBe(true);
-    expect(s.players.bzm).toBeUndefined();
-    expect(currentGachaPool(s)!.realOffered).toBe(3);
+    for (const id of ['bzm', 'misha', 'yuragi', 'crystallis']) {
+      const p = s.players[id];
+      expect(p, id).toBeTruthy();
+      expect(p.status).toBe('active');
+      expect(p.teamId, id).toBeNull();
+      expect(p.isRookie).toBe(true);
+      expect(p.gacha).toMatchObject({ kind: 'real', placed: true, teamId: '', ti: 11, round: 1 });
+      expect(p.marketEntry).toEqual({ ti: 11, round: 1 });
+      expect(s.futureRookies[id]).toBeUndefined();
+      expect(freeAgents(s).map((x) => x.id)).toContain(id);
+    }
+    expect(s.pendingDecisions.some((d) => d.kind === 'rookie_home')).toBe(false);
+    expect(currentGachaPool(s)!.realFree).toBe(4);
+    expect(currentGachaPool(s)!.realJoined ?? 0).toBe(0);
+    expect(currentGachaPool(s)!.realOffered ?? 0).toBe(0);
+    // 出道届的真实水平 / 当届真实位置
+    const pt = getTrajectory('bzm')![11];
+    expect(s.players.bzm.mmr).toBe(pt.mmr);
+    expect(s.players.bzm.power).toBe(pt.power);
+    // 一条公开新闻列出名单
+    const news = s.news.find((n) => n.title.startsWith('【新秀】TI11 未被抽走的真实新秀进入自由市场'));
+    expect(news?.title).toBe('【新秀】TI11 未被抽走的真实新秀进入自由市场：4 人');
+    // 文案不承诺「下一回合起 AI 就签」（AI 多在赛季中期窗口与下个休赛期签自由选手，v0.4.3 审查）
+    expect(news?.body).toContain('入场的这个回合 AI 战队不会签下他们，你可以先签');
+    expect(news?.body).not.toContain('下一回合起照常');
   });
 
-  it('签下 → 加盟本队（新秀合同、工资上限、转售冷却）；放弃 → 加盟 AI 战队或进入自由市场；阵容达到绝对上限时签下被拦下、事件保留', () => {
+  it('公平窗口：入场的回合内 AI 战队不签（补员 / 补强 / 使命），人类玩家可以立即签；下一回合 AI 接手之前仍不签，之后照常', () => {
     const s = setup();
     releaseRealRookieCards(s);
-    const byId = (id: string) => s.pendingDecisions.find((d) => d.kind === 'rookie_home' && d.ctx.rookieId === id)!;
-    const r1 = resolveDecision(s, byId('bzm').id, 'sign');
-    expect(r1.ok, r1.message).toBe(true);
-    const bzm = s.players.bzm;
-    expect(bzm.teamId).toBe('og');
-    expect(bzm.gacha).toMatchObject({ kind: 'real', placed: true, teamId: 'og' });
-    expect(bzm.salary).toBeLessThanOrEqual(gachaRookieWageCap(s));
-    expect(s.futureRookies.bzm).toBeUndefined();
-    expect(gachaResaleLockLeft(s, bzm)).toBeGreaterThan(0);
-    const r2 = resolveDecision(s, byId('misha').id, 'decline');
-    expect(r2.ok).toBe(true);
-    expect(s.players.misha.teamId).not.toBe('og');
-    // 阵容满（绝对上限）：签下失败但事件保留，可以改选放弃
+    const secret = s.teams['team-secret'];
+    secret.gold = 100_000_000;
+    secret.honor = 3000;
+    // Team Secret 只剩 0 人：本回合补员只能用其他自由选手 / 生成新人，不会签下刚入场的真实新秀
+    const rookies = ['bzm', 'misha', 'yuragi', 'crystallis'];
+    for (const id of rookies) expect(aiSigningHeld(s, s.players[id])).toBe(true);
+    // 对照：没有公平窗口时，AI 会先挑刚入场的真实新秀（自由市场里评分最高）
+    const control = withConfig('realEntry', { aiHoldEntryRound: false }, () => pickAffordableFreeAgent(s, secret, freeAgents(s)));
+    expect(rookies).toContain(control?.id);
+    expect(pickAffordableFreeAgent(s, secret, freeAgents(s))?.id ?? '').not.toMatch(/^(bzm|misha|yuragi|crystallis)$/);
+    const signed = fillRosterFromMarket(s, secret.id, 5);
+    expect(signed.some((p) => rookies.includes(p.id))).toBe(false);
+    for (const id of rookies) expect(s.players[id].teamId).toBeNull();
+    // 人类玩家：本回合即可签下（谈判骰子按回合固定，换回合重试时回到第 1 回合）
     const og = s.teams.og;
-    fillBench(s, og, CONFIG.team.hardMaxRoster, { mmr: 6000, power: 60, birthYear: 1995, talent: 40 });
-    expect(rosterSize(s, 'og')).toBe(CONFIG.team.hardMaxRoster);
-    const d3 = byId('yuragi');
-    const r3 = resolveDecision(s, d3.id, 'sign');
-    expect(r3.ok).toBe(false);
-    expect(r3.message).toContain('绝对上限');
-    expect(s.pendingDecisions.some((d) => d.id === d3.id)).toBe(true);
-    expect(resolveDecision(s, d3.id, 'decline').ok).toBe(true);
-    expect(s.pendingDecisions.some((d) => d.kind === 'rookie_home')).toBe(false);
+    og.gold = 100_000_000;
+    og.honor = 3000;
+    let r: OpResult = { ok: false, message: '' };
+    for (let k = 0; k < 20 && !r.ok; k++) {
+      s.players.bzm.marketEntry = { ti: 11, round: s.roundIndex };
+      r = signFreeAgent(s, 'bzm');
+      if (!r.ok) s.roundIndex += 1;
+    }
+    expect(r.ok, r.message).toBe(true);
+    expect(s.players.bzm.teamId).toBe('og');
+    expect(s.players.bzm.marketEntry).toBeUndefined();
+    // 下一回合：本回合结束时 AI 接手（entryPass.ts），接手之前 AI 的其他签约途径仍不签；开关关闭时 AI 照常签
+    s.roundIndex = 2;
+    for (const id of ['misha', 'yuragi', 'crystallis']) {
+      s.players[id].marketEntry = { ti: 11, round: 1 };
+      expect(aiSigningHeld(s, s.players[id])).toBe(true);
+      withConfig('realEntry', { aiPass: false }, () => expect(aiSigningHeld(s, s.players[id])).toBe(false));
+    }
+    // 接手之后（入场时刻已清除）：此后与普通自由选手相同，AI 照常签
+    for (const id of ['misha', 'yuragi', 'crystallis']) {
+      delete s.players[id].marketEntry;
+      expect(aiSigningHeld(s, s.players[id])).toBe(false);
+    }
+    const t1 = s.teams.t1;
+    for (const pid of t1.playerIds.slice()) s.players[pid].teamId = null;
+    t1.playerIds = [];
+    t1.gold = 100_000_000;
+    t1.honor = 3000;
+    const got = fillRosterFromMarket(s, t1.id, 5);
+    expect(got.length).toBe(5);
+    // 关闭开关：不限制（入场回合与下一回合都不限制）
+    const probe = { marketEntry: { ti: 11, round: 1 }, teamId: null };
+    s.roundIndex = 1;
+    expect(aiSigningHeld(s, probe)).toBe(true);
+    withConfig('realEntry', { aiHoldEntryRound: false }, () => {
+      expect(aiSigningHeld(s, probe)).toBe(false);
+      s.roundIndex = 2;
+      expect(aiSigningHeld(s, probe)).toBe(false);
+    });
   });
 
-  it('自动处理（懒人推进 / 托管）：默认签下；阵容已满签不下时改为放弃，不会卡住回合', () => {
+  it('旧存档待决的「真实新秀希望加盟」事件：签下仍然有效（新秀合同加盟本队）；放弃 → 进入自由市场', () => {
     const s = setup();
-    releaseRealRookieCards(s);
-    fillBench(s, s.teams.og, CONFIG.team.hardMaxRoster, { mmr: 6000, power: 60, birthYear: 1995, talent: 40 });
-    const rep = autoHandleRound(s, { news: false });
+    const og = s.teams.og;
+    const legacy = (id: string, tier: Tier) => ({
+      id: `d-${id}`, kind: 'rookie_home' as const, title: `【真实新秀】${id} 希望加盟 OG`, body: '',
+      choices: [{ id: 'sign', label: '签下' }, { id: 'decline', label: '放弃' }],
+      ctx: { teamId: 'og', rookieId: id, tier, ti: 11 }, createdRound: 1, blocking: true,
+    });
+    // 旧版本：离池时这三名新秀没有生成，而是给 OG 发了事件
+    const pool = currentGachaPool(s)!;
+    pool.real = {};
+    pool.realReleased = true;
+    for (const id of ['bzm', 'misha']) delete s.futureRookies[id];
+    s.pendingDecisions.push(legacy('bzm', 'S'), legacy('misha', 'S'));
+    expect(resolveDecision(s, 'd-bzm', 'sign').ok).toBe(true);
+    expect(s.players.bzm.teamId).toBe('og');
+    expect(s.players.bzm.salary).toBeLessThanOrEqual(gachaRookieWageCap(s));
+    expect(resolveDecision(s, 'd-misha', 'decline').ok).toBe(true);
+    expect(s.players.misha.teamId).toBeNull();
+    expect(s.players.misha.marketEntry).toEqual({ ti: 11, round: 1 });
+    expect(s.players.misha.gacha).toMatchObject({ kind: 'real', placed: true, teamId: '' });
     expect(s.pendingDecisions.some((d) => d.kind === 'rookie_home')).toBe(false);
-    expect(rep.decisions).toBe(3);
-    expect(rep.lines.some((l) => l.includes('默认选项未能执行'))).toBe(true);
-    for (const id of ['bzm', 'misha', 'yuragi']) expect(s.players[id]?.teamId).not.toBe('og');
-    // 有空位时默认签下
-    const t = setup();
-    releaseRealRookieCards(t);
-    autoHandleRound(t, { news: false });
-    for (const id of ['bzm', 'misha', 'yuragi']) expect(t.players[id]?.teamId).toBe('og');
+    expect(og.playerIds).toContain('bzm');
   });
 
-  it('确定性：同一状态两次离池结果相同', () => {
+  it('确定性：同一状态两次离池结果相同；离池不消耗随机数以外的补卡（与旧规则一样只有补卡用随机数）', () => {
     const a = setup();
     const b = setup();
     releaseRealRookieCards(a);
     releaseRealRookieCards(b);
     expect(JSON.stringify(a.gacha)).toBe(JSON.stringify(b.gacha));
+    expect(JSON.stringify(a.players)).toBe(JSON.stringify(b.players));
     expect(a.rngState).toBe(b.rngState);
   });
 });

@@ -25,6 +25,7 @@ import { realRoleFor } from './roles';
 import { addFinance, econ, realClubStartingFunds, roundWageBill } from './economy';
 import { departToFreeAgency, executeTransfer, fillRosterFromMarket, roundFee } from './market';
 import { coachFromSeed, colorFromId, generateTeamName, playerFromSeed } from './generation';
+import { markMarketEntry } from './marketEntry';
 import { isHumanTeam, removePendingDecisionsEverywhere } from './seat';
 import { brandEraAt } from './branding';
 import { getPlayerIndex, getTrajectory } from '../data/index';
@@ -216,9 +217,10 @@ export function realPlayerHandle(id: string): string {
 
 /**
  * 本局中从未出现过的当届真实选手（开局届的阵容数据里没有他、不是待登场新秀、也没有同名教练）：按当届真实生涯轨迹的战力 / 天梯、
- * 真实选手索引的身份与天赋 / 灵性，作为自由选手加入本局（随后由新俱乐部签下）。不满足条件返回 null。
+ * 真实选手索引的身份与天赋 / 灵性，作为自由选手加入本局（随后由新俱乐部签下；v0.4.3 起赛季初其余这类选手以自由身进入自由市场，
+ * realEntry.ts）。不满足条件返回 null。不消耗随机数。
  */
-function bringBackRealPlayer(state: GameState, pid: string, ti: number, position: Position | undefined): Player | null {
+export function bringBackRealPlayer(state: GameState, pid: string, ti: number, position: Position | undefined): Player | null {
   if (state.players[pid] || state.coaches[pid] || state.futureRookies?.[pid] !== undefined) return null;
   const e = playerIndexEntry(pid);
   const point = getTrajectory(pid)?.[ti];
@@ -241,7 +243,10 @@ function bringBackRealPlayer(state: GameState, pid: string, ti: number, position
     loyalty: gen.loyaltyMean,
     signatureHeroes: e.signatureHeroes ?? [],
   };
-  return playerFromSeed(state, seed, null);
+  const p = playerFromSeed(state, seed, null);
+  // 以自由身入场（v0.4.3 公平窗口，marketEntry.ts）：新俱乐部随后签下时清除；没签下的留在自由市场，入场的回合内 AI 战队不签
+  markMarketEntry(state, p);
+  return p;
 }
 
 function hireRealCoach(state: GameState, team: Team, seed: SeedCoach | null, ti: number): void {

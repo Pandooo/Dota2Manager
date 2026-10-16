@@ -183,7 +183,7 @@ function HistoryTable({ list }: { list: GachaSeasonRecord[] }) {
             <th className="num">抽出（AI）</th>
             <th className="num">SSR</th>
             <th className="num">请神</th>
-            <th className="num" title="未被抽走的真实新秀（第 1 回合开始前离开卡池）：按出道去向加盟职业战队 / 进入自由市场">真实新秀加盟 / 自由</th>
+            <th className="num" title="未被抽走的真实新秀（第 1 回合开始前离开卡池）：加盟职业战队 / 进入自由市场。v0.4.3 起全部进入自由市场，之前的版本按真实出道去向加盟">真实新秀加盟 / 自由</th>
           </tr>
         </thead>
         <tbody>
@@ -447,7 +447,7 @@ export default function Gacha() {
     <div className="space-y-2 border-t border-line px-3 py-3 text-xs sm:px-4">
       {view.realReleased && view.realLeft.length === 0 && (
         <div className="text-faint">
-          本赛季没有被抽走的真实新秀已在第 1 回合开始前按真实出道去向加盟（卡池补入了同等级的请神 / 虚构卡），之后的卡池只有请神与虚构新秀。
+          本赛季没有被抽走的真实新秀已在第 1 回合开始前进入自由市场（卡池补入了同等级的请神 / 虚构卡），可以在「转会 › 自由选手」中签约；之后的卡池只有请神与虚构新秀。
         </div>
       )}
       {(view.realLeft.length > 0 || view.summonLeft.length > 0) && (
@@ -592,7 +592,7 @@ export default function Gacha() {
               每个赛季初建一个有限卡池：基础 {CONFIG.gacha.poolSize} 张，各等级张数严格按上述比例。每个等级先放本届登场的<b className="text-gold">真实新秀</b>（等级取其出道届的真实水平，超出名额时卡池按比例放大），其余名额约 {Math.round(num(CONFIG.gacha.summonShare) * 100)}% 为<b className="text-[#c39cff]">请神卡</b>、其余为虚构新秀卡。卡池内均匀不放回抽取，所有战队共享、先到先得；抽空后补充一个同比例的卡池。
             </p>
             <p>
-              <b className="text-gold">真实新秀</b>只在赛季初（第 1 回合开始前）可抽：开赛时没有被抽走的真实新秀离开卡池，加盟其真实出道战队（出道战队是你的战队时，由你决定签下或放弃），出道战队不在联赛时加盟其他 AI 战队或进入自由市场；卡池补入同等级的请神 / 虚构卡，之后的出卡比例不变。
+              <b className="text-gold">真实新秀</b>只在赛季初（第 1 回合开始前）可抽：开赛时没有被抽走的真实新秀离开卡池，以自由身进入自由市场（第 1 回合内 AI 战队不签，你可以先在「转会 › 自由选手」中签约；第 2 回合结束时仍是自由身的由 AI 接手，出道战队按新秀合同优先签回；本赛季新成立的真实俱乐部会签回自家出道新秀）；卡池补入同等级的请神 / 虚构卡，之后的出卡比例不变。
             </p>
             <p>
               <b className="text-[#c39cff]">请神</b>：虚拟新秀与名人堂成员（DotA1 时代传奇、开局届之前真实历史中达到过 SS / SSR 的选手与本局历届 SS / SSR 选手）构建请神关系——原型的出道等级与卡的等级相同，新秀复制原型的出道能力、天赋与位置，之后每个赛季的成长走势复制原型的生涯。同一原型每赛季至多 {CONFIG.gacha.summonMaxPerPrototype} 张，所以联赛里可能同时有一名真身和几名请神新秀。

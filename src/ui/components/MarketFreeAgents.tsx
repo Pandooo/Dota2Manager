@@ -2,11 +2,12 @@
 import { useState } from 'react';
 import { useCall, useGame } from '../../store/gameStore';
 import {
-  CONFIG, POSITIONS, TIERS, ageOf, effectiveAttr, effectivePower, formatGold, freeAgents, marketValue, overallRating,
+  CONFIG, POSITIONS, TIERS, ageOf, effectiveAttr, effectivePower, entryRealTeam, formatGold, freeAgents, isHumanTeam, marketEntryStatus, marketValue,
+  overallRating,
   playerTier, playerWillingness, rosterRoom, rosterSigningBlock, rosterSigningNote, signingSalary, tierIndex, POSITION_LABEL,
   REGION_LABEL,
   playsNaturally,
-  type Player, type Position, type Tier,
+  type MarketEntryStatus, type Player, type Position, type Tier,
 } from '../../engine';
 import { Button, Card, EmptyState, Gold, PlayerLink, PosBadge, TierBadge, cx } from './common';
 import { ConfirmButton } from './ConfirmPopover';
@@ -208,6 +209,33 @@ export default function MarketFreeAgents({ windowOpen }: { windowOpen: boolean }
       签约
     </ConfirmButton>
   );
+  // 新进入自由市场的真实选手（未被抽走的真实新秀 / 复出、新面孔，v0.4.3）：入场的回合 AI 战队不签，下一回合结束时 AI 接手（当届真实战队优先）；
+  // 转会窗口锁定期间入场的：下个赛季初窗口开放的回合 AI 战队不签。当届真实战队是人类玩家战队（你的或其他座位的）时没有优先，单独说明
+  const takeoverText = (r: Row, when: string): string => {
+    const home = safe(() => entryRealTeam(g, r.p, r.p.marketEntry?.ti), null);
+    if (home && home.id === me) return `你的战队是他的当届真实战队，但 AI 不会替你签下；${when}需要他的 AI 战队可能签下他`;
+    if (home && (home.isPlayer || safe(() => isHumanTeam(g, home.id), false))) {
+      return `他的当届真实战队 ${home.name} 由玩家执教，没有优先；${when}需要他的 AI 战队可能签下他`;
+    }
+    if (home) return `${when} AI 战队会尝试签约（当届真实战队 ${home.name} 优先）`;
+    return `${when}需要他的 AI 战队可能签下他`;
+  };
+  const entryBadge = (r: Row) => {
+    const st = safe<MarketEntryStatus | null>(() => marketEntryStatus(g, r.p), null);
+    if (!st) return null;
+    const pass = !!CONFIG.realEntry?.aiPass;
+    let title: string;
+    if (st === 'now') {
+      title = '本回合刚进入自由市场的真实选手：本回合 AI 战队不会签约，你可以先签；'
+        + (pass ? takeoverText(r, '下一回合结束时') : '之后 AI 战队也可以签约（多在赛季中期转会窗口与下个休赛期）');
+    } else if (st === 'pass') {
+      title = `新进入自由市场的真实选手（入场的回合已过，本回合结束前你仍可以先签）：${takeoverText(r, '本回合结束时')}`;
+    } else {
+      title = '转会窗口锁定期间进入自由市场的真实选手：下个赛季初窗口开放的那个回合 AI 战队不会签约，你可以先签'
+        + (pass ? `；${takeoverText(r, '第 1 回合结束时')}` : '');
+    }
+    return <span className={cx('text-[10px]', st === 'pass' ? 'text-gold' : 'text-info')} title={title}>新入场</span>;
+  };
   const willCell = (r: Row) =>
     isRefused(g, r.p.id, r.will) ? (
       <span className="text-xs text-bad" title="本回合谈判结果已固定，下回合可再谈">本回合婉拒</span>
@@ -270,6 +298,7 @@ export default function MarketFreeAgents({ windowOpen }: { windowOpen: boolean }
                         <TierBadge tier={r.tier} />
                         <PlayerLink player={r.p} className={PHONE_LINK} />
                         {r.p.isReal && r.p.isRookie && <span className="text-[10px] text-gold">★新秀</span>}
+                        {entryBadge(r)}
                         <span className="text-[10px] text-faint">{r.p.nationality}</span>
                         <PosBadge pos={r.p.position} alt={r.p.altPositions} />
                       </>
@@ -322,6 +351,7 @@ export default function MarketFreeAgents({ windowOpen }: { windowOpen: boolean }
                           <div className="flex items-center gap-1.5">
                             <PlayerLink player={r.p} />
                             {r.p.isReal && r.p.isRookie && <span className="text-[10px] text-gold" title="真实新秀">★</span>}
+                            {entryBadge(r)}
                             <span className="text-[10px] text-faint" title={REGION_LABEL[r.p.region]}>{r.p.nationality}</span>
                           </div>
                         </td>

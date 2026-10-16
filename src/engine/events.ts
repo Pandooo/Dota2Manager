@@ -17,6 +17,7 @@ import { rollFunEvents, resolveFunDecision } from './funEvents';
 import { inSeatOf, removePendingDecisionsEverywhere } from './seat';
 import { syncSynergies } from './synergy';
 import { comebackAfterCoachRelease, comebackReleaseNote } from './realCareer';
+import { realEntryAfterCoachRelease, realEntryReleaseNote } from './realEntry';
 import { resolveHomeRookieDecision } from './gacha';
 import { resaleLocked } from './listingRules';
 import {
@@ -760,7 +761,7 @@ export const DEFAULT_DECISION_CHOICE: Readonly<Partial<Record<EventKind, string>
   poach: 'decline',          // 拒绝报价
   contract: 'renew_1',       // 续约 1 赛季
   retire: 'decline',         // 不聘为教练
-  rookie_home: 'sign',       // 签下按真实出道去向而来的真实新秀（同选秀时代的自动选秀）
+  rookie_home: 'sign',       // 旧存档：签下按真实出道去向而来的真实新秀（v0.4.3 起不再产生，读档时改为直接进入自由市场）
   unpaid_salary: 'ack',
 };
 
@@ -964,7 +965,10 @@ function resolveRetire(state: GameState, team: Team, decision: PendingDecision, 
     `昔日的队员 ${coach.name} 挂靴后留队担任主教练（${coach.tier} 级，灵性 ${Math.round(coach.insight)}）。${current && current.id !== coach.id ? `原主教练 ${current.name} 离任。` : ''}`,
     true,
   );
-  // 原主教练是读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：离任后以自由身复出（realCareer.ts）
-  const back = current && current.id !== coach.id ? comebackAfterCoachRelease(state, current) : null;
-  return { ok: true, message: `${coach.name} 出任主教练（免签字费）${comebackReleaseNote(back)}` };
+  // 原主教练是读档时因在本队执教而暂不复出的退役真实选手（真实生涯仍在继续）：离任后以自由身复出（realCareer.ts）；
+  // 或与当届真实阵容中的真实选手同 id、因在本队执教而暂未入场的真实教练：离任后以自由身进入自由市场（realEntry.ts，v0.4.3）
+  const released = current && current.id !== coach.id ? current : null;
+  const back = released ? comebackAfterCoachRelease(state, released) : null;
+  const entered = released && !back ? realEntryAfterCoachRelease(state, released) : null;
+  return { ok: true, message: `${coach.name} 出任主教练（免签字费）${comebackReleaseNote(back)}${realEntryReleaseNote(entered)}` };
 }

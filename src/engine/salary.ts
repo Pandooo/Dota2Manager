@@ -114,7 +114,7 @@ export function expectedSalary(state: GameState, p: Player, teamId?: string | nu
  */
 function rookieDealWith(p: Player, teamId: string): boolean {
   if (!p.isRookie) return false;
-  // 抽卡新秀（gacha.ts）：抽中他的战队（或按真实出道去向加盟的战队）签的是新秀合同
+  // 抽卡新秀（gacha.ts）：抽中他的战队（或旧版本按真实出道去向加盟的战队）签的是新秀合同；v0.4.3 起未被抽走的真实新秀进入自由市场（teamId 为空），按普通签约
   const g = p.gacha;
   if (g && typeof g === 'object') return g.teamId === teamId;
   const d = p.draft;
@@ -398,6 +398,17 @@ export function recordSalaryGap(p: Player, gap: number, teamId: string): void {
   const t = trackOf(p);
   t.gap = round3(num(gap, 0));
   t.gapTeamId = teamId;
+}
+
+/**
+ * 以新秀合同加盟当前战队、但抽卡出身记录不是这支战队时（入场的下一回合 AI 接手：出道 / 当届真实战队按新秀合同签回出道赛季的真实新秀，
+ * entryPass.ts）：记下新秀合同的战队与到期赛季，合同期内不计薪资差（同 v0.4.2 按真实出道去向加盟）
+ */
+export function startRookieContract(p: Player): void {
+  if (!p?.teamId) return;
+  const t = trackOf(p);
+  t.rookieTeamId = p.teamId;
+  t.rookieUntil = num(p.contractUntil, 0);
 }
 
 /** 续约后结束新秀合同（之后按预期薪资计算薪资差） */

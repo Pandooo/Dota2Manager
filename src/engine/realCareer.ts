@@ -7,8 +7,8 @@
 //   旧版本中已提前退役、真实生涯在当前届次或之后仍在继续的真实选手以自由身回到转会市场（status = active、无东家、
 //   清空修正器、归属感 / 合同 / 工资按普通自由选手重置，本位置与副位置按当届真实生涯同步，水平不高于当届真实水平）。
 //   转会窗口已关闭（TI 预选 / TI 阶段）时只让当届之后仍有真实数据的选手复出：当届 TI 前已无法签约，结算时又会退役。
-//   退役时转任的教练：自由教练 → 删除该教练记录（及引用它的「是否聘为教练」待决事件）；在 AI 战队执教 → 卸任（该队主教练空缺，
-//   AI 之后照常从教练市场补签）后复出；在人类玩家战队执教 → 不替玩家做决定，继续执教，新闻 / 通知注明；
+//   退役时转任的教练：自由教练 → 删除该教练记录（及引用它的「是否聘为教练」待决事件）；在 AI 战队执教 → 卸任后复出
+//   （v0.4.3 审查：该队随即从教练市场补签一名主教练，ai.aiReplaceCoach，不消耗随机数；此前要等到下个赛季初的 AI 季前窗口）；在人类玩家战队执教 → 不替玩家做决定，继续执教，新闻 / 通知注明；
 //   玩家在他真实生涯结束之前解除其主教练职务（解雇 / 签约新教练替换 / 聘请退役旧部替换）时，他随即以自由身复出（comebackAfterCoachRelease）。
 //   复出或暂不复出时发一条公开新闻 + 每支人类玩家战队一条总览通知；有人复出时之后全量同步羁绊。
 // 确定性：不消耗随机数（新闻 / 通知只按 id 排序）。
@@ -20,6 +20,7 @@ import { clampPlayerAttrs, computeSalary, playerTier, tierIndex } from './player
 import { realRoleFor, refreshAltPositions } from './roles';
 import { humanTeamIds, inSeatOf, isHumanTeam, isMultiplayer, removePendingDecisionsEverywhere, seatInPlay } from './seat';
 import { syncSynergies } from './synergy';
+import { aiReplaceCoach } from './ai';
 import type { Coach, GameState, Player, Team } from './types';
 import { POSITIONS } from './types';
 import { ownEntry, round2 } from './util';
@@ -90,6 +91,8 @@ export interface ComebackRecord {
   removedCoachIds: string[];
   /** 卸任主教练的 AI 战队（退役后转任的教练正在 AI 战队执教：卸任后复出） */
   leftTeamIds: string[];
+  /** 卸任后 AI 战队随即补签的主教练（v0.4.3 审查） */
+  replacements?: { teamId: string; coachName: string }[];
 }
 
 export interface ComebackSkip {
@@ -128,7 +131,11 @@ function comebackEligible(state: GameState, p: Player | null | undefined, ti: nu
   return transferWindowOpen(state) ? last >= ti : last > ti;
 }
 
-/** 教练是否在任：所属战队存在且未解散，或被未解散战队登记为主教练 */
+/** 教练是否在任：所属战队存在且未解散，或被未解散战队登记为主教练（realEntry.ts 同样用于教练与真实选手同 id 的情况） */
+export function coachEmployer(state: GameState, c: Coach): Team | null {
+  return employerOf(state, c);
+}
+
 function employerOf(state: GameState, c: Coach): Team | null {
   const own = c.teamId ? ownEntry(state.teams, c.teamId) : undefined;
   if (own && !own.disbanded) return own;
@@ -248,7 +255,15 @@ function runComebacks(state: GameState, ids: readonly string[]): RealCareerMigra
     removePendingDecisionsEverywhere(state, (d) => (d.kind === 'retire' && d.ctx?.playerId === p.id)
       || (typeof d.ctx?.coachId === 'string' && removed.has(d.ctx.coachId)));
     revive(state, p, ti);
-    out.returned.push({ playerId: p.id, handle: p.handle, removedCoachIds: [...removed], leftTeamIds: left });
+    // 卸任的 AI 战队随即补签主教练（读档迁移 / 解除主教练职务都在 AI 季前窗口之外）
+    const replacements: { teamId: string; coachName: string }[] = [];
+    for (const tid of left) {
+      const c = aiReplaceCoach(state, state.teams[tid]);
+      if (c) replacements.push({ teamId: tid, coachName: c.name });
+    }
+    out.returned.push({
+      playerId: p.id, handle: p.handle, removedCoachIds: [...removed], leftTeamIds: left, ...(replacements.length ? { replacements } : {}),
+    });
   }
   return out;
 }
@@ -331,6 +346,8 @@ function comebackNews(state: GameState, res: RealCareerMigration, notify: boolea
     const left = res.returned.filter((r) => r.leftTeamIds.length);
     if (left.length) {
       body += `${left.map((r) => `${r.handle} 卸任 ${r.leftTeamIds.map((t) => teamName(state, t)).join('、')} 主教练`).join('；')}。`;
+      const hired = left.flatMap((r) => r.replacements ?? []);
+      if (hired.length) body += `${hired.map((h) => `${teamName(state, h.teamId)} 随即聘请 ${h.coachName} 担任主教练`).join('；')}。`;
     }
   }
   if (res.skipped.length) {

@@ -155,3 +155,28 @@ export function realOrgOf(state: GameState, teamId: string | null | undefined): 
 export function peakPlayerIdsOfTeam(state: GameState, teamId: string | null | undefined): string[] {
   return realOrgOf(state, teamId)?.peak?.players ?? [];
 }
+
+// 选手某届所在的真实组织（入场的下一回合 AI 接手的「当届真实战队」，entryPass.ts）：首次查询时按全部出现记录建索引
+let PLAYER_ORG_AT: Map<number, Map<string, { org: ClubOrg; idx: number }>> | null = null;
+
+/**
+ * 选手在某届真实阵容数据中效力的组织（只看战队名单，不含当届自由选手）。同一届出现在多支战队名单中时（数据中极少），
+ * 首发（名单前 5 人）优先，其余按索引顺序取第一个。没有记录返回 undefined。
+ */
+export function realOrgOfPlayerAt(playerId: string | null | undefined, ti: number): ClubOrg | undefined {
+  if (!playerId || !Number.isFinite(ti)) return undefined;
+  if (!PLAYER_ORG_AT) {
+    PLAYER_ORG_AT = new Map();
+    for (const org of index().orgs) {
+      for (const app of org.apps) {
+        let byPlayer = PLAYER_ORG_AT.get(app.ti);
+        if (!byPlayer) PLAYER_ORG_AT.set(app.ti, (byPlayer = new Map()));
+        app.players.forEach((pid, idx) => {
+          const cur = byPlayer!.get(pid);
+          if (!cur || (idx < 5 && cur.idx >= 5)) byPlayer!.set(pid, { org, idx });
+        });
+      }
+    }
+  }
+  return PLAYER_ORG_AT.get(ti)?.get(playerId)?.org;
+}

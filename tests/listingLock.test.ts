@@ -365,7 +365,7 @@ describe('加盟门槛 · 任何途径加盟都从 0 开始', () => {
     expect(transferRoundsSinceJoin(s, a)).toBeNull();
   });
 
-  it('抽卡新秀与按真实出道去向签下的真实新秀：同样从 0 开始；「签下」说明写明挂牌条件', () => {
+  it('抽卡新秀与从自由市场签下的真实新秀：同样从 0 开始；抽卡页的挂牌条件说明', () => {
     const s = makeTestState(6);
     startGachaSeason(s);
     s.teams.t0.gold = 100_000_000;
@@ -378,13 +378,15 @@ describe('加盟门槛 · 任何途径加盟都从 0 开始', () => {
     expect(teamMatchesSinceJoin(s, rk)).toBe(0);
     expect(transferRoundsSinceJoin(s, rk)).toBe(0);
 
-    // 真实新秀（TI11，OG 为人类战队）：「签下」事件
+    // 真实新秀（TI11，OG 为人类战队）：v0.4.3 起未被抽走的真实新秀进入自由市场（不再发「签下」事件）；从自由市场签下时同样从 0 开始
     const g = makeTestState(4);
     g.season.ti = 11;
     g.season.year = 2022;
     g.settings.startTi = 11;
     g.teams.t0.isPlayer = false;
     const og = addTeam(g, 'og', { isPlayer: true });
+    og.honor = 3000;
+    og.gold = 100_000_000;
     g.settings.playerTeamId = 'og';
     addTeam(g, 'team-secret');
     for (const id of ['bzm', 'misha', 'yuragi', 'crystallis']) g.futureRookies[id] = 11;
@@ -393,18 +395,18 @@ describe('加盟门槛 · 任何途径加盟都从 0 开始', () => {
     g.roundIndex = 1;
     og.seriesCount = 8;
     releaseRealRookieCards(g);
-    const d = g.pendingDecisions.find((x) => x.kind === 'rookie_home' && x.ctx.rookieId === 'bzm')!;
-    // 「签下」说明写明挂牌条件（与抽卡页规则同一说法）：抽卡转售冷却 18 个转会回合长于一般新加盟选手的 6 个
-    expect(gachaListingRuleText()).toBe(`入队满 ${CONFIG.gacha.resaleHoldRounds} 个转会回合（约一个赛季；其他新加盟选手为 ${RMIN} 个）且随队满 ${MIN} 场比赛`);
-    expect(d.body).toContain(`入队满 18 个转会回合（约一个赛季；其他新加盟选手为 6 个）且随队满 10 场比赛前不能挂牌出售`);
-    expect(resolveDecision(g, d.id, 'sign').ok).toBe(true);
+    expect(g.pendingDecisions.some((x) => x.kind === 'rookie_home')).toBe(false);
+    expect(g.players.bzm.teamId).toBeNull();
+    sign(g, g.players.bzm);
     expect(g.players.bzm.teamId).toBe('og');
     expect(g.players.bzm.joinedTeamSeries).toBe(8);
     expect(g.players.bzm.joinedTeamClock).toBe(listingClock(g));
-    // AI 出道战队直接签下的：不记
-    expect(g.players.crystallis.teamId).toBe('team-secret');
+    // 自由选手：不记
+    expect(g.players.crystallis.teamId).toBeNull();
     expect(g.players.crystallis.joinedTeamSeries).toBeUndefined();
     expect(g.players.crystallis.joinedTeamClock).toBeUndefined();
+    // 抽卡页规则说明（挂牌条件）：抽卡转售冷却 18 个转会回合长于一般新加盟选手的 6 个
+    expect(gachaListingRuleText()).toBe(`入队满 ${CONFIG.gacha.resaleHoldRounds} 个转会回合（约一个赛季；其他新加盟选手为 ${RMIN} 个）且随队满 ${MIN} 场比赛`);
     // 规则说明随配置变化：入队门槛长于抽卡冷却时按入队门槛说，不再写「其他新加盟选手」
     withConfig('squadOps', { listingMinTransferRounds: 24 }, () =>
       expect(gachaListingRuleText()).toBe(`入队满 24 个转会回合且随队满 ${MIN} 场比赛`));

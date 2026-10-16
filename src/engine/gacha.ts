@@ -22,9 +22,10 @@
 // 3. AI 战队：第 1 回合开始前（人类玩家先抽）与赛季中期各自动抽一次，按资金盈余与阵容空位，每赛季至多 aiMaxPullsPerSeason 张；
 //    超编 1 人（rosterSlack）只在替补中有保留价值低于 ai.slackKeepMax 的选手时才抽；抽完整理阵容（超出 ai.maxRoster 放走保留价值最低的非首发）。
 //    抽到 S 级以上、整理后仍在队的发公开新闻。
-// 4. 第 1 回合开始前（AI 开赛前抽卡之后，releaseRealRookieCards）：未被抽走的真实新秀卡离开卡池，同等级补入等量的请神 / 虚构卡
-//    （之后的出卡比例仍为用户指定比例），真实新秀按真实出道去向加盟：出道战队是 AI → 直接加盟（新秀合同，同选秀时代）；
-//    出道战队是人类玩家 → 该玩家收到「签下 / 放弃」的待决事件；否则「该位置首发最弱、付得起工资」的 AI 战队，再否则进入自由市场。
+// 4. 第 1 回合开始前（AI 开赛前抽卡之前，releaseRealRookieCards）：未被抽走的真实新秀卡离开卡池，同等级补入等量的请神 / 虚构卡
+//    （之后的出卡比例仍为用户指定比例），真实新秀以自由身进入自由市场（v0.4.3【用户指定】「真实新秀如果没抽到则直接上场到自由市场中」；
+//    此前按真实出道去向加盟）。入场的回合内 AI 战队不从自由市场签下他们（marketEntry.ts），人类玩家可以立即签约；
+//    第 2 回合结束时仍是自由身的由 AI 接手一次，出道战队优先按新秀合同签回（entryPass.ts，【用户指定】「要，且真实战队优先」）。
 // 5. TI 预选赛转会锁定时卡池关闭（其余卡作废；第 1 回合前已离池的真实新秀不受影响，旧卡池仍有真实卡时按 4 处理）。
 // 随机数一律来自 rngOf(state)。
 // ============================================================================
@@ -35,20 +36,21 @@ import type {
 import { POSITIONS, TIERS } from './types';
 import { CONFIG, MAX_TI, POSITION_LABEL, TI_YEAR } from './config';
 import { rngOf, type Rng } from './rng';
-import { clamp, formatGold, nextId, ownEntry, round2 } from './util';
+import { clamp, formatGold, ownEntry, round2 } from './util';
 import { addNews } from './news';
 import {
-  ageOf, clampPlayerAttrs, computeSalary, econIndexAt, overallRating, playerRating, seasonEconIndex, seasonYear, standardSalary,
+  ageOf, clampPlayerAttrs, computeSalary, econIndexAt, playerTier, seasonEconIndex, seasonYear, standardSalary,
   tierIndex, tierOf,
 } from './player';
-import { activeTeams, addPlayerToTeam, autoLineup, benchPlayers, lineupPlayers, rosterSize, teamPlayers } from './team';
+import { activeTeams, addPlayerToTeam, autoLineup, benchPlayers, rosterSize, teamPlayers } from './team';
 import { generatePlayer, playerFromSeed } from './generation';
 import { departToFreeAgency, isTransferWindowOpen } from './market';
 import { addFinance, roundWageBill } from './economy';
-import { inSeatOf, isHumanTeam, seatInPlay } from './seat';
+import { isHumanTeam } from './seat';
 import { syncSynergies } from './synergy';
 import { aiKeepValue } from './rookieDraft';
-import { gachaListingRuleText } from './listingRules';
+import { markMarketEntry, marketEntryNote } from './marketEntry';
+import { resolveSameIdCoach, sameIdHumanCoachTeam } from './sameIdCoach';
 import { realRoleFor } from './roles';
 import { heroById } from './heroes';
 import { ensureHallOfFame, hofMember, prototypeDebut, summonPrototypes } from './hallOfFame';
@@ -203,6 +205,11 @@ function realDebutPoint(id: string): { ti: number; mmr: number; power: number; t
   if (!point || !Number.isFinite(point.mmr) || !Number.isFinite(point.power)) return null;
   const tier = (TIERS as string[]).includes(point.tier) ? point.tier : tierOf(point.mmr);
   return { ti: e.firstTi, mmr: point.mmr, power: point.power, tier };
+}
+
+/** 真实新秀出道届的等级（卡的等级；数据缺失返回 null） */
+export function realDebutTier(id: string): Tier | null {
+  return realDebutPoint(id)?.tier ?? null;
 }
 
 /** 本届到期的真实新秀（futureRookies 登场届 ≤ 本届、尚未进入本局），按等级分组（组内按 id 排序） */
@@ -395,13 +402,33 @@ function takeAt(pool: GachaPool, t: Tier, idx: number): DrawnCard {
   return { tier: t, kind: 'fictional' };
 }
 
-/** 真实新秀卡 → 选手：身份取真实选手索引，水平取出道届的真实轨迹，位置取当届（或此前最近一届）的真实位置 */
+/**
+ * 真实新秀卡 → 选手：身份取真实选手索引，水平取出道届的真实轨迹，位置取当届（或此前最近一届）的真实位置。
+ * 与他同 id 的真实教练（阵容数据中他出道前是教练，如 TI7 的 Papita / StanKing / SVG；sameIdCoach.ts）：自由教练 → 删除；
+ * 在 AI 战队执教 → 卸任，该队随即补签主教练（新闻注明）；在人类玩家战队执教 → 不生成（返回 null，暂不出道；
+ * 玩家解除其主教练职务时 realEntry.realEntryAfterCoachRelease 让他进入自由市场）。
+ */
 export function createRealRookie(state: GameState, id: string): Player | null {
   if (state.players[id]) return null;
   const e = indexEntry(id);
   const pt = realDebutPoint(id);
   if (!e || !pt) return null;
   const ti = state.season?.ti ?? e.firstTi;
+  const coach = resolveSameIdCoach(state, id, { replace: true });
+  if (coach.humanTeamId) return null;
+  if (coach.leftTeamIds.length) {
+    const handle = e.handle || id;
+    const names = coach.leftTeamIds.map((t) => state.teams[t]?.name ?? t).join('、');
+    const hired = coach.replacements.map((r) => `${state.teams[r.teamId]?.name ?? r.teamId} 随即聘请 ${r.coachName} 担任主教练。`).join('');
+    addNews(
+      state,
+      'transfer',
+      `【教练】${handle} 卸任 ${names} 主教练`,
+      `${handle} 是 TI${ti} 登场的真实新秀，卸任 ${names} 主教练，以选手身份出道。${hired}`,
+      false,
+      { teamIds: coach.leftTeamIds, tags: ['transfer'], noInfer: true },
+    );
+  }
   const gen = CONFIG.generation;
   const age = seasonYear(state) - num(e.birthYear, seasonYear(state) - 18);
   const seed: SeedPlayer = {
@@ -494,7 +521,7 @@ export function teamGachaPull(state: GameState, teamId: string, count: number, o
     const force = tg.pity >= threshold - 1;
     const card = drawCard(state, pool, rng, force);
     const p = realizeCard(state, card);
-    addPlayerToTeam(state, p.id, teamId, { salary: gachaRookieSalary(state, p), contractSeasons: rookieContractSeasons() });
+    addPlayerToTeam(state, p.id, teamId, { salary: gachaRookieSalary(state, p), contractSeasons: gachaRookieContractSeasons() });
     p.isRookie = true;
     p.gacha = {
       ti,
@@ -535,8 +562,8 @@ export function teamGachaPull(state: GameState, teamId: string, count: number, o
   return out;
 }
 
-/** 抽卡新秀的新秀合同赛季数（含当前赛季） */
-function rookieContractSeasons(): number {
+/** 抽卡新秀的新秀合同赛季数（含当前赛季）；入场的下一回合 AI 接手时出道 / 当届真实战队签回本届真实新秀也用它（entryPass.ts） */
+export function gachaRookieContractSeasons(): number {
   return Math.max(1, Math.floor(num(CONFIG.gacha.rookieContractSeasons, 3)));
 }
 
@@ -790,60 +817,13 @@ export function aiGachaPulls(state: GameState, phase: 'opening' | 'midseason'): 
 
 // ---------------------------------------------------------------------------
 // 真实新秀离池（第 1 回合开始前）/ 卡池关闭（TI 预选赛转会锁定）
+// v0.4.3【用户指定，2026-10-16】「真实新秀如果没抽到则直接上场到自由市场中」：未被抽走的真实新秀以自由身进入自由市场，
+// 不再按真实出道去向加盟（此前出道战队是 AI 时直接加盟、是人类玩家时发「签下 / 放弃」事件 rookie_home）。
+// 入场的回合内 AI 战队不从自由市场签下他们（marketEntry.ts），人类玩家先看到、可以立即签约；入场的下一回合结束时 AI 接手一次
+// （entryPass.ts：出道战队 / 当届真实战队优先按新秀合同签回，否则按 AI 需求）。卡池关闭（转会窗口锁定）时离池的，公平窗口留到下个赛季初窗口开放的回合。
 // ---------------------------------------------------------------------------
 
-/** 某战队在 pos 位置首发的评分（空位为 0） */
-function starterRatingAt(state: GameState, teamId: string, pos: Player['position']): number {
-  const slot = lineupPlayers(state, teamId).find((s) => s.pos === pos);
-  return slot?.player ? playerRating(slot.player, pos) : 0;
-}
-
-/** 真实新秀的出道战队（playerIndex.firstTeamId；不在本局 / 已解散返回 null） */
-function realHomeTeam(state: GameState, id: string): Team | null {
-  const home = state.teams[indexEntry(id)?.firstTeamId ?? ''];
-  return home && !home.disbanded ? home : null;
-}
-
-/**
- * 一名未被抽走的真实新秀的去向（只考虑 AI 战队）：真实出道战队是 AI → 直接加盟（同选秀时代：新秀合同工资不超过选秀顶薪，
- * 不做预算检查）；否则「该位置首发最弱、付得起工资」的 AI 战队；都不行返回 null（留在自由市场）。返回加盟的战队。
- */
-function placeRealRookie(state: GameState, p: Player): Team | null {
-  const maxRoster = CONFIG.ai.maxRoster;
-  const salary = gachaRookieSalary(state, p);
-  const home = realHomeTeam(state, p.id);
-  const isAi = (t: Team | null | undefined): t is Team => !!t && !t.disbanded && !t.isPlayer && !isHumanTeam(state, t.id) && t.playerIds.length > 0;
-  // 其他 AI 战队：与 AI 签约同一预算规则，签下后的余额需覆盖（现有工资 + 新秀工资）× signBudgetRounds 个回合
-  const affordable = (t: Team) => num(t.gold, 0) >= (roundWageBill(state, t.id) + salary) * CONFIG.ai.signBudgetRounds;
-  let team: Team | null = isAi(home) ? home : null;
-  if (!team) {
-    const rating = overallRating(p);
-    let best = -Infinity;
-    for (const t of activeTeams(state)) {
-      if (!isAi(t) || !affordable(t)) continue;
-      const roster = teamPlayers(state, t.id).filter((x) => !x.tempSubUntilTournament);
-      const full = roster.length >= maxRoster;
-      if (full) {
-        const bench = benchPlayers(state, t.id).filter((b) => !b.tempSubUntilTournament);
-        if (!bench.length || bench.every((b) => overallRating(b) >= rating)) continue;
-      }
-      const gap = playerRating(p, p.position) - starterRatingAt(state, t.id, p.position) - (full ? 5 : 0);
-      if (gap > best || (gap === best && team && t.id < team.id)) {
-        best = gap;
-        team = t;
-      }
-    }
-  }
-  if (!team) return null;
-  addPlayerToTeam(state, p.id, team.id, { salary, contractSeasons: rookieContractSeasons() });
-  if (p.teamId !== team.id) return null;
-  autoLineup(state, team.id);
-  trimAiAfterPull(state, team);
-  if (p.teamId !== team.id) return null;
-  return team;
-}
-
-/** 真实新秀的抽卡出身记录（按真实出道去向加盟 / 留在自由市场） */
+/** 真实新秀的抽卡出身记录（未被抽走：teamId 为空 = 进入自由市场；旧版本按真实出道去向加盟时为加盟的战队） */
 function placedRecord(state: GameState, p: Player, ti: number, tier: Tier, teamId: string): NonNullable<Player['gacha']> {
   return {
     ti,
@@ -859,65 +839,102 @@ function placedRecord(state: GameState, p: Player, ti: number, tier: Tier, teamI
   };
 }
 
-/** 生成并安置一名未被抽走的真实新秀（AI 战队或自由市场）；返回加盟的战队（null = 自由市场 / 数据缺失） */
-function placeUnpulledReal(state: GameState, id: string, tier: Tier, ti: number): { p: Player | null; team: Team | null } {
+/**
+ * 一名未被抽走的真实新秀以自由身进入自由市场：按出道届的真实水平与当届真实位置生成（createRealRookie），记录抽卡出身（placed，teamId 为空）
+ * 与入场时刻（入场的回合内 AI 不签）。已在本局中或数据缺失时返回 null（同时清掉 futureRookies 条目）。不消耗随机数。
+ * 也用于旧存档待决的「真实新秀希望加盟」事件的迁移（realEntry.migrateRealEntry）。
+ */
+export function releaseRealRookieToMarket(state: GameState, id: string, tier: Tier, ti: number): Player | null {
   const p = createRealRookie(state, id);
   if (state.futureRookies) delete state.futureRookies[id];
-  if (!p) return { p: null, team: null };
-  const team = placeRealRookie(state, p);
-  p.gacha = placedRecord(state, p, ti, tier, team?.id ?? '');
-  return { p, team };
+  if (!p) return null;
+  p.gacha = placedRecord(state, p, ti, tier, '');
+  markMarketEntry(state, p);
+  return p;
 }
 
-/** 人类玩家战队是否接收「真实出道新秀」的待决事件（多人模式：座位仍在游戏中） */
-function humanHome(state: GameState, team: Team | null): team is Team {
-  if (!team || team.disbanded) return false;
-  if (state.multiplayer) return isHumanTeam(state, team.id) && seatInPlay(state, team.id);
-  return team.isPlayer || isHumanTeam(state, team.id);
+/** 离池的真实新秀：进入自由市场的选手；与他同 id 的教练在人类玩家战队执教而暂不出道的（显示 ID、战队） */
+interface RealRelease {
+  free: Player[];
+  held: { handle: string; teamId: string }[];
 }
 
-/** 真实出道新秀待决事件的说明数据（不生成选手、不消耗随机数） */
-function homeRookieInfo(state: GameState, id: string): { handle: string; pos: Player['position']; age: number; salary: number } | null {
-  const e = indexEntry(id);
-  const pt = realDebutPoint(id);
-  if (!e || !pt) return null;
-  const ti = state.season?.ti ?? e.firstTi;
-  const pos = realRoleFor(id, ti) ?? e.position;
-  const age = seasonYear(state) - num(e.birthYear, seasonYear(state) - 18);
-  return { handle: e.handle || id, pos, age, salary: gachaRookieSalary(state, { mmr: pt.mmr, power: pt.power }) };
+/** 一批未被抽走的真实新秀卡进入自由市场；结果计入 pool 的离池统计 */
+function releaseRealCards(state: GameState, pool: GachaPool, cards: { id: string; t: Tier }[]): RealRelease {
+  const out: RealRelease = { free: [], held: [] };
+  for (const { id, t } of cards) {
+    // 离池而未被抽走的卡（本届抽出张数 = 构成 − 剩余 − 离池）
+    (pool.realPlaced ??= {})[t] = num(pool.realPlaced[t], 0) + 1;
+    // 与他同 id 的教练在人类玩家战队执教：暂不出道（解除主教练职务后进入自由市场，realEntry.realEntryAfterCoachRelease）
+    const humanTeam = state.players[id] ? null : sameIdHumanCoachTeam(state, id);
+    if (humanTeam) {
+      if (state.futureRookies) delete state.futureRookies[id];
+      out.held.push({ handle: indexEntry(id)?.handle || id, teamId: humanTeam });
+      continue;
+    }
+    const p = releaseRealRookieToMarket(state, id, t, pool.ti);
+    if (p) out.free.push(p);
+  }
+  pool.realFree = num(pool.realFree, 0) + out.free.length;
+  return out;
 }
 
-/** 给人类玩家战队发「真实出道新秀」的待决事件（签下 / 放弃；写入该战队所属座位） */
-function offerHomeRookie(state: GameState, team: Team, id: string, tier: Tier, ti: number): boolean {
-  const info = homeRookieInfo(state, id);
-  if (!info) return false;
-  const seasons = rookieContractSeasons();
-  // 挂牌限制（与抽卡页规则同一说法）：抽卡转售冷却 + 加盟门槛（随队场数 / 入队转会回合，CONFIG.squadOps）
-  const resaleRule = gachaListingRuleText();
-  inSeatOf(state, team.id, () => {
-    const d: PendingDecision = {
-      id: nextId(state, 'd'),
-      kind: 'rookie_home',
-      title: `【真实新秀】${info.handle} 希望加盟 ${team.name}`,
-      body: `${info.handle}（${tier} · ${POSITION_LABEL[info.pos]} · ${info.age} 岁）是 TI${ti} 登场的真实新秀，现实中从 ${team.name} 出道。`
-        + `本赛季开赛前没有战队抽到他，他希望按真实出道去向加盟。\n`
-        + `· 签下：新秀合同 ${seasons} 个赛季，工资 ${formatGold(info.salary)}/回合，无签字费`
-        + `${resaleRule ? `；${resaleRule}前不能挂牌出售` : ''}。\n`
-        + '· 放弃：他将加盟其他职业战队，或进入自由市场。',
-      choices: [
-        { id: 'sign', label: '签下', description: `工资 ${formatGold(info.salary)}/回合，新秀合同 ${seasons} 个赛季` },
-        { id: 'decline', label: '放弃', description: '他将另寻东家' },
-      ],
-      ctx: { teamId: team.id, rookieId: id, tier, ti },
-      createdRound: state.roundIndex,
-      blocking: true,
-    };
-    state.pendingDecisions.push(d);
-  });
-  return true;
+/** 暂不出道的说明（新闻正文） */
+function heldRookieText(state: GameState, held: RealRelease['held']): string {
+  if (!held.length) return '';
+  return `${held.map((h) => `${h.handle} 现任 ${state.teams[h.teamId]?.name ?? h.teamId} 主教练`).join('；')}，继续执教、暂不出道；`
+    + `解除其主教练职务后以自由身进入自由市场。`;
 }
 
-/** 「真实出道新秀」待决事件的处理结果（events.resolveDecision 调用；keep = 不移除该事件，玩家可改选） */
+/** 新闻里的名单：「Topson（S 级 · 2号位 中单）」，等级从高到低、同级按显示 ID，最多 CONFIG.realEntry.newsMax 人 */
+function rookieNewsList(list: Player[]): string {
+  const max = Math.max(1, Math.floor(num(CONFIG.realEntry?.newsMax, 12)));
+  const key = (p: Player) => (p.handle || p.id).toLowerCase();
+  const sorted = list.slice().sort((a, b) => tierIndex(playerTier(b)) - tierIndex(playerTier(a))
+    || (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const shown = sorted.slice(0, max).map((p) => `${p.handle}（${playerTier(p)} 级 · ${POSITION_LABEL[p.position]}）`);
+  return `${shown.join('、')}${sorted.length > max ? ` 等 ${sorted.length} 人` : ''}`;
+}
+
+/**
+ * 第 1 回合开始前（season.enterRound，AI 开赛前抽卡之前）：未被抽走的真实新秀卡离开卡池，以自由身进入自由市场
+ * （入场的回合内 AI 战队不签，人类玩家可以立即签约），同等级补入等量的请神 / 虚构卡（之后的出卡比例仍为用户指定比例）。
+ * 同一赛季只执行一次；返回离池的真实新秀人数。
+ */
+export function releaseRealRookieCards(state: GameState): number {
+  const pool = currentGachaPool(state);
+  if (!pool || pool.realReleased || state.gameOver) return 0;
+  pool.realReleased = true;
+  const cards = TIERS.slice().reverse().flatMap((t) => (pool.real[t] ?? []).map((id) => ({ id, t })));
+  if (!cards.length) return 0;
+  pool.real = {};
+  const backfill = Object.fromEntries(TIERS.map((t) => [t, 0])) as Record<Tier, number>;
+  for (const c of cards) backfill[c.t] += 1;
+  fillTiers(state, pool, backfill, null, rngOf(state));
+  pool.size += cards.length;
+  pool.backfilled = num(pool.backfilled, 0) + cards.length;
+  const { free, held } = releaseRealCards(state, pool, cards);
+  if (free.length || held.length) {
+    const note = marketEntryNote(state, free.length);
+    addNews(
+      state,
+      'transfer',
+      free.length ? `【新秀】TI${pool.ti} 未被抽走的真实新秀进入自由市场：${free.length} 人` : `【新秀】TI${pool.ti} 未被抽走的真实新秀暂不出道`,
+      `开赛前没有被抽走的真实新秀离开卡池（卡池补入同等级的请神 / 虚构卡，继续开放到 TI 预选赛）`
+        + `${free.length ? `，以自由身进入自由市场：${rookieNewsList(free)}。` : '。'}`
+        + `${note ? `${note}本赛季新成立的真实俱乐部签回自家出道新秀不受此限。` : ''}`
+        + heldRookieText(state, held),
+      true,
+      { playerIds: free.map((p) => p.id), teamIds: held.map((h) => h.teamId), tags: ['gacha', 'transfer'], noInfer: true },
+    );
+  }
+  return cards.length;
+}
+
+/**
+ * 旧存档待决的「真实新秀希望加盟」事件（rookie_home，v0.4.3 起不再产生；读档时 realEntry.migrateRealEntry 会把它们改为直接进入自由市场）
+ * 的处理结果（events.resolveDecision 调用；keep = 不移除该事件，玩家可改选）：签下 = 新秀合同加盟本队；放弃 = 他进入自由市场。
+ */
 export function resolveHomeRookieDecision(
   state: GameState, team: Team, decision: Pick<PendingDecision, 'ctx'>, choiceId: string,
 ): { ok: boolean; message: string; keep?: boolean } {
@@ -935,7 +952,7 @@ export function resolveHomeRookieDecision(
     const p = createRealRookie(state, id);
     if (state.futureRookies) delete state.futureRookies[id];
     if (!p) return { ok: true, message: '新秀数据缺失，事件取消' };
-    addPlayerToTeam(state, p.id, team.id, { salary: gachaRookieSalary(state, p), contractSeasons: rookieContractSeasons() });
+    addPlayerToTeam(state, p.id, team.id, { salary: gachaRookieSalary(state, p), contractSeasons: gachaRookieContractSeasons() });
     if (p.teamId !== team.id) return { ok: false, message: `未能签下 ${p.handle}` };
     p.isRookie = true;
     p.gacha = placedRecord(state, p, ti, tier, team.id);
@@ -944,108 +961,40 @@ export function resolveHomeRookieDecision(
       'transfer',
       `【新秀】${p.handle} 加盟 ${team.name}`,
       `TI${ti} 真实新秀 ${p.handle}（${tier} · ${POSITION_LABEL[p.position]}）按真实出道去向加盟 ${team.name}，`
-        + `签下 ${rookieContractSeasons()} 个赛季的新秀合同，工资 ${formatGold(p.salary)}/回合。`,
+        + `签下 ${gachaRookieContractSeasons()} 个赛季的新秀合同，工资 ${formatGold(p.salary)}/回合。`,
       false,
       { teamIds: [team.id], playerIds: [p.id], tags: ['gacha', 'transfer'], noInfer: true },
     );
     syncSynergies(state);
     return { ok: true, message: `已签下 ${p.handle}（工资 ${formatGold(p.salary)}/回合）` };
   }
-  const { p, team: to } = placeUnpulledReal(state, id, tier, ti);
+  const p = releaseRealRookieToMarket(state, id, tier, ti);
   if (!p) return { ok: true, message: '新秀数据缺失，事件取消' };
-  if (to) syncSynergies(state);
   addNews(
     state,
     'transfer',
     `【新秀】${team.name} 放弃真实新秀 ${p.handle}`,
-    `${team.name} 没有签下按真实出道去向而来的 ${p.handle}（${tier}），${to ? `他转而加盟 ${to.name}` : '他进入自由市场'}。`,
+    `${team.name} 没有签下按真实出道去向而来的 ${p.handle}（${tier}），他进入自由市场。`,
     false,
-    { teamIds: [team.id, ...(to ? [to.id] : [])], playerIds: [p.id], visibility: 'private', actorTeamId: team.id, tags: ['gacha'], noInfer: true },
+    { teamIds: [team.id], playerIds: [p.id], visibility: 'private', actorTeamId: team.id, tags: ['gacha'], noInfer: true },
   );
-  return { ok: true, message: to ? `已放弃 ${p.handle}，他加盟了 ${to.name}` : `已放弃 ${p.handle}，他进入自由市场` };
-}
-
-/** 真实新秀离池 / 卡池关闭时安置的汇总 */
-interface RealPlacement {
-  joined: string[];
-  free: string[];
-  offered: number;
-}
-
-/** 安置一批真实新秀卡（出道战队为人类玩家 → 发待决事件；否则 AI / 自由市场）；结果计入 pool 的离池统计 */
-function placeRealCards(state: GameState, pool: GachaPool, cards: { id: string; t: Tier }[], allowOffers: boolean): RealPlacement {
-  const out: RealPlacement = { joined: [], free: [], offered: 0 };
-  for (const { id, t } of cards) {
-    // 离池而未被抽走的卡（本届抽出张数 = 构成 − 剩余 − 离池）
-    (pool.realPlaced ??= {})[t] = num(pool.realPlaced[t], 0) + 1;
-    if (state.players[id]) {
-      if (state.futureRookies) delete state.futureRookies[id];
-      continue;
-    }
-    const home = realHomeTeam(state, id);
-    if (allowOffers && humanHome(state, home) && offerHomeRookie(state, home, id, t, pool.ti)) {
-      out.offered += 1;
-      continue;
-    }
-    const { p, team } = placeUnpulledReal(state, id, t, pool.ti);
-    if (!p) continue;
-    if (team) out.joined.push(`${p.handle}（${team.name}）`);
-    else out.free.push(p.handle);
-  }
-  pool.realJoined = num(pool.realJoined, 0) + out.joined.length;
-  pool.realFree = num(pool.realFree, 0) + out.free.length;
-  if (out.offered) pool.realOffered = num(pool.realOffered, 0) + out.offered;
-  if (out.joined.length) syncSynergies(state);
-  return out;
-}
-
-/**
- * 第 1 回合开始前（season.enterRound，AI 开赛前抽卡之后）：未被抽走的真实新秀卡离开卡池，按真实出道去向加盟
- * （出道战队是 AI → 直接加盟；是人类玩家 → 待决事件「签下 / 放弃」；否则合适的 AI 战队 / 自由市场），
- * 同等级补入等量的请神 / 虚构卡（之后的出卡比例仍为用户指定比例）。同一赛季只执行一次；返回离池的真实新秀人数。
- */
-export function releaseRealRookieCards(state: GameState): number {
-  const pool = currentGachaPool(state);
-  if (!pool || pool.realReleased || state.gameOver) return 0;
-  pool.realReleased = true;
-  const cards = TIERS.slice().reverse().flatMap((t) => (pool.real[t] ?? []).map((id) => ({ id, t })));
-  if (!cards.length) return 0;
-  pool.real = {};
-  const backfill = Object.fromEntries(TIERS.map((t) => [t, 0])) as Record<Tier, number>;
-  for (const c of cards) backfill[c.t] += 1;
-  fillTiers(state, pool, backfill, null, rngOf(state));
-  pool.size += cards.length;
-  pool.backfilled = num(pool.backfilled, 0) + cards.length;
-  const res = placeRealCards(state, pool, cards, true);
-  if (res.joined.length || res.free.length) {
-    addNews(
-      state,
-      'transfer',
-      `【新秀】TI${pool.ti} 真实新秀按出道去向加盟：${res.joined.length + res.free.length} 人`,
-      `开赛前没有被抽走的真实新秀离开卡池（卡池补入同等级的请神 / 虚构卡，继续开放到 TI 预选赛）。`
-        + `${res.joined.length ? `加盟职业战队：${res.joined.slice(0, 12).join('、')}${res.joined.length > 12 ? ' 等' : ''}` : ''}`
-        + `${res.joined.length && res.free.length ? '；' : ''}${res.free.length ? `${res.free.length} 人暂无东家，进入自由市场` : ''}。`,
-      false,
-      { tags: ['gacha'] },
-    );
-  }
-  return cards.length;
+  return { ok: true, message: `已放弃 ${p.handle}，他进入自由市场` };
 }
 
 /**
  * 关闭本赛季卡池（season.enterRound 进入 TI 预选赛回合时；新赛季建池前若旧卡池仍未关闭也会先关闭）：
- * 仍在池中的真实新秀（旧卡池：第 1 回合前没有离池）按真实出道去向加盟（只考虑 AI 战队），其余卡作废；记录本届汇总并发一条新闻。
+ * 仍在池中的真实新秀（旧卡池：第 1 回合前没有离池）以自由身进入自由市场，其余卡作废；记录本届汇总并发一条新闻。
  */
 export function closeGachaPool(state: GameState): GachaSeasonRecord | null {
   const gs = gachaState(state);
   const pool = gs.pool;
   if (!pool) return null;
   gs.pool = null;
-  const cards = TIERS.flatMap((t) => (pool.real[t] ?? []).map((id) => ({ id, t })));
-  let late: RealPlacement = { joined: [], free: [], offered: 0 };
+  const cards = TIERS.slice().reverse().flatMap((t) => (pool.real[t] ?? []).map((id) => ({ id, t })));
+  let late: RealRelease = { free: [], held: [] };
   if (cards.length && !state.gameOver && (CONFIG.gacha as { placeUnpulledReal?: boolean }).placeUnpulledReal !== false) {
     pool.real = {};
-    late = placeRealCards(state, pool, cards, false);
+    late = releaseRealCards(state, pool, cards);
   }
   const made = pool.made ?? {};
   const rec: GachaSeasonRecord = {
@@ -1072,16 +1021,19 @@ export function closeGachaPool(state: GameState): GachaSeasonRecord | null {
   gs.history.push(rec);
   const keep = Math.max(1, Math.floor(num(CONFIG.gacha.historyMax, 16)));
   if (gs.history.length > keep) gs.history.splice(0, gs.history.length - keep);
-  if (!state.gameOver && (late.joined.length || late.free.length)) {
+  if (!state.gameOver && (late.free.length || late.held.length)) {
+    // 进入 TI 预选赛时关闭：转会窗口锁定，公平窗口留到下个赛季初（marketEntry.ts）；新赛季建池前关闭旧卡池时为赛季初
     addNews(
       state,
       'transfer',
-      `【新秀】TI${pool.ti} 卡池关闭：${late.joined.length + late.free.length} 名真实新秀按出道去向加盟`,
-      `转会窗口锁定，本赛季新秀抽卡结束（共抽出 ${pool.drawn} 张）。未被抽走的真实新秀`
-        + `${late.joined.length ? `加盟职业战队：${late.joined.slice(0, 12).join('、')}${late.joined.length > 12 ? ' 等' : ''}` : ''}`
-        + `${late.joined.length && late.free.length ? '；' : ''}${late.free.length ? `${late.free.length} 人暂无东家，进入自由市场` : ''}。`,
+      late.free.length
+        ? `【新秀】TI${pool.ti} 卡池关闭：${late.free.length} 名未被抽走的真实新秀进入自由市场`
+        : `【新秀】TI${pool.ti} 卡池关闭：未被抽走的真实新秀暂不出道`,
+      `本赛季新秀抽卡结束（共抽出 ${pool.drawn} 张）。`
+        + `${late.free.length ? `未被抽走的真实新秀以自由身进入自由市场：${rookieNewsList(late.free)}。${marketEntryNote(state, late.free.length)}` : ''}`
+        + heldRookieText(state, late.held),
       false,
-      { tags: ['gacha'] },
+      { playerIds: late.free.map((p) => p.id), teamIds: late.held.map((h) => h.teamId), tags: ['gacha'], noInfer: true },
     );
   }
   return rec;

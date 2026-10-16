@@ -14,7 +14,7 @@ import {
   playerWillingness, roundFee, trimRoster,
 } from './market';
 import { generateAiTeam } from './generation';
-import { allPendingDecisions } from './seat';
+import { allPendingDecisions, isHumanTeam } from './seat';
 import { aiCoachCandidates, aiCoachPickWeight } from './coaches';
 import { aiPursueMission, isRetainedMissionPlayer, missionAwareTrim, refreshMissions } from './missions';
 import { aiLineupPriority, lineupPriorityLocks } from './lineupPriority';
@@ -232,6 +232,57 @@ function maybeHireCoach(state: GameState, team: Team, coachPool: Coach[], rng: R
   }
 }
 
+/** 人类玩家战队退役选手转来的教练（「是否聘为教练」待决事件引用的教练 id 与 `p:选手 id`）：玩家拥有优先签约权，决策未处理前 AI 不得签约 */
+function retireReservedCoaches(state: GameState): Set<string> {
+  const reserved = new Set<string>();
+  for (const d of allPendingDecisions(state)) {
+    if (d.kind !== 'retire') continue;
+    if (typeof d.ctx?.coachId === 'string') reserved.add(d.ctx.coachId);
+    if (typeof d.ctx?.playerId === 'string') reserved.add(`p:${d.ctx.playerId}`);
+  }
+  return reserved;
+}
+
+/** AI 可以考虑的自由教练（排除玩家优先签约的退役旧部），按等级 → 灵性降序 */
+function freeCoachPool(state: GameState, reserved: Set<string>): Coach[] {
+  return Object.values(state.coaches)
+    .filter((c) => !!c && !c.teamId && !reserved.has(c.id) && !(c.formerPlayerId && reserved.has(`p:${c.formerPlayerId}`)))
+    .sort((a, b) => tierIndex(b.tier) - tierIndex(a.tier) || b.insight - a.insight);
+}
+
+/**
+ * AI 战队的主教练在转会窗口之外离任后随即补签一名（v0.4.3 审查：读档迁移时与真实选手同 id 的教练卸任、回到赛场，
+ * 真实新秀卸任教练出道等；AI 平时只在赛季初季前窗口按概率聘请，赛季中途离任会让该队整个赛季没有主教练）。
+ * 候选与 maybeHireCoach 相同（自由教练、付得起签字费 + 工资 × signBudgetRounds、签下后市场不跌破保底），
+ * 取与本队首发平均等级最匹配的一名（aiCoachPickWeight 最大；同分按等级 → 灵性 → id）。不消耗随机数、不发新闻（调用方的新闻注明）。
+ * 人类玩家战队 / 已解散 / 已有主教练时不处理。返回签下的教练。
+ */
+export function aiReplaceCoach(state: GameState, team: Team | null | undefined): Coach | null {
+  if (!team || team.disbanded || team.isPlayer || isHumanTeam(state, team.id)) return null;
+  if (team.coachId && state.coaches[team.coachId]) return null;
+  const pool = freeCoachPool(state, retireReservedCoaches(state))
+    .sort((a, b) => tierIndex(b.tier) - tierIndex(a.tier) || b.insight - a.insight || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const wage = roundWageBill(state, team.id);
+  const feeOf = (c: Coach) => Math.round(Math.max(0, c.salary) * CONFIG.ai.coachFeeSalaryMult);
+  const cands = aiCoachCandidates(pool, (c) => team.gold - feeOf(c) >= (wage + c.salary) * CONFIG.ai.signBudgetRounds);
+  if (!cands.length) return null;
+  const target = coachTargetTier(state, team);
+  let best = cands[0];
+  let bestW = aiCoachPickWeight(best, target);
+  for (const c of cands) {
+    const w = aiCoachPickWeight(c, target);
+    if (w > bestW) {
+      best = c;
+      bestW = w;
+    }
+  }
+  const fee = feeOf(best);
+  best.teamId = team.id;
+  team.coachId = best.id;
+  if (fee > 0) addFinance(state, team.id, -fee, 'signing', `签约教练 ${best.name}`);
+  return best;
+}
+
 /**
  * 资金为负：依次出售工资最高的替补（无买家则解约），直到资金转正或替补清空（首发不动，保证 ≥ 5 人）；
  * 仍为负则全员降薪（不低于 CONFIG.economy.minSalary）。
@@ -307,18 +358,8 @@ export function aiTransferWindow(
   const pool = freeAgents(state);
   const teams = rng.shuffle(aiTeams(state).slice());
   // 玩家战队退役选手转来的教练：玩家拥有优先签约权，决策未处理前 AI 不得签约
-  const reserved = new Set<string>();
-  for (const d of allPendingDecisions(state)) {
-    if (d.kind !== 'retire') continue;
-    if (typeof d.ctx?.coachId === 'string') reserved.add(d.ctx.coachId);
-    if (typeof d.ctx?.playerId === 'string') reserved.add(`p:${d.ctx.playerId}`);
-  }
-  const coachPool =
-    mode === 'preseason'
-      ? Object.values(state.coaches)
-          .filter((c) => !c.teamId && !reserved.has(c.id) && !(c.formerPlayerId && reserved.has(`p:${c.formerPlayerId}`)))
-          .sort((a, b) => tierIndex(b.tier) - tierIndex(a.tier) || b.insight - a.insight)
-      : [];
+  const reserved = retireReservedCoaches(state);
+  const coachPool = mode === 'preseason' ? freeCoachPool(state, reserved) : [];
   const upgradeChance = mode === 'preseason' ? CONFIG.ai.preseasonUpgradeChance : CONFIG.ai.midseasonUpgradeChance;
   // 全联盟低归属感 AI 选手（挖角目标），评分降序
   const poachPool: Player[] = [];

@@ -305,6 +305,8 @@ export function addPlayerToTeam(
   // 挂牌门槛的两个起点（listingRules.teamMatchesSinceJoin / transferRoundsSinceJoin）：任何途径换队都从 0 开始计——
   // 加盟时战队的累计系列赛场数与转会回合时钟。只有人类战队用得到（挂牌 / AI 求购人类选手），AI 战队的选手不记，省存档
   if (p.teamId !== teamId) {
+    // 入场的公平窗口（v0.4.3，marketEntry.ts）只对自由选手有意义：加盟任何战队即清除
+    delete p.marketEntry;
     if (team.isPlayer) {
       p.joinedTeamSeries = teamSeriesCount(team);
       p.joinedTeamClock = listingClock(state);

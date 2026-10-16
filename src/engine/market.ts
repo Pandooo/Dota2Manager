@@ -6,6 +6,7 @@ import { rngOf, seededRng, hashSeed, type Rng } from './rng';
 import { clamp, formatGold, lerp, nextId, ownEntry, sigmoid } from './util';
 import { addNews } from './news';
 import { listingClock, listingProgress, resaleLocked } from './listingRules';
+import { aiSigningHeld } from './marketEntry';
 import {
   computeSalary, effectiveAttr, marketValue, overallRating, playerRating, playerTier, tierIndex,
 } from './player';
@@ -432,6 +433,7 @@ export function canAfford(state: GameState, team: Team, fee: number, salary: num
 /**
  * 从自由选手池中为 AI 战队挑选某位置的最佳可负担、愿意加盟的选手（pool 按评分降序）。
  * position 为空时不限位置；给出时只看该位置的本职选手（本位置 / 副位置），minRating 与该位置上的评分比较。
+ * 本回合刚入场的真实选手（未被抽走的真实新秀 / 复出，v0.4.3 marketEntry.aiSigningHeld）跳过：入场的回合内 AI 不签。
  */
 export function pickAffordableFreeAgent(
   state: GameState,
@@ -442,6 +444,7 @@ export function pickAffordableFreeAgent(
 ): Player | null {
   for (const p of pool) {
     if (p.teamId || p.status !== 'active') continue;
+    if (aiSigningHeld(state, p)) continue;
     if (position && !playsNaturally(p, position)) continue;
     if (overallRating(p) <= minRating) return null; // 降序：后面只会更弱（位置评分不超过综合评分）
     if (position && position !== p.position && playerRating(p, position) <= minRating) continue; // 副位置评分打折

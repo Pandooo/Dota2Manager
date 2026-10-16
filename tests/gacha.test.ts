@@ -365,7 +365,7 @@ describe('gacha · AI 抽卡与卡池关闭', () => {
     expect(currentGachaPool(s)!.aiDrawn).toBe(Object.values(s.teams).reduce((a, t) => a + (t.isPlayer ? 0 : t.gacha?.pulls ?? 0), 0));
   });
 
-  it('卡池关闭（TI 预选赛转会锁定）：未被抽走的真实新秀全部进入本局，付得起的 AI 战队签下，否则进入自由市场；记录本届汇总', () => {
+  it('卡池关闭（TI 预选赛转会锁定）：旧卡池中未被抽走的真实新秀全部以自由身进入自由市场（v0.4.3）；记录本届汇总', () => {
     const s = makeTestState(8);
     const rookies = ti9Rookies().slice(0, 8);
     for (const [id] of rookies) s.futureRookies[id] = 9;
@@ -375,18 +375,17 @@ describe('gacha · AI 抽卡与卡池关闭', () => {
     s.phase = 'ti_qualifier';
     const rec = closeGachaPool(s)!;
     expect(rec.ti).toBe(9);
-    expect(rec.realJoined + rec.realFree).toBe(rookies.length);
+    expect(rec.realFree).toBe(rookies.length);
+    expect(rec.realJoined).toBe(0);
     expect(s.gacha!.pool).toBeNull();
     expect(s.gacha!.history.at(-1)).toEqual(rec);
     for (const [id, tier] of rookies) {
       const p = s.players[id];
       expect(p, id).toBeTruthy();
       expect(s.futureRookies[id]).toBeUndefined();
-      expect(p.gacha).toMatchObject({ kind: 'real', tier, placed: true });
-      if (p.teamId) {
-        expect(s.teams[p.teamId].isPlayer).toBe(false);
-        expect(p.teamId).not.toBe('t7');
-      }
+      expect(p.gacha).toMatchObject({ kind: 'real', tier, placed: true, teamId: '' });
+      expect(p.teamId).toBeNull();
+      expect(p.status).toBe('active');
     }
     expect(currentGachaPool(s)).toBeNull();
     expect(gachaView(s).open).toBe(false);

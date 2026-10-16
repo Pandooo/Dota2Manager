@@ -51,6 +51,7 @@ import { releaseDraftedRookie } from './rookieDraft';
 import { gachaDiscard, gachaPull } from './gacha';
 import { hallOfFameNeedsMigration, migrateHallOfFame } from './hallOfFame';
 import { migrateRealCareerComebacks, realCareerNeedsMigration } from './realCareer';
+import { migrateRealEntry, realEntryNeedsMigration } from './realEntry';
 import { setPrizeShare } from './prizeShare';
 import { resolveDecision } from './events';
 import { autoHandleRound, type AutoRoundReport } from './autoRound';
@@ -647,10 +648,13 @@ export function migrateRoomState(state: GameState): boolean {
   // 名人堂（2026-10-14 抽卡回归，hallOfFame.migrateHallOfFame）：旧房间没有名人堂 → 以初始成员 + 开局补录创建并补录当前 SS / SSR；
   // 有名人堂但没有开局补录（2026-10-15「补录」之前的房间）→ 补录开局届之前的真实 SS / SSR 与当前 SS / SSR（按 backfillVersion 一次）
   const hof = hallOfFameNeedsMigration(state);
-  if (!roles && !career && !hof) return false;
+  // 真实选手入场（v0.4.3，realEntry.migrateRealEntry）：当届缺失的真实选手进入自由市场；各座位待决的「真实新秀希望加盟」事件改为直接进入自由市场
+  const entry = realEntryNeedsMigration(state);
+  if (!roles && !career && !hof && !entry) return false;
   ensureNeutral(state);
   if (roles) migrateRealRoles(state);
   if (career) migrateRealCareerComebacks(state);
+  if (entry) migrateRealEntry(state);
   if (hof) migrateHallOfFame(state);
   return true;
 }

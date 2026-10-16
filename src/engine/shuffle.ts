@@ -37,6 +37,7 @@ import { orgTeam, peakOrgsOfPlayer } from './clubs';
 import { lineupPriorityLocks } from './lineupPriority';
 import { naturalPositions, playsNaturally, roleFactor, uncoveredPositions } from './roles';
 import { resaleLocked } from './listingRules';
+import { aiSigningHeld } from './marketEntry';
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -745,6 +746,7 @@ function findCandidate(
   }
   for (const p of w.fa) {
     if (p.teamId || p.status !== 'active' || !playsNaturally(p, pos)) continue;
+    if (aiSigningHeld(state, p)) continue; // 本回合刚入场的真实选手（v0.4.3 公平窗口）
     consider(p, 'fa', signingFee(state, p), 'upgrade', 0);
   }
   if (best) return best;
@@ -946,6 +948,7 @@ function pursueMissions(w: World): void {
       const salary = computeSalary(state, p);
       let cand: Candidate;
       if (!p.teamId) {
+        if (aiSigningHeld(state, p)) continue; // 本回合刚入场的真实选手（v0.4.3 公平窗口）
         const fee = signingFee(state, p);
         if (!missionCanAfford(state, team, fee, salary)) continue;
         cand = { p, source: 'fa', fee, reason: 'mission', will: clamp(will, 0, 1) };

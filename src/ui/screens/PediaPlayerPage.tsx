@@ -574,7 +574,7 @@ function PlayerInfobox({ page }: { page: PlayerPage }) {
             TI{page.gacha.ti} <TierBadge tier={page.gacha.tier} /> {GACHA_KIND_LABEL[page.gacha.kind]}
             {page.gacha.placed ? (
               <span className="text-mute">
-                （未被抽走，按真实出道去向{page.gacha.teamId ? <>加盟 <PTeam id={page.gacha.teamId} name={page.gacha.teamName ?? undefined} tag /></> : '进入自由市场'}）
+                （未被抽走，{page.gacha.teamId ? <>按真实出道去向加盟 <PTeam id={page.gacha.teamId} name={page.gacha.teamName ?? undefined} tag /></> : '进入自由市场'}）
               </span>
             ) : (
               page.gacha.teamId && <span className="text-mute">· <PTeam id={page.gacha.teamId} name={page.gacha.teamName ?? undefined} tag /></span>

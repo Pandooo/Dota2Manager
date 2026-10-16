@@ -4,6 +4,7 @@ import { POSITIONS } from '../src/engine/types';
 import { SAVE_VERSION } from '../src/engine/config';
 import { ROLE_DATA_VERSION } from '../src/engine/roles';
 import { REAL_CAREER_VERSION } from '../src/engine/realCareer';
+import { REAL_ENTRY_VERSION } from '../src/engine/realEntry';
 import { initialHallOfFame } from '../src/engine/hallOfFame';
 
 let counter = 0;
@@ -148,6 +149,7 @@ export function makeTestState(teamCount = 8, seed = 12345): GameState {
     gameOver: null,
     roleDataVersion: ROLE_DATA_VERSION, // 与新游戏一致：无需真实生涯位置迁移
     realCareerVersion: REAL_CAREER_VERSION, // 与新游戏一致：无需真实生涯复出迁移
+    realEntryVersion: REAL_ENTRY_VERSION, // 与新游戏一致：无需真实选手入场迁移（v0.4.3）
     hallOfFame: initialHallOfFame(9), // 与新游戏一致：DotA1 时代传奇 + 开局补录（TI9 之前的真实 SS / SSR；无需读档迁移）
   };
   for (let i = 0; i < teamCount; i++) {

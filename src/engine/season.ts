@@ -41,6 +41,9 @@ import { newsroomRoundEnd, newsroomRoundStart } from './newsroom';
 import { fireDueClubScandals, rollClubScandals } from './scandal';
 import { seasonCoachSupply } from './coaches';
 import { foundSeasonClubs, signFoundedClubRookies } from './clubs';
+import { seasonRealReturners } from './realEntry';
+import { pruneMarketEntries } from './marketEntry';
+import { notifyHumanRealTeams, runEntryPass } from './entryPass';
 import { missionContractRetention, missionSeasonEnd } from './missions';
 import { recordLegacySeasonAll } from './legacy';
 import { recordPediaSeasonEnd } from './stats';
@@ -442,6 +445,7 @@ export function startSeason(state: GameState, ti: number): void {
   pruneCoachPool(state);
   pruneRetiredPlayers(state);
   pruneUnavailableMarks(state);
+  pruneMarketEntries(state); // 往届的入场时刻（v0.4.3 公平窗口，marketEntry.ts）
 
   // 版本：先补齐休赛期发布的版本，再把赛季内版本映射到回合
   catchUpPatches(state, startDate);
@@ -465,10 +469,16 @@ export function startSeason(state: GameState, ti: number): void {
   ensureHallOfFame(state);
   if (CONFIG.draft.enabled) runRookieDraft(state);
   else startGachaSeason(state);
-  // 错过登场时机的真实新秀条目清理（仍在本赛季卡池中待抽的除外：抽中或卡池关闭时才进入本局）
+  // 错过登场时机的真实新秀条目清理（仍在本赛季卡池中待抽的除外：抽中或第 1 回合前离池时才进入本局）
   for (const [id, debut] of Object.entries(state.futureRookies)) {
     if (debut < ti && !gachaHoldsRealRookie(state, id)) delete state.futureRookies[id];
   }
+  // 复出 / 新面孔（v0.4.3，realEntry.ts）：当届真实阵容数据中有、本局还没有出现过的真实选手（非本届新秀，如 TI6 开局时 TI8 重返赛场的 Ceb）
+  // 以自由身进入自由市场。放在新俱乐部成立（先签回自家当届选手）与卡池建立之后、教练供给与 AI 休赛期转会之前：
+  // 入场的回合（赛季初）内 AI 战队不签他们（marketEntry.ts），人类玩家先看到
+  seasonRealReturners(state);
+  // 入场者的当届真实战队是人类玩家战队时发总览通知（AI 接手不替人类玩家签，entryPass.notifyHumanRealTeams）
+  notifyHumanRealTeams(state);
   // 教练供给（第九波 #3，coaches.ts）：随选秀向教练市场引入一批教练并保证可签约数量（在 AI 季前转会之前）
   seasonCoachSupply(state);
   refreshFreeAgents(state);
@@ -523,7 +533,7 @@ function seasonStartNews(state: GameState): void {
       + `本赛季共 ${s.rounds.length - 1} 个大回合（含 TI 预选与 TI 正赛）。`
       + (CONFIG.draft.enabled
         ? '新秀选秀已结束，转会窗口现已开放。'
-        : '转会窗口现已开放，本赛季新秀卡池同时开放（真实新秀、请神新秀与虚构新秀；真实新秀只能在第 1 回合开始前抽，之后按真实出道去向加盟；转会窗口锁定时卡池关闭）。'),
+        : '转会窗口现已开放，本赛季新秀卡池同时开放（真实新秀、请神新秀与虚构新秀；真实新秀只能在第 1 回合开始前抽，没有被抽走的进入自由市场；转会窗口锁定时卡池关闭）。'),
     true,
   );
   const ts = (state.seasonTournamentIds ?? [])
@@ -577,11 +587,14 @@ export function enterRound(state: GameState, idx: number): void {
 
   for (const v of round.patchVersions) applyPatch(state, v);
 
-  // 新秀抽卡（gacha.ts）：第 1 回合开始前，赛季初（人类玩家可先抽）没有被抽走的真实新秀卡离池、按真实出道去向加盟（出道战队为人类玩家时
-  // 发待决事件；卡池同等级补入请神 / 虚构卡），本赛季成立的真实俱乐部签回其余本届登场的新秀，然后 AI 战队按空位与资金自动抽卡；
+  // 新秀抽卡（gacha.ts）：第 1 回合开始前，赛季初（人类玩家可先抽）没有被抽走的真实新秀卡离池、以自由身进入自由市场（v0.4.3【用户指定】；
+  // 本回合 AI 不从自由市场签他们，marketEntry.ts；卡池同等级补入请神 / 虚构卡），本赛季成立的真实俱乐部签回自家本届登场的新秀，然后 AI 战队按空位与资金自动抽卡；
   // 赛季中期再抽一次（中期转会窗口之前）；进入 TI 预选赛（转会锁定）时卡池关闭
   if (round.phase === 'regular' && idx === 1) {
-    if (releaseRealRookieCards(state) > 0) signFoundedClubRookies(state);
+    if (releaseRealRookieCards(state) > 0) {
+      signFoundedClubRookies(state);
+      notifyHumanRealTeams(state);
+    }
     aiGachaPulls(state, 'opening');
   }
   if (round.phase === 'regular' && idx === midseasonRoundIndex(state)) {
@@ -610,8 +623,8 @@ export function enterRound(state: GameState, idx: number): void {
 /**
  * 结束当前回合：玩家赛事必须已结束（由 getAdvanceBlockers 保证）；本回合所有未结束赛事 simulateTournamentToEnd + finishTournament；
  * 未使用的免费训练自动按当前焦点执行（休赛回合）；ai.aiTrainRound；economy.payRoundSalaries；player.tickModifiers；
- * growth.roundLoyaltyUpdate；market.expireOffers；momentum.updateTeamMomentumRound（荣誉环比，第十四波）；
- * schedule.refreshSeasonInvites（赛季中补充邀请，第十四波）；history.honor/gold 快照。
+ * growth.roundLoyaltyUpdate；market.expireOffers；挂牌处理；entryPass.runEntryPass（入场的下一回合 AI 接手，v0.4.3）；
+ * momentum.updateTeamMomentumRound（荣誉环比，第十四波）；schedule.refreshSeasonInvites（赛季中补充邀请，第十四波）；history.honor/gold 快照。
  */
 export function endRound(state: GameState): void {
   const idx = state.roundIndex;
@@ -663,7 +676,10 @@ export function endRound(state: GameState): void {
   expireOffers(state);
   // 挂牌转会：AI 出价 / 倒计时 / 到期自动解约（须在 expireOffers 之后；多人模式每个座位各自处理）
   forEachSeat(state, () => processTransferListings(state));
-  // 羁绊（第十波 #5）：回合末的挂牌出售 / 离队之后同步
+  // 入场的下一回合 AI 接手（v0.4.3【用户指定】，entryPass.ts）：入场回合已过去、仍是自由身的新入场真实选手，当届真实战队优先签回，
+  // 否则按 AI 平常的需求签下。放在回合末（人类玩家本回合的操作与懒人推进的自动补员都在推进之前，先于 AI）
+  runEntryPass(state);
+  // 羁绊（第十波 #5）：回合末的挂牌出售 / 离队 / AI 接手之后同步
   syncSynergies(state, { full: true });
 
   // 上一回合及更早的已结束赛事：压缩 AI 对局记录（本回合的留到下回合，便于赛事中心查看）

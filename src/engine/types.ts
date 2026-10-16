@@ -312,6 +312,13 @@ export interface Player {
    * 之后每个赛季的自主成长按原型的生涯轨迹（按出道届次平移）走，原型数据结束后按普通选手的年龄 / 潜力规律。
    */
   summon?: PlayerSummonInfo;
+  /**
+   * 进入自由市场的时刻（v0.4.3，marketEntry.ts）：未被抽走的真实新秀（第 1 回合开始前）与赛季初入场的复出 / 新面孔真实选手
+   * （realEntry.ts）以自由身入场时写入 {TI 序号, 回合}；转会窗口锁定期间入场的写下个赛季初 {TI + 1, 0}。
+   * 这个回合内 AI 战队不从自由市场签下他（人类玩家可以）；下一回合结束时 AI 接手一次（entryPass.ts，处理后清除）。
+   * 加盟任何战队时清除；缺失 = 无限制。
+   */
+  marketEntry?: { ti: number; round: number };
 }
 
 /** 抽卡卡种：真实新秀 / 请神新秀 / 虚构新秀 */
@@ -332,7 +339,10 @@ export interface PlayerGachaInfo {
   power: number;
   talent: number;
   insight: number;
-  /** 未被抽走、按真实出道去向加盟（真实新秀；第 1 回合开始前离池或卡池关闭时） */
+  /**
+   * 未被抽走（真实新秀；第 1 回合开始前离池或卡池关闭时）。v0.4.3 起全部以自由身进入自由市场（teamId 为空）；
+   * 旧版本按真实出道去向加盟的 teamId 为当时加盟的战队。
+   */
   placed?: boolean;
 }
 
@@ -409,7 +419,9 @@ export interface GachaPool {
   backfilled?: number;
   /** 离池而未被抽走的真实新秀卡（按等级） */
   realPlaced?: Partial<Record<Tier, number>>;
-  /** 离池的真实新秀：加盟 AI 战队 / 进入自由市场 / 交给出道战队（人类玩家）决定 */
+  /**
+   * 离池的真实新秀：v0.4.3 起全部进入自由市场（realFree）；旧版本加盟 AI 战队（realJoined）/ 交给出道战队（人类玩家）决定（realOffered）
+   */
   realJoined?: number;
   realFree?: number;
   realOffered?: number;
@@ -427,7 +439,10 @@ export interface GachaSeasonRecord {
   /** 抽出的 SSR / 请神张数 */
   ssr: number;
   summons: number;
-  /** 未被抽走的真实新秀（第 1 回合前离池或卡池关闭时）：加盟 AI 战队 / 进入自由市场 / 交给出道战队（人类玩家）决定 */
+  /**
+   * 未被抽走的真实新秀（第 1 回合前离池或卡池关闭时）：v0.4.3 起全部进入自由市场（realFree）；
+   * 旧版本加盟 AI 战队（realJoined）/ 交给出道战队（人类玩家）决定（realOffered）
+   */
   realJoined: number;
   realFree: number;
   realOffered?: number;
@@ -1607,6 +1622,13 @@ export interface GameState {
    * 已提前退役、真实生涯在当前届次或之后仍在继续的真实选手以自由身复出（realCareer.migrateRealCareerComebacks）。全局标记（非座位私有）。
    */
   realCareerVersion?: number;
+  /**
+   * 真实选手入场迁移版本（v0.4.3，realEntry.REAL_ENTRY_VERSION）：新游戏创建时写入；旧存档 / 旧房间缺失或落后时，
+   * 读档（save.upgradeLoadedState）/ 多人房间载入（multi.migrateRoomState）时执行一次（realEntry.migrateRealEntry）：
+   * 当届真实阵容数据中有、本局还没有出现过的真实选手（非本届新秀）以自由身进入自由市场；
+   * 待决的「真实新秀希望加盟」事件（rookie_home）改为该新秀直接进入自由市场。全局标记（非座位私有）。
+   */
+  realEntryVersion?: number;
 
   /** 多人对局（局域网，src/engine/multi.ts）；单机为空 */
   multiplayer?: MultiplayerInfo;

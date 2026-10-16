@@ -90,7 +90,7 @@ export function gachaResaleHoldRounds(): number {
 }
 
 /**
- * 抽卡新秀的转售冷却（CONFIG.gacha.resaleHoldRounds，2026-10-14 审查）：本队抽到（或按真实出道去向加盟本队）的新秀仍在本队、
+ * 抽卡新秀的转售冷却（CONFIG.gacha.resaleHoldRounds，2026-10-14 审查）：本队抽到（或旧版本按真实出道去向加盟本队）的新秀仍在本队、
  * 入队不满 resaleHoldRounds 个转会回合时返回剩余回合数（> 0），否则 0。冷却期内不能挂牌、不接 AI 随机求购，交易抵价按签字费比例估值。
  */
 export function gachaResaleLockLeft(state: GameState, p: Pick<Player, 'gacha' | 'teamId'> | null | undefined): number {
@@ -204,7 +204,7 @@ export function listingRoundLockLeft(
 }
 
 /**
- * 抽卡新秀（含按真实出道去向签下的真实新秀）挂牌条件的说明（抽卡页规则与「真实新秀」待决事件共用）：抽卡转售冷却与加盟门槛叠加，
+ * 抽卡新秀（含旧版本按真实出道去向签下的真实新秀）挂牌条件的说明（抽卡页规则；v0.4.3 起不再有「真实新秀」待决事件）：抽卡转售冷却与加盟门槛叠加，
  * 入队转会回合取两者中较长的——「入队满 18 个转会回合（约一个赛季；其他新加盟选手为 6 个）且随队满 10 场比赛」；没有任何限制时为空串。
  */
 export function gachaListingRuleText(): string {

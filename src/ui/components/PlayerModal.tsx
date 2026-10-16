@@ -92,7 +92,9 @@ function PlayerModalInner({ id, onClose }: { id: string; onClose: () => void }) 
           {p.gacha && (
             <Chip
               title={`TI${p.gacha.ti} 新秀抽卡：${p.gacha.tier} 级${GACHA_KIND_LABEL[p.gacha.kind]}`
-                + `${p.gacha.placed ? '（未被抽走，按真实出道去向加盟）' : `，被 ${game.teams[p.gacha.teamId]?.name ?? p.gacha.teamId} 抽中`}`}
+                + `${p.gacha.placed
+                  ? (p.gacha.teamId ? `（未被抽走，按真实出道去向加盟 ${game.teams[p.gacha.teamId]?.name ?? p.gacha.teamId}）` : '（未被抽走，进入自由市场）')
+                  : `，被 ${game.teams[p.gacha.teamId]?.name ?? p.gacha.teamId} 抽中`}`}
             >
               TI{p.gacha.ti} 抽卡 · {p.gacha.tier}
             </Chip>

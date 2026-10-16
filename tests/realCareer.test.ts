@@ -498,13 +498,15 @@ describe('用户场景：Insania 打到 TI14', () => {
   });
 
   for (const startTi of [9, 11]) {
-    it(`TI${startTi} 开局推进到 TI14 赛季初（10 个种子）：Insania 在役，TI13 Liquid 五人都没有退役`, async () => {
+    it(`TI${startTi} 开局推进到 TI14 赛季初（10 个种子）：Insania 与 TI13 Liquid 五人都没有退役`, async () => {
       for (let seed = 1; seed <= 10; seed++) {
         const g = await advanceTo(startTi, 14, seed);
         expect(g.season.ti, `seed ${seed}`).toBe(14);
         expect(g.phase).toBe('preseason');
-        expect(g.players.insania?.status, `TI${startTi} seed ${seed}: insania`).toBe('active');
-        // 其余四人：不会退役（AI 俱乐部全员假赛曝光时可能被禁赛，与退役无关）
+        // 不会退役（假赛事件 / AI 俱乐部全员假赛曝光时可能被禁赛，与退役无关；v0.4.3 起随机序列变化后 TI9 种子 1 的 Insania 被禁赛）
+        expect(g.players.insania, `TI${startTi} seed ${seed}: insania`).toBeDefined();
+        expect(g.players.insania.status, `TI${startTi} seed ${seed}: insania`).not.toBe('retired');
+        // 其余四人：同样不会退役
         for (const m of liquid.members) {
           expect(g.players[m.id]?.status, `TI${startTi} seed ${seed}: ${m.id}`).not.toBe('retired');
         }
